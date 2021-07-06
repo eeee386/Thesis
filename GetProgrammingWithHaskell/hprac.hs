@@ -25,7 +25,7 @@ overwriteLambda = (\x -> (\x -> (\x -> x) 4 ) 3 ) 2
 
 libraryAdd x y = (\x y -> x+y) x y
 
-
+ifEvenDo :: (Int -> Int) -> Int -> Int
 ifEvenDo f x = if even x then f x else x
 
 names = [("Ian", "Curtis"), ("Will", "Smith")]
