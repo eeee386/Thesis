@@ -2,14 +2,19 @@ calcChange :: (Ord p, Num p) => p -> p -> p
 calcChange owed given = if change > 0 then change else 0
                         where change = given - owed
 
+
+doublePlusTwo :: Num a => a -> a
 doublePlusTwo x = doubleX + 2
                     where doubleX = 2*x
 
+inc :: Num a => a -> a
 inc x = x + 1
 square x = x*x
 double x = x*2
 
 
+
+func :: Integral a => a -> a
 func n = if even n then n-2 else 3*n-1
 
 sumSquareOrSquareSum x y = (\sumSquare squareSum -> if sumSquare > squareSum then sumSquare else squareSum) (x^2 + y^2) (x+y)^2
