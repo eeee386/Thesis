@@ -9,20 +9,20 @@ data SportsCar = SportsCar Car Spoiler
 
 
 
-data FirstName = String 
-data LastName = String
-data MiddleName = String
+type FirstName = String
+type LastName = String
+type MiddleName = String
 
-data Name = Name FirstName LastName 
-            | NameWithMiddle FirstName MiddleName LastName 
-            | TwoinitialsWithLast Char Char LastName 
-            | FirstNameWithTwoInitials FirstName Char Char
-data Author = Author Name
-data Artist = Person Name | Band String
-data Creator = AuthorCreator Author | ArtistCreator Artist deriving Show
+data Name = Name FirstName LastName
+            | NameWithMiddle FirstName MiddleName LastName
+            | TwoInitialsWithLast Char Char LastName
+            | FirstNameWithTwoInitials FirstName Char Char deriving Show
+data Author = Author Name deriving Show
+data Artist = Person Name | Band String deriving Show
+data Creator = AuthorCreator Author | ArtistCreator Artist deriving (Show)
 
 hpLovecraft :: Creator
-hpLovecraft = AuthorCreator (Author TwoinitialsWithLast 'H' 'P' "Lovecraft")
+hpLovecraft = AuthorCreator (Author (TwoInitialsWithLast 'H' 'P' "Lovecraft"))
 
 data Book = Book {
     author :: Creator,
@@ -52,16 +52,16 @@ data Pamphlets = Pamphlets {
     contact :: String
 }
 
-data StoreItem = BookItem Book | RecordItem VinylRecord | ToyItem CollectibleToy | PamphletItem Pamphlet
+data StoreItem = BookItem Book | RecordItem VinylRecord | ToyItem CollectibleToy | PamphletItem Pamphlets
 
 price :: StoreItem -> Double
 price (BookItem book) = bookPrice book
 price (RecordItem record) = recordPrice record
-price (ToyItem toy) = toyPrice toy 
+price (ToyItem toy) = toyPrice toy
 price _ = 0
 
-madeBy :: StoreItem -> String 
-madeBy (BookItem book) = author book
-madeBy (RecordItem record) = artist record
+madeBy :: StoreItem -> String
+madeBy (BookItem book) = show (author book)
+madeBy (RecordItem record) = show (artist record)
 madeBy _ = "No creator is assigned to this product"
 
