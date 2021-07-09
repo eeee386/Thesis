@@ -4,6 +4,9 @@
 # Unignore all that has extension
 !*.*
 
+# Unignore all dirs
+!*/
+
 # Ignore all with extensions we don't need
 *.hi
 *.o
