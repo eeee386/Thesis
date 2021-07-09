@@ -175,3 +175,4 @@ movingAverageTS (TS times values) n = TS times smoothedValues
     where ma = movingAvg values n
           nothings = replicate (n `div` 2) Nothing 
           smoothedValues = mconcat [nothings, ma, nothings]
+
