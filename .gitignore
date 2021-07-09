@@ -1,0 +1,9 @@
+# Ignore all
+*
+
+# Unignore all that has extension
+!*.*
+
+# Ignore all with extensions we don't need
+*.hi
+*.o
