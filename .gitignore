@@ -10,3 +10,4 @@
 # Ignore all with extensions we don't need
 *.hi
 *.o
+*.mrc
