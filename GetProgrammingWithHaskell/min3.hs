@@ -15,3 +15,5 @@ main = do
     minInt <- minOfInts
     putStrLn (show minInt ++ " is the smallest")
 
+    
+

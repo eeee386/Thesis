@@ -43,22 +43,6 @@ robotHead = RobotPart
   }
 
 
-leftLeg :: RobotPart
-leftLeg = RobotPart
-  { name        = "left leg"
-  , description = "left leg for kicking!"
-  , cost        = 800.00
-  , count       = 3
-  }
-
-rightLeg :: RobotPart
-rightLeg = RobotPart
-  { name        = "right leg"
-  , description = "right leg for kicking the dirt"
-  , cost        = 825.00
-  , count       = 5
-  }
-
 
 type Html = String
 renderHtml :: RobotPart -> Html
@@ -72,8 +56,8 @@ renderHtml part = mconcat [
 
 partsDB :: Map.Map Int RobotPart
 partsDB = Map.fromList keyVals
-    where keys = [1,2,3, 4, 5]
-          values = [leftArm, rightArm, robotHead, leftLeg, rightLeg]
+    where keys = [1,2,3]
+          values = [leftArm, rightArm, robotHead]
           keyVals = zip keys values
 
 partVal :: Maybe RobotPart
@@ -105,7 +89,7 @@ instance Functor Box where
 morePresents :: Int -> Box a -> Box [a]
 morePresents n a = fmap (replicate n) a
 
-myBox :: Box Int
+myBox :: Box Int 
 myBox = Box 1
 
 otherBox :: Box Int
@@ -122,16 +106,8 @@ printCost :: Maybe Double -> IO()
 printCost Nothing = putStrLn "item not found"
 printCost (Just cost) = print cost
 
-minOfTwoPart :: Int -> Int -> Maybe RobotPart
-minOfTwoPart id1 id2 = if cost1 <= cost2 then robot1 else robot2
-  where robot1 = Map.lookup id1 partsDB
-        robot2 = Map.lookup id2 partsDB
-        cost1 = cost <$> robot1
-        cost2 = cost <$> robot2
-
-readInt :: IO Int
-readInt = read <$> getLine
-
 main = do
-    min <- minOfTwoPart <$> readInt <*> readInt
-    print min
+    idStr <- getContents
+    let idv = read idStr 
+    printCost (fmap cost (Map.lookup idv partsDB))
+    
