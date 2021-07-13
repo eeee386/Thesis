@@ -1,18 +1,8 @@
+module Glitch(randomReplaceBytes, randomSortSection, randomReplaceBytes, randomSortSection, randomReplaceBytes) where
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
-import System.Environment
--- no System.Random on MacOS
 import System.Random
 
-main :: IO()
-main = do
-    args <- getArgs
-    let fileName = head args
-    imageFile <- BC.readFile fileName
-    let glitched = foldM (\bytes func -> func bytes) imageFile [randomReplaceBytes, randomSortSection, randomReplaceBytes, randomSortSection, randomReplaceBytes]
-    let glitchedFileName = mconcat ["glitched_", fileName]
-    BC.writeFile glitchedFileName glitched
-    print "all done"
 
 intToChar :: Int -> Char 
 intToChar int = toEnum safeInt
