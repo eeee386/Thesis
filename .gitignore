@@ -11,3 +11,8 @@
 *.hi
 *.o
 *.mrc
+
+# ignore dirs
+.idea/
+out/
+

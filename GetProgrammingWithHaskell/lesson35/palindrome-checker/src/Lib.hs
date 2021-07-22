@@ -20,4 +20,4 @@ preprocess = stripWhiteSpace . stripPunctuation . toLowerCase
 
 isPalindrome :: T.Text -> Bool 
 isPalindrome text = cleanText == T.reverse cleanText
-    where cleanText = preprocess text 
+    where cleanText = preprocess text
