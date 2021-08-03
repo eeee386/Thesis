@@ -5,9 +5,9 @@
   - Haskell
     - Megismerkedni a Haskell programozási nyelvvel
     - Will Kurt: Get Programming With Haskell (Manning Publications)
-  - Programozási nyelvek készítése
+  - Programozási nyelv készítése
     - Programozási nyelvek alapjainak megismerése
-    - Programozási nyelvek tervezése
+    - Programozási nyelv tervezése
       - Kulcs szavak
       - Működés
       - Beépített utasítások
