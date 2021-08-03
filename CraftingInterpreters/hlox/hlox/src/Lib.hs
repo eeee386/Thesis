@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Lib
     ( someFunc
     ) where
@@ -7,4 +9,4 @@ import qualified Data.Text as T
 
 someFunc :: IO ()
 someFunc = do
-  putStrLn "Hello World!"
+  TIO.putStrLn "Hello, World!"
