@@ -19,13 +19,6 @@ packages:
   original:
     hackage: strict-0.4.0.1
 - completed:
-    hackage: deepseq-1.4.4.0@sha256:76902b99ee97fc059311ddb0df9488c54969adf0a212efa39705981761f06b55,2918
-    pantry-tree:
-      size: 385
-      sha256: edf7ecb1e7195bf2c1b595f462343b8a237351acf73e4d0e66e005fc5baa62f4
-  original:
-    hackage: deepseq-1.4.4.0
-- completed:
     hackage: bytestring-0.11.1.0@sha256:84a15ec06aca21c4af8772a0e847fdda1b58235b801774dd205edb03bfeb8518,7631
     pantry-tree:
       size: 2654
@@ -39,6 +32,20 @@ packages:
       sha256: 271cd1e75af293fc25a489d860f094dc635a4ed8b56aa5b343c58f4637736ca3
   original:
     hackage: binary-0.8.8.0
+- completed:
+    hackage: vector-0.12.3.0@sha256:0ae2c1ba86f0077910be242ec6802cc3d7725fe7b2bea6987201aa3737b239b5,7953
+    pantry-tree:
+      size: 3842
+      sha256: 11121a60e271d7971b68d603e4727673e8ffb724c858106bb739997ae00e485a
+  original:
+    hackage: vector-0.12.3.0
+- completed:
+    hackage: containers-0.6.2.1@sha256:bbc3d2d5eef59a5d26383fb4b727c968390f2b6e9bd413d29aa875175bb16f8b,2460
+    pantry-tree:
+      size: 2823
+      sha256: 5bb0af2da4e4cc5472a17063ecdbda8f1117e5f3509fcd600f2cbd7e2b760f49
+  original:
+    hackage: containers-0.6.2.1
 snapshots:
 - completed:
     size: 585603

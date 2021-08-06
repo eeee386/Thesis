@@ -23,17 +23,12 @@ data TokenType =     LEFT_PAREN | RIGHT_PAREN | LEFT_BRACE | RIGHT_BRACE |
                      
                      COMMENT | BLOCK_COMMENT | WHITE_SPACE | 
                  
-                     EOF | NOT_TOKEN deriving (Show, Eq)
-
-data Literal = LiteralString TextType | LiteralNumber Float | LiteralBool Bool | LiteralOther deriving Show
-                  
+                     EOF | NOT_TOKEN TextType deriving (Show, Eq)             
                      
 data Token = Token {
 tokenType :: TokenType
-, lexeme :: T.Text
-, literal :: Literal
 , line :: Int
 } 
 
 instance Show Token where
-  show a = mconcat ["{", show (tokenType a), ", ", T.unpack (lexeme a), ", ", show (literal a), ", ", show (line a), "}"]
+  show a = mconcat ["{", show (tokenType a), ", ", show (line a), "}"]

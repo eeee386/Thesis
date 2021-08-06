@@ -37,9 +37,10 @@ packages:
 extra-deps:
   - text-1.2.4.1
   - strict-0.4.0.1
-  - deepseq-1.4.4.0
   - bytestring-0.11.1.0
   - binary-0.8.8.0
+  - vector-0.12.3.0
+  - containers-0.6.2.1
 # - acme-missiles-0.3
 # - git: https://github.com/commercialhaskell/stack.git
 #   commit: e7b331f14bcffb8367cd58fbfc8b40ec7642100a

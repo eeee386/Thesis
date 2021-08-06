@@ -1,12 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 
--- TODO: Fix list with STArray or smth else
-
 module Scanner where
 
 import qualified Data.Text as T
 import Data.Char
 import TokenHelper
+import qualified Data.Sequence as S
 
 data TokenReader = TokenReader {
 len :: Int
@@ -34,21 +33,20 @@ checkIfCommentOrDivision text
   where twoLengthStr =  T.take 2 text
  
 createBlockComment :: T.Text -> TokenReader 
-createBlockComment text = checkBlockComment 2 0 text
+createBlockComment = checkBlockComment 0 0
   where 
     checkBlockComment :: Int -> Int -> T.Text -> TokenReader
     checkBlockComment tl nl t
-        | T.take 1 t == "" = createNoNewLineToken NOT_TOKEN tl 
-        | T.head text == '\n' = checkBlockComment (tl+1) (nl+1) (T.tail t)
-        | T.take 2 t == "*/" = createToken BLOCK_COMMENT tl nl 
+        | T.take 1 t == "" = createNoNewLineToken (NOT_TOKEN t) tl 
+        | T.head t == '\n' = checkBlockComment (tl+1) (nl+1) (T.tail t)
+        | T.take 2 t == "*/" = createToken BLOCK_COMMENT (tl+2) nl 
         | otherwise = checkBlockComment (tl+1) nl (T.tail t)
-        
 
 handleWhiteSpace :: TokenReader
 handleWhiteSpace = createNoNewLineToken WHITE_SPACE 1
 
 createString :: T.Text -> TokenReader 
-createString text = if lengthOfTheNewString == lengthOfTheRest then createNoNewLineToken NOT_TOKEN lengthOfTheRest else createToken (STRING newString) (lengthOfTheNewString + 2) numberOfNL 
+createString text = if lengthOfTheNewString == lengthOfTheRest then createNoNewLineToken (NOT_TOKEN restOfTheText) lengthOfTheRest else createToken (STRING newString) (lengthOfTheNewString + 2) numberOfNL 
   where newString = T.takeWhile (/= '\"') restOfTheText
         restOfTheText = T.tail text
         lengthOfTheRest = T.length restOfTheText
@@ -115,22 +113,26 @@ recognizeToken text
   | isDigit (T.head tok) = createNumber text
   | isAlpha (T.head tok) = createIdentifier text
   --TODO: handle non-tokens gracefully
-  | otherwise = createNoNewLineToken NOT_TOKEN 1
+  | otherwise = createNoNewLineToken (NOT_TOKEN tok) 1
   where tok = T.take 1 text 
         twoTok = T.take 2 text 
 
-scanTokens :: T.Text -> [Token]
--- filtering could be done inside the scanTokansWithData function, but it works fine for now
-scanTokens src = filter (\x -> tokenType x /= WHITE_SPACE && tokenType x /= COMMENT) (scanTokensWithData 0 1 [] src)
+scanTokens :: T.Text -> S.Seq Token
+scanTokens src = (S.<|) (Token {tokenType=EOF, line= length (T.lines src)}) (S.filter (\x -> tokenType x /= WHITE_SPACE && tokenType x /= COMMENT) (scanTokensWithData 0 1 S.empty src))
   where
     isAtEnd current = current == T.length src
-    scanTokensWithData :: Int -> Int -> [Token] -> T.Text -> [Token]
+    scanTokensWithData :: Int -> Int -> S.Seq Token -> T.Text -> S.Seq Token
     scanTokensWithData current lineP list text =
           let tokenScanned = recognizeToken text
               lenP = len tokenScanned
-              tokenP = Token {tokenType= token tokenScanned, lexeme = "", literal=LiteralOther, line=lineP}
+              tokenP = Token {tokenType= token tokenScanned, line=lineP}
               numberOfNewLinesP = numberOfNewLines tokenScanned
               newCurrent = current + lenP
               newLineNumber = lineP + numberOfNewLinesP
           in
-            if isAtEnd current then list else scanTokensWithData newCurrent newLineNumber (list ++ [tokenP]) (T.drop lenP text)
+            if isAtEnd current then list else scanTokensWithData newCurrent newLineNumber ((S.|>) list tokenP) (T.drop lenP text)
+
+
+isNotToken :: TokenType -> Bool
+isNotToken (NOT_TOKEN _) = True
+isNotToken _ = False

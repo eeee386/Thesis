@@ -25,6 +25,8 @@ dependencies:
 - strict
 - deepseq
 - bytestring
+- vector
+- containers
 
 library:
   source-dirs: src
