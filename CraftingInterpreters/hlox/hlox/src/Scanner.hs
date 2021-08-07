@@ -6,6 +6,8 @@ import qualified Data.Text as T
 import Data.Char
 import TokenHelper
 import qualified Data.Sequence as S
+import qualified Text.Read as TR
+import Data.Maybe
 
 data TokenReader = TokenReader {
 len :: Int
@@ -54,9 +56,18 @@ createString text = if lengthOfTheNewString == lengthOfTheRest then createNoNewL
         numberOfNL = T.foldl' (\y x -> if x == '\n' then y+1 else y) 0 newString 
         
 createNumber :: T.Text -> TokenReader
-createNumber text = createNoNewLineToken (NUMBER (read (T.unpack numberString))) lengthOfTheNumber
-  where numberString = T.takeWhile isDigit text
+createNumber text = if isJust number then createNoNewLineToken (NUMBER (fromJust number)) lengthOfTheNumber else createNoNewLineToken (NOT_TOKEN numberString) lengthOfTheNumber
+  where numberString = T.takeWhile (\x -> isDigit x || x == '.') text
         lengthOfTheNumber = T.length numberString
+        number = getNumberFromEither (TR.readEither (T.unpack numberString))
+
+-- Should have used readMaybe, but the stack could not figure out the imports even with qualified TR import, when using TR.readMaybe
+getNumberFromEither :: Either String Double -> Maybe Double
+getNumberFromEither (Right a) = Just a
+getNumberFromEither (Left _) = Nothing
+
+
+
 
 createIdentifierChunk :: T.Text -> T.Text
 createIdentifierChunk = T.takeWhile (\ x -> isAlpha x || isDigit x)
@@ -91,7 +102,7 @@ createIdentifier text
 
 recognizeToken :: T.Text -> TokenReader
 recognizeToken text
-  | tok == ")" = createNoNewLineToken LEFT_PAREN 1
+  | tok == ")" = createNoNewLineToken RIGHT_PAREN 1
   | tok == "(" = createNoNewLineToken LEFT_PAREN 1
   | tok == "}" = createNoNewLineToken RIGHT_BRACE 1
   | tok == "{" = createNoNewLineToken LEFT_BRACE 1
@@ -118,7 +129,7 @@ recognizeToken text
         twoTok = T.take 2 text 
 
 scanTokens :: T.Text -> S.Seq Token
-scanTokens src = (S.<|) (Token {tokenType=EOF, line= length (T.lines src)}) (S.filter (\x -> tokenType x /= WHITE_SPACE && tokenType x /= COMMENT) (scanTokensWithData 0 1 S.empty src))
+scanTokens src = (S.|>) (S.filter (\x -> tokenType x /= WHITE_SPACE && tokenType x /= COMMENT) (scanTokensWithData 0 1 S.empty src)) (Token {tokenType=EOF, line= length (T.lines src)})
   where
     isAtEnd current = current == T.length src
     scanTokensWithData :: Int -> Int -> S.Seq Token -> T.Text -> S.Seq Token

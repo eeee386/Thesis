@@ -5,15 +5,15 @@ import qualified Data.Text as T
 
 type TextType = T.Text
   
-data EXPRESSION = EXP_LITERAL LITERAL | EXP_UNARY UNARY | EXP_BINARY BINARY | EXP_GROUPING GROUPING | NON_EXP
+data EXPRESSION = EXP_LITERAL LITERAL | EXP_UNARY UNARY | EXP_BINARY BINARY | EXP_GROUPING GROUPING | NON_EXP TextType
 instance Show EXPRESSION where 
   show (EXP_LITERAL x) = show x
   show (EXP_UNARY x) = show x
   show (EXP_BINARY x) = show x
   show (EXP_GROUPING x) = show x
-  show NON_EXP = "non_exp"
+  show (NON_EXP x) = show x
 
-data LITERAL = NUMBER Float | STRING TextType | TRUE | FALSE | NIL
+data LITERAL = NUMBER Double | STRING TextType | TRUE | FALSE | NIL
 instance Show LITERAL where 
   show (NUMBER x) = show x
   show (STRING x) = T.unpack x
@@ -45,7 +45,7 @@ instance Show OPERATOR where
   show LESS_EQUAL = "<="
   show GREATER = ">"
   show GREATER_EQUAL = ">="
-  show PLUS = "-"
+  show PLUS = "+"
   show MINUS = "-"
   show STAR = "*"
   show SLASH = "/"
