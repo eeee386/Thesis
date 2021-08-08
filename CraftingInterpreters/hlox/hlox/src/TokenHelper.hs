@@ -15,6 +15,8 @@ data TokenType =     LEFT_PAREN | RIGHT_PAREN | LEFT_BRACE | RIGHT_BRACE |
                      EQUAL | EQUAL_EQUAL |
                      GREATER | GREATER_EQUAL |
                      LESS | LESS_EQUAL |
+                     
+                     QUESTION_MARK | COLON |
                  
                      IDENTIFIER TextType | STRING TextType | NUMBER Double |
                  

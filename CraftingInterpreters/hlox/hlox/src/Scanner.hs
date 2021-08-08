@@ -112,6 +112,8 @@ recognizeToken text
   | tok == "+" = createNoNewLineToken PLUS 1
   | tok == ";" = createNoNewLineToken SEMICOLON 1
   | tok == "*" = createNoNewLineToken STAR 1
+  | tok == "?" = createNoNewLineToken QUESTION_MARK 1
+  | tok == ":" = createNoNewLineToken COLON 1
   | tok == "!" = checkIfTwoLengthToken twoTok "!=" BANG_EQUAL BANG
   | tok == "=" = checkIfTwoLengthToken twoTok "==" EQUAL_EQUAL EQUAL
   | tok == "<" = checkIfTwoLengthToken twoTok "<=" LESS_EQUAL LESS

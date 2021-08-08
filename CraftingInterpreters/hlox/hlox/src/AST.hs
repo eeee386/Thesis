@@ -2,16 +2,19 @@
 module AST where
   
 import qualified Data.Text as T
+import TokenHelper (Token)
+import qualified Data.Sequence as S
 
 type TextType = T.Text
   
-data EXPRESSION = EXP_LITERAL LITERAL | EXP_UNARY UNARY | EXP_BINARY BINARY | EXP_GROUPING GROUPING | NON_EXP TextType
+data EXPRESSION = EXP_LITERAL LITERAL | EXP_UNARY UNARY | EXP_BINARY BINARY | EXP_TERNARY TERNARY | EXP_GROUPING GROUPING | NON_EXP String (S.Seq Token)
 instance Show EXPRESSION where 
   show (EXP_LITERAL x) = show x
   show (EXP_UNARY x) = show x
   show (EXP_BINARY x) = show x
   show (EXP_GROUPING x) = show x
-  show (NON_EXP x) = show x
+  show (NON_EXP x y) = mconcat [show x, " ", show y]
+  show (EXP_TERNARY x) = show x
 
 data LITERAL = NUMBER Double | STRING TextType | TRUE | FALSE | NIL
 instance Show LITERAL where 
@@ -34,9 +37,13 @@ instance Show UNARY where
 data BINARY = BIN EXPRESSION OPERATOR EXPRESSION
 instance Show BINARY where 
   show (BIN x y z) = mconcat [show x, show y, show z]
+  
+data TERNARY = TERN EXPRESSION OPERATOR EXPRESSION OPERATOR EXPRESSION
+instance Show TERNARY where 
+  show (TERN v w x y z) = mconcat [show v, show w, show x, show y, show z]
 
 data OPERATOR = EQUAL_EQUAL | BANG_EQUAL | LESS | LESS_EQUAL | GREATER | GREATER_EQUAL
-               | PLUS  | MINUS | STAR | SLASH | NO_OP deriving Eq
+               | PLUS  | MINUS | STAR | SLASH | QUESTION_MARK | COLON deriving Eq
                
 instance Show OPERATOR where 
   show EQUAL_EQUAL = "=="
@@ -49,5 +56,6 @@ instance Show OPERATOR where
   show MINUS = "-"
   show STAR = "*"
   show SLASH = "/"
-  show NO_OP = "noop"
+  show QUESTION_MARK = "?"
+  show COLON = ":"
   

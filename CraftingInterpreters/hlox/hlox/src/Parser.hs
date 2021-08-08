@@ -13,8 +13,18 @@ parse :: S.Seq Token -> EXPRESSION
 parse = createExpression
 
 createExpression :: S.Seq Token -> EXPRESSION
-createExpression = createEquality
+createExpression = createTernary
 
+createTernary :: S.Seq Token -> EXPRESSION
+createTernary tokens = if isJust indexOfOp1 && isJust indexOfOp2 then EXP_TERNARY (prepTernary getOp1 getOp2 (fromJust indexOfOp1) (fromJust indexOfOp2) tokens createEquality) else createEquality tokens
+  where 
+    indexOfOp1 = S.findIndexL (\x -> tokenType x == TokenHelper.QUESTION_MARK) tokens
+    indexOfOp2 = S.findIndexL (\x -> tokenType x == TokenHelper.COLON) tokens
+    getOp1 indx 
+      | tokenType (S.index tokens indx) == TokenHelper.QUESTION_MARK = AST.QUESTION_MARK
+    getOp2 indx 
+      | tokenType (S.index tokens indx) == TokenHelper.COLON = AST.COLON
+    
 createEquality :: S.Seq Token -> EXPRESSION
 createEquality tokens = if isJust indexOfOp then EXP_BINARY (prepBinary getOp (fromJust indexOfOp) tokens createComparison) else createComparison tokens
   where
@@ -71,18 +81,16 @@ checkLiteralToken (TokenHelper.NUMBER a) _  = EXP_LITERAL (AST.NUMBER a)
 checkLiteralToken TokenHelper.FALSE _  = EXP_LITERAL AST.FALSE
 checkLiteralToken TokenHelper.TRUE _  = EXP_LITERAL AST.TRUE
 checkLiteralToken TokenHelper.NIL _ = EXP_LITERAL AST.NIL
-checkLiteralToken TokenHelper.LEFT_PAREN tokens 
-  | isEof = NON_EXP "Parenthesis not closed"
-  | isEmpty = NON_EXP "Empty parenthesis"
-  | otherwise = EXP_GROUPING (GROUP (createExpression tokensToUse)) 
+checkLiteralToken TokenHelper.LEFT_PAREN tokens
+  | isEof = NON_EXP "Parenthesis not closed" tokens
+  | isEmpty = NON_EXP "Empty parenthesis" tokens
+  | otherwise = EXP_GROUPING (GROUP (createExpression tokensToUse))
   where tokensToMatch = S.takeWhileL (\x -> tokenType x /= TokenHelper.RIGHT_PAREN) tokens
         tokensToUse = S.drop 1 tokensToMatch
         eofFind = S.findIndexR (\x -> tokenType x == EOF) tokensToMatch
         isEof = getIsAnyEOF eofFind
         isEmpty = S.null tokensToUse
-checkLiteralToken _ _ = NON_EXP "Unknown Token"
-
-
+checkLiteralToken _ tokens = NON_EXP "Unknown Token" tokens
 
 
 --Helpers
@@ -99,3 +107,16 @@ prepBinary getOperation idx tokens nextPrec = AST.BIN (nextPrec left) op (nextPr
          right = S.drop 1 (snd split) 
          op = getOperation idx
          splitTokens indx = S.splitAt indx tokens
+         
+prepTernary :: (Int -> OPERATOR) -> (Int -> OPERATOR) -> Int -> Int -> S.Seq a -> (S.Seq a -> EXPRESSION) -> TERNARY
+prepTernary getOp1 getOp2 idx1 idx2 tokens nextPrec = AST.TERN (nextPrec left) op1 (nextPrec middle) op2 (nextPrec right)
+  where splitTokens indx tList = S.splitAt indx tList
+        split1 = splitTokens idx1 tokens
+        left = fst split1
+        rest = S.drop 1 (snd split1)
+        split2 = splitTokens (idx2-idx1-1) rest
+        middle = fst split2
+        right = S.drop 1 (snd split2)
+        op1 = getOp1 idx1
+        op2 = getOp2 idx2
+        
