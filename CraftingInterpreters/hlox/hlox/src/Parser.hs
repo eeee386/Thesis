@@ -90,7 +90,7 @@ checkLiteralToken TokenHelper.LEFT_PAREN tokens
         eofFind = S.findIndexR (\x -> tokenType x == EOF) tokensToMatch
         isEof = getIsAnyEOF eofFind
         isEmpty = S.null tokensToUse
-checkLiteralToken _ tokens = NON_EXP "Unknown Token" tokens
+checkLiteralToken _ tokens = NON_EXP "Misplaced Token" tokens
 
 
 --Helpers
