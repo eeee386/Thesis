@@ -16,7 +16,7 @@ createExpression :: S.Seq Token -> EXPRESSION
 createExpression = createTernary
 
 createTernary :: S.Seq Token -> EXPRESSION
-createTernary tokens = if isJust indexOfOp1 && isJust indexOfOp2 then EXP_TERNARY (prepTernary getOp1 getOp2 (fromJust indexOfOp1) (fromJust indexOfOp2) tokens createEquality) else createEquality tokens
+createTernary tokens = if isJust indexOfOp1 && isJust indexOfOp2 && indexOfOp1 > Just 0 && (((-) <$> indexOfOp2 <*> indexOfOp1) > Just 1) then EXP_TERNARY (prepTernary getOp1 getOp2 (fromJust indexOfOp1) (fromJust indexOfOp2) tokens createEquality) else createEquality tokens
   where 
     indexOfOp1 = S.findIndexL (\x -> tokenType x == TokenHelper.QUESTION_MARK) tokens
     indexOfOp2 = S.findIndexL (\x -> tokenType x == TokenHelper.COLON) tokens
@@ -26,7 +26,7 @@ createTernary tokens = if isJust indexOfOp1 && isJust indexOfOp2 then EXP_TERNAR
       | tokenType (S.index tokens indx) == TokenHelper.COLON = AST.COLON
     
 createEquality :: S.Seq Token -> EXPRESSION
-createEquality tokens = if isJust indexOfOp then EXP_BINARY (prepBinary getOp (fromJust indexOfOp) tokens createComparison) else createComparison tokens
+createEquality tokens = if isJust indexOfOp then EXP_BINARY (prepBinary getOp (fromJust indexOfOp) tokens createEquality) else createComparison tokens
   where
     indexOfOp = S.findIndexL (\x -> tokenType x == TokenHelper.EQUAL_EQUAL || tokenType x == TokenHelper.BANG_EQUAL) tokens
     getOp indx 
@@ -35,7 +35,7 @@ createEquality tokens = if isJust indexOfOp then EXP_BINARY (prepBinary getOp (f
       where token = tokenType (S.index tokens indx)
 
 createComparison :: S.Seq Token -> EXPRESSION
-createComparison tokens = if isJust indexOfOp then EXP_BINARY (prepBinary getOp (fromJust indexOfOp) tokens createTerm) else createTerm tokens
+createComparison tokens = if isJust indexOfOp then EXP_BINARY (prepBinary getOp (fromJust indexOfOp) tokens createComparison) else createTerm tokens
   where
     indexOfOp = S.findIndexL (\x -> tokenType x == TokenHelper.LESS || tokenType x == TokenHelper.LESS_EQUAL || tokenType x == TokenHelper.GREATER || tokenType x == TokenHelper.GREATER_EQUAL) tokens
     getOp indx 
@@ -46,16 +46,16 @@ createComparison tokens = if isJust indexOfOp then EXP_BINARY (prepBinary getOp 
       where token = tokenType (S.index tokens indx)
 
 createTerm :: S.Seq Token -> EXPRESSION
-createTerm tokens = if isJust indexOfOp then EXP_BINARY (prepBinary getOp (fromJust indexOfOp) tokens createFactor) else createFactor tokens
+createTerm tokens = if isJust indexOfOp && indexOfOp /= Just 0 then EXP_BINARY (prepBinary getOp (fromJust indexOfOp) tokens createTerm) else createFactor tokens
   where
-    indexOfOp = S.findIndexL (\x -> tokenType x == TokenHelper.PLUS || tokenType x == TokenHelper.MINUS) tokens
+    indexOfOp = S.findIndexL (\x -> tokenType x == TokenHelper.PLUS) tokens
     getOp indx 
        | token == TokenHelper.PLUS = AST.PLUS
        | token == TokenHelper.MINUS = AST.MINUS
        where token = tokenType (S.index tokens indx)
 
 createFactor :: S.Seq Token -> EXPRESSION
-createFactor tokens = if isJust indexOfOp then EXP_BINARY (prepBinary getOp (fromJust indexOfOp) tokens createUnary) else createUnary tokens
+createFactor tokens = if isJust indexOfOp && indexOfOp /= Just 0 then EXP_BINARY (prepBinary getOp (fromJust indexOfOp) tokens createUnary) else createUnary tokens
   where
     indexOfOp = S.findIndexL (\x -> tokenType x == TokenHelper.SLASH || tokenType x == TokenHelper.STAR) tokens
     getOp indx 
@@ -95,6 +95,9 @@ checkLiteralToken _ tokens = NON_EXP "Misplaced Token" tokens
 
 --Helpers
 
+findFromIndex :: Int -> (a -> Bool) -> S.Seq a -> Maybe Int
+findFromIndex start predi tokens = S.findIndexL predi (S.drop start tokens) 
+
 getIsAnyEOF :: Maybe Int -> Bool
 getIsAnyEOF (Just _) = True
 getIsAnyEOF Nothing = False
@@ -120,3 +123,12 @@ prepTernary getOp1 getOp2 idx1 idx2 tokens nextPrec = AST.TERN (nextPrec left) o
         op1 = getOp1 idx1
         op2 = getOp2 idx2
         
+        
+findASTError :: EXPRESSION -> Maybe String
+findASTError (NON_EXP x y) = Just (show (NON_EXP x y))
+findASTError (EXP_GROUPING (GROUP x)) = findASTError x
+findASTError (EXP_UNARY (UNARY_MINUS x)) = findASTError x
+findASTError (EXP_UNARY (UNARY_BANG x)) = findASTError x
+findASTError (EXP_BINARY (BIN left _ right)) = (++) <$> findASTError left <*> findASTError right
+findASTError (EXP_TERNARY (TERN _ _ trueRes _ falseRes)) = (++) <$> findASTError trueRes <*> findASTError falseRes
+findASTError _ = Nothing

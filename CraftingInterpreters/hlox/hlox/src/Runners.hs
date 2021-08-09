@@ -12,13 +12,24 @@ import GHC.IO.Handle (hFlush)
 import System.IO (stdout)
 import qualified Data.Sequence as S
 import Parser
+import Eval
 
+
+printScan tokens = if null scanError then printEval parsed else print scanError
+  where scanError = S.findIndicesL (isNotToken . tokenType) tokens
+        parsed = parse tokens
+
+printEval parsed = if null evalError then print evaled else print evalError
+  where evalError = findASTError parsed
+        evaled = evalExpression parsed
+  
 run :: T.Text -> IO()
 run text = do
   print (scanTokens text)
   let tokens = scanTokens text
   let scanErrors = S.findIndicesL (isNotToken . tokenType) tokens
-  if null scanErrors then print (parse tokens) else print scanErrors
+  print (parse tokens)
+  printScan tokens
 
 -- This is the code I used. Thanks Joel Chelliah!
 -- https://github.com/joelchelliah/simple-repl-in-haskell/blob/master/README.md

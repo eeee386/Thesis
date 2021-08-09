@@ -6,7 +6,7 @@ import AST
 import qualified Data.Text as T
 import Data.Maybe
 
-data EVAL = EVAL_NUMBER Double | EVAL_STRING AST.TextType | EVAL_BOOL Bool | EVAL_NIL | NON_EVAL AST.TextType deriving Eq
+data EVAL = EVAL_NUMBER Double | EVAL_STRING AST.TextType | EVAL_BOOL Bool | EVAL_NIL | NON_EVAL AST.TextType deriving (Eq, Show)
 
 evalExpression :: EXPRESSION -> EVAL
 evalExpression (EXP_LITERAL (NUMBER x)) = EVAL_NUMBER x

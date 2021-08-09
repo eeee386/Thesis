@@ -19,7 +19,7 @@ instance Show EXPRESSION where
 data LITERAL = NUMBER Double | STRING TextType | TRUE | FALSE | NIL
 instance Show LITERAL where 
   show (NUMBER x) = show x
-  show (STRING x) = T.unpack x
+  show (STRING x) = T.unpack (T.concat [T.pack "\"", x, T.pack "\""])
   show TRUE = "true"
   show FALSE = "false"
   show NIL = "nil"  
