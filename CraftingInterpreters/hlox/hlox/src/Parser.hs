@@ -7,16 +7,16 @@ import qualified Data.Sequence as S
 import TokenHelper
 import Data.Maybe
 
--- TODO: Add ternary operator
-
 parse :: S.Seq Token -> EXPRESSION
 parse = createExpression
 
 createExpression :: S.Seq Token -> EXPRESSION
 createExpression = createTernary
 
+-- Other cases could be covered, such one of the operators missing
+-- Could be problematic if we had used question marks and colons as other operands
 createTernary :: S.Seq Token -> EXPRESSION
-createTernary tokens = if isJust indexOfOp1 && isJust indexOfOp2 && indexOfOp1 > Just 0 && (((-) <$> indexOfOp2 <*> indexOfOp1) > Just 1) then EXP_TERNARY (prepTernary getOp1 getOp2 (fromJust indexOfOp1) (fromJust indexOfOp2) tokens createEquality) else createEquality tokens
+createTernary tokens = handleTernaryCases
   where 
     indexOfOp1 = S.findIndexL (\x -> tokenType x == TokenHelper.QUESTION_MARK) tokens
     indexOfOp2 = S.findIndexL (\x -> tokenType x == TokenHelper.COLON) tokens
@@ -24,6 +24,13 @@ createTernary tokens = if isJust indexOfOp1 && isJust indexOfOp2 && indexOfOp1 >
       | tokenType (S.index tokens indx) == TokenHelper.QUESTION_MARK = AST.QUESTION_MARK
     getOp2 indx 
       | tokenType (S.index tokens indx) == TokenHelper.COLON = AST.COLON
+    bothIsJust = isJust indexOfOp1 && isJust indexOfOp2
+    xorIsJust = isJust indexOfOp1 /= isJust indexOfOp2
+    biggerThanJust1 = ((-) <$> indexOfOp2 <*> indexOfOp1) > Just 1
+    handleTernaryCases
+      | bothIsJust && biggerThanJust1 = EXP_TERNARY (prepTernary getOp1 getOp2 (fromJust indexOfOp1) (fromJust indexOfOp2) tokens createEquality)
+      | xorIsJust || (bothIsJust && not biggerThanJust1) = NON_EXP "Not a valid ternary operator" tokens
+      | otherwise = createEquality tokens
     
 createEquality :: S.Seq Token -> EXPRESSION
 createEquality tokens = if isJust indexOfOp then EXP_BINARY (prepBinary getOp (fromJust indexOfOp) tokens createEquality) else createComparison tokens

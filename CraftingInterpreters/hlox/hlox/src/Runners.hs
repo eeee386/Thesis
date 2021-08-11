@@ -27,7 +27,6 @@ run :: T.Text -> IO()
 run text = do
   print (scanTokens text)
   let tokens = scanTokens text
-  let scanErrors = S.findIndicesL (isNotToken . tokenType) tokens
   print (parse tokens)
   printScan tokens
 
