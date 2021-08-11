@@ -8,3 +8,4 @@
     - Why did I use strict instead of lazy -> again perfonrmace issues (list concatenation, backwards traversal, indexing... etc)
 - Parser Types and Recursive Descent Parser
 - Error Handling
+- States (variables,scopes...) in a stateless side-effectless programming languages (will see how it turns out)

@@ -28,10 +28,10 @@ createTernary tokens = handleTernaryCases
       | tokenType (S.index tokens indx) == TokenHelper.COLON = AST.COLON
     bothIsJust = isJust indexOfOp1 && isJust indexOfOp2
     xorIsJust = isJust indexOfOp1 /= isJust indexOfOp2
-    biggerThanJust1 = ((-) <$> indexOfOp2 <*> indexOfOp1) > Just 1
+    properPlacement = ((-) <$> indexOfOp2 <*> indexOfOp1) > Just 1
     handleTernaryCases
-      | bothIsJust && biggerThanJust1 = EXP_TERNARY (prepTernary getOp1 getOp2 (fromJust indexOfOp1) (fromJust indexOfOp2) tokens createEquality)
-      | xorIsJust || (bothIsJust && not biggerThanJust1) = NON_EXP "Not a valid ternary operator" tokens
+      | bothIsJust && properPlacement = EXP_TERNARY (prepTernary getOp1 getOp2 (fromJust indexOfOp1) (fromJust indexOfOp2) tokens createEquality)
+      | xorIsJust || (bothIsJust && not properPlacement) = NON_EXP "Not a valid ternary operator" tokens
       | otherwise = createEquality tokens
     
 createEquality :: S.Seq Token -> EXPRESSION
@@ -103,7 +103,6 @@ checkLiteralToken _ tokens = NON_EXP "Misplaced Token" tokens
 
 
 --Helpers
-
 findFromIndex :: Int -> (a -> Bool) -> S.Seq a -> Maybe Int
 findFromIndex start predi tokens = S.findIndexL predi (S.drop start tokens) 
 
