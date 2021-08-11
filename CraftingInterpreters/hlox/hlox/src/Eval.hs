@@ -6,7 +6,16 @@ import AST
 import qualified Data.Text as T
 import Data.Maybe
 
-data EVAL = EVAL_NUMBER Double | EVAL_STRING AST.TextType | EVAL_BOOL Bool | EVAL_NIL | NON_EVAL AST.TextType deriving (Eq, Show)
+-- TODO: show line in error message, have to refactor parser and AST for this
+
+data EVAL = EVAL_NUMBER Double | EVAL_STRING AST.TextType | EVAL_BOOL Bool | EVAL_NIL | NON_EVAL AST.TextType deriving (Eq)
+instance Show EVAL where
+  show (EVAL_NUMBER x) = show x
+  show (EVAL_STRING x) = show x
+  show (EVAL_BOOL x) = show x
+  show EVAL_NIL = "nil"
+  show (NON_EVAL x) = mconcat ["Error: ", show x]
+  
 
 evalExpression :: EXPRESSION -> EVAL
 evalExpression (EXP_LITERAL (NUMBER x)) = EVAL_NUMBER x
@@ -27,7 +36,7 @@ getUnary (UNARY_BANG x)
   where val = maybeEvalTruthy (evalExpression x)
 getUnary (UNARY_MINUS x)
   | isJust number = EVAL_NUMBER (-(fromJust number))
-  | otherwise = NON_EVAL "Not a number expression" 
+  | otherwise = NON_EVAL "Operand must be a number" 
   where number = maybeEvalNumber (evalExpression x)
   
 
@@ -55,8 +64,8 @@ getBinary left op right
        notEquals = createEquality evalLeft evalRight not
        handlePlus 
          | isJust leftNum && isJust rightNum = getArithOp (+)
-         | isJust leftStr && isJust rightStr = concatMaybeString leftStr rightStr
-         | otherwise = NON_EVAL ""
+         | isJust leftStr && isJust rightStr = concatTwoString (fromJust leftStr) (fromJust rightStr)
+         | otherwise = NON_EVAL "Operands must be two numbers or two strings"
 
 
 getTernary :: EXPRESSION -> EXPRESSION -> EXPRESSION -> EVAL
@@ -82,11 +91,11 @@ maybeEvalString :: EVAL -> Maybe AST.TextType
 maybeEvalString (EVAL_STRING x) = Just x
 maybeEvalString _ = Nothing
 
-concatMaybeString :: Maybe AST.TextType -> Maybe AST.TextType -> EVAL
-concatMaybeString l r = if isJust l && isJust r then EVAL_STRING (T.concat [fromJust l, fromJust r]) else NON_EVAL "Not a concatenation"
+concatTwoString :: AST.TextType -> AST.TextType -> EVAL
+concatTwoString l r = EVAL_STRING (T.concat [l,r])
 
 createMathOp :: (a -> EVAL) -> Maybe Double -> Maybe Double -> (Double -> Double -> a) -> EVAL
-createMathOp x l r f = if isJust l && isJust r then x (f (fromJust l) (fromJust r)) else NON_EVAL "Not an arithmetic operation"
+createMathOp x l r f = if isJust l && isJust r then x (f (fromJust l) (fromJust r)) else NON_EVAL "Operands must be numbers"
 
 createArithmeticOps :: Maybe Double -> Maybe Double -> (Double -> Double -> Double) -> EVAL
 createArithmeticOps = createMathOp EVAL_NUMBER

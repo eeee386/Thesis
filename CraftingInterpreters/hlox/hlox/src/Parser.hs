@@ -7,6 +7,8 @@ import qualified Data.Sequence as S
 import TokenHelper
 import Data.Maybe
 
+-- TODO: solve Synchronization 
+
 parse :: S.Seq Token -> EXPRESSION
 parse = createExpression
 
