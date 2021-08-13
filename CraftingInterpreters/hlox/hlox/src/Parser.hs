@@ -6,7 +6,8 @@ import AST
 import qualified Data.Sequence as S
 import TokenHelper
 import Data.Maybe
-
+import qualified Data.Map as M
+ 
 -- TODO: solve Synchronization 
 
 parse :: S.Seq Token -> EXPRESSION
@@ -18,7 +19,7 @@ createExpression = createTernary
 -- Other cases could be covered, such one of the operators missing
 -- Could be problematic if we had used question marks and colons as other operands
 createTernary :: S.Seq Token -> EXPRESSION
-createTernary tokens = handleTernaryCases
+createTernary tokens = handleTernaryCases getOp1 getOp2 indexOfOp1 indexOfOp2 tokens
   where 
     indexOfOp1 = S.findIndexL (\x -> tokenType x == TokenHelper.QUESTION_MARK) tokens
     indexOfOp2 = S.findIndexL (\x -> tokenType x == TokenHelper.COLON) tokens
@@ -26,59 +27,35 @@ createTernary tokens = handleTernaryCases
       | tokenType (S.index tokens indx) == TokenHelper.QUESTION_MARK = AST.QUESTION_MARK
     getOp2 indx 
       | tokenType (S.index tokens indx) == TokenHelper.COLON = AST.COLON
-    bothIsJust = isJust indexOfOp1 && isJust indexOfOp2
-    xorIsJust = isJust indexOfOp1 /= isJust indexOfOp2
-    properPlacement = ((-) <$> indexOfOp2 <*> indexOfOp1) > Just 1
-    handleTernaryCases
-      | bothIsJust && properPlacement = EXP_TERNARY (prepTernary getOp1 getOp2 (fromJust indexOfOp1) (fromJust indexOfOp2) tokens createEquality)
-      | xorIsJust || (bothIsJust && not properPlacement) = NON_EXP "Not a valid ternary operator" tokens
-      | otherwise = createEquality tokens
-    
+
+
 createEquality :: S.Seq Token -> EXPRESSION
-createEquality tokens = if isJust indexOfOp then EXP_BINARY (prepBinary getOp (fromJust indexOfOp) tokens createEquality) else createComparison tokens
-  where
-    indexOfOp = S.findIndexL (\x -> tokenType x == TokenHelper.EQUAL_EQUAL || tokenType x == TokenHelper.BANG_EQUAL) tokens
-    getOp indx 
-      | token == TokenHelper.EQUAL_EQUAL = AST.EQUAL_EQUAL
-      | token == TokenHelper.BANG_EQUAL = AST.BANG_EQUAL
-      where token = tokenType (S.index tokens indx)
+createEquality = createBinaryExpressions (M.fromList [(TokenHelper.EQUAL_EQUAL, AST.EQUAL_EQUAL), 
+                                                      (TokenHelper.BANG_EQUAL, AST.BANG_EQUAL)]) createComparison
 
 createComparison :: S.Seq Token -> EXPRESSION
-createComparison tokens = if isJust indexOfOp then EXP_BINARY (prepBinary getOp (fromJust indexOfOp) tokens createComparison) else createTerm tokens
-  where
-    indexOfOp = S.findIndexL (\x -> tokenType x == TokenHelper.LESS || tokenType x == TokenHelper.LESS_EQUAL || tokenType x == TokenHelper.GREATER || tokenType x == TokenHelper.GREATER_EQUAL) tokens
-    getOp indx 
-      | token == TokenHelper.LESS = AST.LESS
-      | token == TokenHelper.LESS_EQUAL = AST.LESS_EQUAL
-      | token == TokenHelper.GREATER = AST.GREATER
-      | token == TokenHelper.GREATER_EQUAL = AST.GREATER_EQUAL
-      where token = tokenType (S.index tokens indx)
+createComparison = createBinaryExpressions (M.fromList [(TokenHelper.LESS, AST.LESS),
+                                                        (TokenHelper.LESS_EQUAL, AST.LESS_EQUAL),
+                                                        (TokenHelper.GREATER, AST.GREATER),
+                                                        (TokenHelper.GREATER_EQUAL, AST.GREATER_EQUAL)]) createTerm
 
 createTerm :: S.Seq Token -> EXPRESSION
-createTerm tokens = if isJust indexOfOp && indexOfOp /= Just 0 then EXP_BINARY (prepBinary getOp (fromJust indexOfOp) tokens createTerm) else createFactor tokens
-  where
-    indexOfOp = S.findIndexL (\x -> tokenType x == TokenHelper.PLUS) tokens
-    getOp indx 
-       | token == TokenHelper.PLUS = AST.PLUS
-       | token == TokenHelper.MINUS = AST.MINUS
-       where token = tokenType (S.index tokens indx)
+createTerm = createBinaryExpressions (M.fromList [(TokenHelper.PLUS, AST.PLUS), 
+                                                  (TokenHelper.MINUS, AST.MINUS)]) createFactor
 
 createFactor :: S.Seq Token -> EXPRESSION
-createFactor tokens = if isJust indexOfOp && indexOfOp /= Just 0 then EXP_BINARY (prepBinary getOp (fromJust indexOfOp) tokens createUnary) else createUnary tokens
-  where
-    indexOfOp = S.findIndexL (\x -> tokenType x == TokenHelper.SLASH || tokenType x == TokenHelper.STAR) tokens
-    getOp indx 
-       | token == TokenHelper.SLASH = AST.SLASH
-       | token == TokenHelper.STAR = AST.STAR
-       where token = tokenType (S.index tokens indx)
+createFactor = createBinaryExpressions (M.fromList [(TokenHelper.SLASH, AST.SLASH), 
+                                                    (TokenHelper.STAR, AST.STAR)]) createUnary
 
     
 createUnary :: S.Seq Token -> EXPRESSION
 createUnary tokens
-  | token == TokenHelper.BANG = EXP_UNARY (UNARY_BANG (createUnary (S.drop 1 tokens)))
-  | token == TokenHelper.MINUS = EXP_UNARY (UNARY_MINUS (createUnary (S.drop 1 tokens)))
+  | tType == Just TokenHelper.BANG = EXP_UNARY (UNARY_BANG (createUnary (S.drop 1 tokens))) (fromJust l)
+  | tType == Just TokenHelper.MINUS = EXP_UNARY (UNARY_MINUS (createUnary (S.drop 1 tokens))) (fromJust l)
   | otherwise = createLiteral tokens
-  where token = tokenType (S.index tokens 0)
+  where token = S.lookup 0 tokens
+        tType = tokenType <$> token
+        l = line <$> token
   
 createLiteral :: S.Seq Token -> EXPRESSION
 createLiteral tokens = checkLiteralToken token tokens
@@ -110,17 +87,31 @@ getIsAnyEOF :: Maybe Int -> Bool
 getIsAnyEOF (Just _) = True
 getIsAnyEOF Nothing = False
 
+createBinaryExpressions :: M.Map TokenType OPERATOR -> (S.Seq Token -> EXPRESSION) -> S.Seq Token -> EXPRESSION
+createBinaryExpressions tokenExpMap nextPrec tokens = handleBinaryCases
+  where
+    indexOfOp = S.findIndexL (\x -> tokenType x `elem` M.keys tokenExpMap) tokens
+    (bin, bLines) = prepBinary getOp (fromJust indexOfOp) tokens nextPrec
+    getOp indx = tokenExpMap M.! token
+      where token = tokenType (S.index tokens indx)
+    handleBinaryCases
+      | isJust indexOfOp && indexOfOp > Just 0 = EXP_BINARY bin bLines
+      | indexOfOp > Just (S.length tokens - 2) = NON_EXP "Missing operands from right side" tokens
+      | otherwise = nextPrec tokens
 
-prepBinary :: (Int -> OPERATOR) -> Int -> S.Seq a -> (S.Seq a -> EXPRESSION) -> BINARY
-prepBinary getOperation idx tokens nextPrec = AST.BIN (nextPrec left) op (nextPrec right)
+prepBinary :: (Int -> OPERATOR) -> Int -> S.Seq Token -> (S.Seq Token -> EXPRESSION) -> (BINARY, (Int, Int))
+prepBinary getOperation idx tokens nextPrec = (AST.BIN (nextPrec left) op (nextPrec right), (startLine, endLine))
    where split = splitTokens idx
          left = fst split
          right = S.drop 1 (snd split) 
          op = getOperation idx
          splitTokens indx = S.splitAt indx tokens
+         opToken = S.index tokens idx
+         startLine = if S.null left then line opToken else line (S.index left 0)
+         endLine = if S.null right then line opToken else line (S.index right (S.length right - 1)) 
          
-prepTernary :: (Int -> OPERATOR) -> (Int -> OPERATOR) -> Int -> Int -> S.Seq a -> (S.Seq a -> EXPRESSION) -> TERNARY
-prepTernary getOp1 getOp2 idx1 idx2 tokens nextPrec = AST.TERN (nextPrec left) op1 (nextPrec middle) op2 (nextPrec right)
+prepTernary :: (Int -> OPERATOR) -> (Int -> OPERATOR) -> Int -> Int -> S.Seq Token -> (S.Seq Token -> EXPRESSION) -> (TERNARY, (Int, Int))
+prepTernary getOp1 getOp2 idx1 idx2 tokens nextPrec = (AST.TERN (nextPrec left) op1 (nextPrec middle) op2 (nextPrec right), (startLine, endLine))
   where splitTokens indx tList = S.splitAt indx tList
         split1 = splitTokens idx1 tokens
         left = fst split1
@@ -130,13 +121,27 @@ prepTernary getOp1 getOp2 idx1 idx2 tokens nextPrec = AST.TERN (nextPrec left) o
         right = S.drop 1 (snd split2)
         op1 = getOp1 idx1
         op2 = getOp2 idx2
-        
+        startLine = if S.null left then line (S.index tokens idx1) else line (S.index left 0)
+        endLine = if S.null right then line (S.index tokens idx2) else line (S.index right (length tokens-1)) 
+
+
+handleTernaryCases :: (Int -> OPERATOR) -> (Int -> OPERATOR) -> Maybe Int -> Maybe Int -> S.Seq Token -> EXPRESSION
+handleTernaryCases getOp1 getOp2 indexOfOp1 indexOfOp2 tokens
+  | bothIsJust && properPlacement = EXP_TERNARY tern tLines
+  | xorIsJust || (bothIsJust && not properPlacement) = NON_EXP "Not a valid ternary operator" tokens
+  | otherwise = createEquality tokens
+  where (tern, tLines) = prepTernary getOp1 getOp2 (fromJust indexOfOp1) (fromJust indexOfOp2) tokens createEquality
+        bothIsJust = isJust indexOfOp1 && isJust indexOfOp2
+        xorIsJust = isJust indexOfOp1 /= isJust indexOfOp2
+        properPlacement = ((-) <$> indexOfOp2 <*> indexOfOp1) > Just 1 && indexOfOp2 < Just (S.length tokens - 2)
+  
         
 findASTError :: EXPRESSION -> Maybe String
 findASTError (NON_EXP x y) = Just (show (NON_EXP x y))
 findASTError (EXP_GROUPING (GROUP x)) = findASTError x
-findASTError (EXP_UNARY (UNARY_MINUS x)) = findASTError x
-findASTError (EXP_UNARY (UNARY_BANG x)) = findASTError x
-findASTError (EXP_BINARY (BIN left _ right)) = (++) <$> findASTError left <*> findASTError right
-findASTError (EXP_TERNARY (TERN _ _ trueRes _ falseRes)) = (++) <$> findASTError trueRes <*> findASTError falseRes
+findASTError (EXP_UNARY (UNARY_MINUS x) _) = findASTError x
+findASTError (EXP_UNARY (UNARY_BANG x) _) = findASTError x
+findASTError (EXP_BINARY (BIN left _ right) _) = (++) <$> findASTError left <*> findASTError right
+findASTError (EXP_TERNARY (TERN _ _ trueRes _ falseRes) _) = (++) <$> findASTError trueRes <*> findASTError falseRes
 findASTError _ = Nothing
+        

@@ -16,8 +16,8 @@ import Eval
 import AST
 
 
-printScan :: S.Seq Token -> IO ()
-printScan tokens = if null scanError then printEval parsed else print scanError
+printScanErrorOrContinue :: S.Seq Token -> IO ()
+printScanErrorOrContinue tokens = if null scanError then printEval parsed else print scanError
   where scanError = S.findIndicesL (isNotToken . tokenType) tokens
         parsed = parse tokens
 
@@ -29,7 +29,7 @@ printEval parsed = if null evalError then print evaled else print evalError
 run :: T.Text -> IO()
 run text = do
   let tokens = scanTokens text
-  printScan tokens
+  printScanErrorOrContinue tokens
 
 -- This is the code I used. Thanks Joel Chelliah!
 -- https://github.com/joelchelliah/simple-repl-in-haskell/blob/master/README.md

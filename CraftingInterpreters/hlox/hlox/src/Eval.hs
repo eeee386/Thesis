@@ -8,13 +8,13 @@ import Data.Maybe
 
 -- TODO: show line in error message, have to refactor parser and AST for this
 
-data EVAL = EVAL_NUMBER Double | EVAL_STRING AST.TextType | EVAL_BOOL Bool | EVAL_NIL | NON_EVAL AST.TextType deriving (Eq)
+data EVAL = EVAL_NUMBER Double | EVAL_STRING AST.TextType | EVAL_BOOL Bool | EVAL_NIL | NON_EVAL AST.TextType Lines deriving (Eq)
 instance Show EVAL where
   show (EVAL_NUMBER x) = show x
   show (EVAL_STRING x) = show x
   show (EVAL_BOOL x) = show x
   show EVAL_NIL = "nil"
-  show (NON_EVAL x) = mconcat ["Error: ", show x]
+  show (NON_EVAL x neLines) = mconcat ["RuntimeError: ", show x, getLineError neLines]
   
 
 evalExpression :: EXPRESSION -> EVAL
@@ -24,24 +24,24 @@ evalExpression (EXP_LITERAL FALSE) = EVAL_BOOL False
 evalExpression (EXP_LITERAL TRUE) = EVAL_BOOL True
 evalExpression (EXP_LITERAL NIL) = EVAL_NIL
 evalExpression (EXP_GROUPING (GROUP x)) = evalExpression x
-evalExpression (EXP_UNARY x) = getUnary x
-evalExpression (EXP_BINARY (BIN left op right)) = getBinary left op right
-evalExpression (EXP_TERNARY (TERN predi _ trueRes _ falseRes)) = getTernary predi trueRes falseRes
-evalExpression _ = NON_EVAL "Expression cannot be evaluated"
+evalExpression (EXP_UNARY x uLine) = getUnary uLine x 
+evalExpression (EXP_BINARY (BIN left op right) bLines) = getBinary bLines left op right 
+evalExpression (EXP_TERNARY (TERN predi _ trueRes _ falseRes) tLines) = getTernary tLines predi trueRes falseRes
+evalExpression _ = NON_EVAL "Expression cannot be evaluated" (-1, -1)
 
-getUnary :: UNARY -> EVAL
-getUnary (UNARY_BANG x)
+getUnary :: Int -> UNARY -> EVAL
+getUnary uLine (UNARY_BANG x) 
   | isJust val = EVAL_BOOL (not (fromJust val))
-  | otherwise = NON_EVAL "Not an expression"
+  | otherwise = NON_EVAL "Not an expression" (uLine, uLine)
   where val = maybeEvalTruthy (evalExpression x)
-getUnary (UNARY_MINUS x)
+getUnary uLine (UNARY_MINUS x) 
   | isJust number = EVAL_NUMBER (-(fromJust number))
-  | otherwise = NON_EVAL "Operand must be a number" 
+  | otherwise = NON_EVAL "Operand must be a number" (uLine, uLine)
   where number = maybeEvalNumber (evalExpression x)
   
 
-getBinary :: EXPRESSION -> OPERATOR -> EXPRESSION -> EVAL
-getBinary left op right
+getBinary :: (Int, Int) -> EXPRESSION -> OPERATOR -> EXPRESSION ->  EVAL
+getBinary bLines left op right
  | op == MINUS = getArithOp (-) 
  | op == SLASH = getArithOp (/)
  | op == STAR = getArithOp (*)
@@ -58,24 +58,29 @@ getBinary left op right
        rightNum = maybeEvalNumber evalRight
        leftStr = maybeEvalString evalLeft
        rightStr = maybeEvalString evalRight
-       getArithOp = createArithmeticOps leftNum rightNum
-       getCompOp = createComparison leftNum rightNum
+       getArithOp = createArithmeticOps bLines leftNum rightNum
+       getCompOp = createComparison bLines leftNum rightNum
        equals = createEquality evalLeft evalRight id
        notEquals = createEquality evalLeft evalRight not
        handlePlus 
          | isJust leftNum && isJust rightNum = getArithOp (+)
          | isJust leftStr && isJust rightStr = concatTwoString (fromJust leftStr) (fromJust rightStr)
-         | otherwise = NON_EVAL "Operands must be two numbers or two strings"
+         | otherwise = NON_EVAL "Operands must be two numbers or two strings" bLines
 
 
-getTernary :: EXPRESSION -> EXPRESSION -> EXPRESSION -> EVAL
-getTernary predi trueRes falseRes
+getTernary :: (Int, Int) -> EXPRESSION -> EXPRESSION -> EXPRESSION -> EVAL
+getTernary tLines predi trueRes falseRes
   | preppedPred == Just True = evalExpression trueRes
   | preppedPred == Just False = evalExpression falseRes
-  | isNothing preppedPred = NON_EVAL "Ternary operator failed"
+  | isNothing preppedPred = NON_EVAL "Ternary operator failed" tLines
   where preppedPred = maybeEvalTruthy (evalExpression predi)
 
 -- Helpers
+getLineError :: (Int, Int) -> String
+getLineError eLines = if firstLine /= secondLine then mconcat [". Between lines: ", show firstLine, "-", show secondLine] else mconcat [". In line: ", show firstLine]
+  where firstLine = fst eLines
+        secondLine = snd eLines
+ 
 maybeEvalNumber :: EVAL -> Maybe Double
 maybeEvalNumber (EVAL_NUMBER x) = Just x
 maybeEvalNumber _ = Nothing
@@ -94,13 +99,13 @@ maybeEvalString _ = Nothing
 concatTwoString :: AST.TextType -> AST.TextType -> EVAL
 concatTwoString l r = EVAL_STRING (T.concat [l,r])
 
-createMathOp :: (a -> EVAL) -> Maybe Double -> Maybe Double -> (Double -> Double -> a) -> EVAL
-createMathOp x l r f = if isJust l && isJust r then x (f (fromJust l) (fromJust r)) else NON_EVAL "Operands must be numbers"
+createMathOp :: (a -> EVAL) -> (Int, Int) -> Maybe Double -> Maybe Double -> (Double -> Double -> a)  -> EVAL
+createMathOp x mLines l r f = if isJust l && isJust r then x (f (fromJust l) (fromJust r)) else NON_EVAL "Operands must be numbers" mLines
 
-createArithmeticOps :: Maybe Double -> Maybe Double -> (Double -> Double -> Double) -> EVAL
+createArithmeticOps :: (Int, Int) -> Maybe Double -> Maybe Double -> (Double -> Double -> Double) -> EVAL
 createArithmeticOps = createMathOp EVAL_NUMBER
 
-createComparison :: Maybe Double -> Maybe Double -> (Double -> Double -> Bool) -> EVAL
+createComparison :: (Int, Int) -> Maybe Double -> Maybe Double -> (Double -> Double -> Bool) -> EVAL
 createComparison = createMathOp EVAL_BOOL
 
 createEquality :: (Eq a) => a -> a -> (Bool -> Bool) -> EVAL

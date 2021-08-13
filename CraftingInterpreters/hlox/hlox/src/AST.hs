@@ -6,15 +6,18 @@ import TokenHelper (Token)
 import qualified Data.Sequence as S
 
 type TextType = T.Text
-  
-data EXPRESSION = EXP_LITERAL LITERAL | EXP_UNARY UNARY | EXP_BINARY BINARY | EXP_TERNARY TERNARY | EXP_GROUPING GROUPING | NON_EXP String (S.Seq Token)
+type Line = Int
+type Lines = (Line, Line)
+
+-- Lines only needed in operator expression because are the ones that can be items, that cannot be evaluated
+data EXPRESSION = EXP_LITERAL LITERAL | EXP_UNARY UNARY Line | EXP_BINARY BINARY Lines | EXP_TERNARY TERNARY Lines | EXP_GROUPING GROUPING | NON_EXP String (S.Seq Token)
 instance Show EXPRESSION where 
   show (EXP_LITERAL x) = show x
-  show (EXP_UNARY x) = show x
-  show (EXP_BINARY x) = show x
+  show (EXP_UNARY x _) = show x
+  show (EXP_BINARY x _) = show x
   show (EXP_GROUPING x) = show x
   show (NON_EXP x y) = mconcat [show x, " ", show y]
-  show (EXP_TERNARY x) = show x
+  show (EXP_TERNARY x _) = show x
 
 data LITERAL = NUMBER Double | STRING TextType | TRUE | FALSE | NIL
 instance Show LITERAL where 
