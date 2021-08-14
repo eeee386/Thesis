@@ -50,12 +50,11 @@ createFactor = createBinaryExpressions (M.fromList [(TokenHelper.SLASH, AST.SLAS
     
 createUnary :: S.Seq Token -> EXPRESSION
 createUnary tokens
-  | tType == Just TokenHelper.BANG = EXP_UNARY (UNARY_BANG (createUnary (S.drop 1 tokens))) (fromJust l)
-  | tType == Just TokenHelper.MINUS = EXP_UNARY (UNARY_MINUS (createUnary (S.drop 1 tokens))) (fromJust l)
+  | tType == Just TokenHelper.BANG = EXP_UNARY (UNARY_BANG (createUnary (S.drop 1 tokens))) tokens
+  | tType == Just TokenHelper.MINUS = EXP_UNARY (UNARY_MINUS (createUnary (S.drop 1 tokens))) tokens
   | otherwise = createLiteral tokens
   where token = S.lookup 0 tokens
         tType = tokenType <$> token
-        l = line <$> token
   
 createLiteral :: S.Seq Token -> EXPRESSION
 createLiteral tokens = checkLiteralToken token tokens
@@ -91,27 +90,24 @@ createBinaryExpressions :: M.Map TokenType OPERATOR -> (S.Seq Token -> EXPRESSIO
 createBinaryExpressions tokenExpMap nextPrec tokens = handleBinaryCases
   where
     indexOfOp = S.findIndexL (\x -> tokenType x `elem` M.keys tokenExpMap) tokens
-    (bin, bLines) = prepBinary getOp (fromJust indexOfOp) tokens nextPrec
+    bin = prepBinary getOp (fromJust indexOfOp) tokens nextPrec
     getOp indx = tokenExpMap M.! token
       where token = tokenType (S.index tokens indx)
     handleBinaryCases
-      | isJust indexOfOp && indexOfOp > Just 0 = EXP_BINARY bin bLines
+      | isJust indexOfOp && indexOfOp > Just 0 = EXP_BINARY bin tokens
       | indexOfOp > Just (S.length tokens - 2) = NON_EXP "Missing operands from right side" tokens
       | otherwise = nextPrec tokens
 
-prepBinary :: (Int -> OPERATOR) -> Int -> S.Seq Token -> (S.Seq Token -> EXPRESSION) -> (BINARY, (Int, Int))
-prepBinary getOperation idx tokens nextPrec = (AST.BIN (nextPrec left) op (nextPrec right), (startLine, endLine))
+prepBinary :: (Int -> OPERATOR) -> Int -> S.Seq Token -> (S.Seq Token -> EXPRESSION) -> BINARY
+prepBinary getOperation idx tokens nextPrec = AST.BIN (nextPrec left) op (nextPrec right)
    where split = splitTokens idx
          left = fst split
          right = S.drop 1 (snd split) 
          op = getOperation idx
          splitTokens indx = S.splitAt indx tokens
-         opToken = S.index tokens idx
-         startLine = if S.null left then line opToken else line (S.index left 0)
-         endLine = if S.null right then line opToken else line (S.index right (S.length right - 1)) 
          
-prepTernary :: (Int -> OPERATOR) -> (Int -> OPERATOR) -> Int -> Int -> S.Seq Token -> (S.Seq Token -> EXPRESSION) -> (TERNARY, (Int, Int))
-prepTernary getOp1 getOp2 idx1 idx2 tokens nextPrec = (AST.TERN (nextPrec left) op1 (nextPrec middle) op2 (nextPrec right), (startLine, endLine))
+prepTernary :: (Int -> OPERATOR) -> (Int -> OPERATOR) -> Int -> Int -> S.Seq Token -> (S.Seq Token -> EXPRESSION) -> TERNARY
+prepTernary getOp1 getOp2 idx1 idx2 tokens nextPrec = AST.TERN (nextPrec left) op1 (nextPrec middle) op2 (nextPrec right)
   where splitTokens indx tList = S.splitAt indx tList
         split1 = splitTokens idx1 tokens
         left = fst split1
@@ -121,16 +117,14 @@ prepTernary getOp1 getOp2 idx1 idx2 tokens nextPrec = (AST.TERN (nextPrec left) 
         right = S.drop 1 (snd split2)
         op1 = getOp1 idx1
         op2 = getOp2 idx2
-        startLine = if S.null left then line (S.index tokens idx1) else line (S.index left 0)
-        endLine = if S.null right then line (S.index tokens idx2) else line (S.index right (length tokens-1)) 
 
 
 handleTernaryCases :: (Int -> OPERATOR) -> (Int -> OPERATOR) -> Maybe Int -> Maybe Int -> S.Seq Token -> EXPRESSION
 handleTernaryCases getOp1 getOp2 indexOfOp1 indexOfOp2 tokens
-  | bothIsJust && properPlacement = EXP_TERNARY tern tLines
+  | bothIsJust && properPlacement = EXP_TERNARY tern tokens
   | xorIsJust || (bothIsJust && not properPlacement) = NON_EXP "Not a valid ternary operator" tokens
   | otherwise = createEquality tokens
-  where (tern, tLines) = prepTernary getOp1 getOp2 (fromJust indexOfOp1) (fromJust indexOfOp2) tokens createEquality
+  where tern = prepTernary getOp1 getOp2 (fromJust indexOfOp1) (fromJust indexOfOp2) tokens createEquality
         bothIsJust = isJust indexOfOp1 && isJust indexOfOp2
         xorIsJust = isJust indexOfOp1 /= isJust indexOfOp2
         properPlacement = ((-) <$> indexOfOp2 <*> indexOfOp1) > Just 1 && indexOfOp2 < Just (S.length tokens - 2)

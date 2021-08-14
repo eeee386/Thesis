@@ -30,7 +30,7 @@ data TokenType =     LEFT_PAREN | RIGHT_PAREN | LEFT_BRACE | RIGHT_BRACE |
 data Token = Token {
 tokenType :: TokenType
 , line :: Int
-} 
+} deriving Eq
 
 instance Show Token where
   show a = mconcat ["{", show (tokenType a), ", ", show (line a), "}"]

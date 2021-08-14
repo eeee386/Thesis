@@ -6,11 +6,9 @@ import TokenHelper (Token)
 import qualified Data.Sequence as S
 
 type TextType = T.Text
-type Line = Int
-type Lines = (Line, Line)
 
 -- Lines only needed in operator expression because are the ones that can be items, that cannot be evaluated
-data EXPRESSION = EXP_LITERAL LITERAL | EXP_UNARY UNARY Line | EXP_BINARY BINARY Lines | EXP_TERNARY TERNARY Lines | EXP_GROUPING GROUPING | NON_EXP String (S.Seq Token)
+data EXPRESSION = EXP_LITERAL LITERAL | EXP_UNARY UNARY (S.Seq Token) | EXP_BINARY BINARY (S.Seq Token) | EXP_TERNARY TERNARY (S.Seq Token) | EXP_GROUPING GROUPING | NON_EXP String (S.Seq Token)
 instance Show EXPRESSION where 
   show (EXP_LITERAL x) = show x
   show (EXP_UNARY x _) = show x
