@@ -8,11 +8,7 @@ import Data.Maybe
 import qualified Data.Sequence as S
 import qualified TokenHelper as TH
 
-
-type Line = Int
-type Lines = (Line, Line)
-
--- TODO: show line in error message, have to refactor parser and AST for this
+data PROG_EVAL = EXPR_EVAL EVAL | PRINT_EVAL EVAL
 
 data EVAL = EVAL_NUMBER Double | EVAL_STRING AST.TextType | EVAL_BOOL Bool | EVAL_NIL | NON_EVAL AST.TextType (S.Seq TH.Token) deriving Eq
 instance Show EVAL where
@@ -22,6 +18,12 @@ instance Show EVAL where
   show EVAL_NIL = "nil"
   show (NON_EVAL x neLines) = mconcat ["RuntimeError: ", show x, getLineError neLines]
   
+evalProgram :: PROGRAM -> S.Seq PROG_EVAL
+evalProgram (PROG x _) = fmap evalProgramHelper x
+
+evalProgramHelper :: STATEMENT -> PROG_EVAL 
+evalProgramHelper (PRINT_STMT x) = PRINT_EVAL (evalExpression x)
+evalProgramHelper (EXPR_STMT x) = EXPR_EVAL (evalExpression x)
 
 evalExpression :: EXPRESSION -> EVAL
 evalExpression (EXP_LITERAL (NUMBER x)) = EVAL_NUMBER x
@@ -30,24 +32,24 @@ evalExpression (EXP_LITERAL FALSE) = EVAL_BOOL False
 evalExpression (EXP_LITERAL TRUE) = EVAL_BOOL True
 evalExpression (EXP_LITERAL NIL) = EVAL_NIL
 evalExpression (EXP_GROUPING (GROUP x)) = evalExpression x
-evalExpression (EXP_UNARY x tokens) = getUnary tokens x 
-evalExpression (EXP_BINARY (BIN left op right) bLines) = getBinary bLines left op right 
-evalExpression (EXP_TERNARY (TERN predi _ trueRes _ falseRes) tLines) = getTernary tLines predi trueRes falseRes
+evalExpression (EXP_UNARY x tokens) = evalUnary tokens x 
+evalExpression (EXP_BINARY (BIN left op right) bLines) = evalBinary bLines left op right 
+evalExpression (EXP_TERNARY (TERN predi _ trueRes _ falseRes) tLines) = evalTernary tLines predi trueRes falseRes
 evalExpression _ = NON_EVAL "Expression cannot be evaluated" (S.fromList [])
 
-getUnary :: S.Seq TH.Token -> UNARY -> EVAL
-getUnary tokens (UNARY_BANG x) 
+evalUnary :: S.Seq TH.Token -> UNARY -> EVAL
+evalUnary tokens (UNARY_BANG x) 
   | isJust val = EVAL_BOOL (not (fromJust val))
   | otherwise = NON_EVAL "Not an expression" tokens
   where val = maybeEvalTruthy (evalExpression x)
-getUnary tokens (UNARY_MINUS x) 
+evalUnary tokens (UNARY_MINUS x) 
   | isJust number = EVAL_NUMBER (-(fromJust number))
   | otherwise = NON_EVAL "Operand must be a number" tokens
   where number = maybeEvalNumber (evalExpression x)
   
 
-getBinary :: S.Seq TH.Token -> EXPRESSION -> OPERATOR -> EXPRESSION ->  EVAL
-getBinary tokens left op right
+evalBinary :: S.Seq TH.Token -> EXPRESSION -> OPERATOR -> EXPRESSION ->  EVAL
+evalBinary tokens left op right
  | op == MINUS = getArithOp (-) 
  | op == SLASH = getArithOp (/)
  | op == STAR = getArithOp (*)
@@ -74,11 +76,11 @@ getBinary tokens left op right
          | otherwise = NON_EVAL "Operands must be two numbers or two strings" tokens
 
 
-getTernary :: S.Seq TH.Token -> EXPRESSION -> EXPRESSION -> EXPRESSION -> EVAL
-getTernary tokens predi trueRes falseRes
+evalTernary :: S.Seq TH.Token -> EXPRESSION -> EXPRESSION -> EXPRESSION -> EVAL
+evalTernary tokens predi trueRes falseRes
   | preppedPred == Just True = evalExpression trueRes
   | preppedPred == Just False = evalExpression falseRes
-  | isNothing preppedPred = NON_EVAL "Ternary operator failed" tokens
+  | otherwise = NON_EVAL "Ternary operator failed" tokens
   where preppedPred = maybeEvalTruthy (evalExpression predi)
 
 -- Helpers
@@ -116,4 +118,9 @@ createComparison = createMathOp EVAL_BOOL
 
 createEquality :: (Eq a) => a -> a -> (Bool -> Bool) -> EVAL
 createEquality l r ch = if l == r then EVAL_BOOL (ch True) else EVAL_BOOL False
+
+
+getExpressionFromStatement :: STATEMENT -> EXPRESSION
+getExpressionFromStatement (EXPR_STMT x) = x
+getExpressionFromStatement (PRINT_STMT x) = x
   

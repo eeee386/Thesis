@@ -14,17 +14,29 @@ import qualified Data.Sequence as S
 import Parser
 import Eval
 import AST
+import Control.Monad
+import Data.Maybe
 
 
 printScanErrorOrContinue :: S.Seq Token -> IO ()
-printScanErrorOrContinue tokens = if null scanError then printEval parsed else print scanError
-  where scanError = S.findIndicesL (isNotToken . tokenType) tokens
+printScanErrorOrContinue tokens = if null scanError then printEvalOrContinue parsed else print scanError
+  where scanError = S.filter (isNotToken . tokenType) tokens
         parsed = parse tokens
 
-printEval :: AST.EXPRESSION -> IO ()
-printEval parsed = if null evalError then print evaled else print evalError
-  where evalError = findASTError parsed
-        evaled = evalExpression parsed
+printEvalOrContinue :: AST.PROGRAM -> IO ()
+printEvalOrContinue (PROG statements eof) = if null parserError then runByLines evaled else print (mconcat ["ParserError: ", show parserError])
+  where parserError = S.filter isJust (fmap (findASTError . getExpressionFromStatement) statements)
+        evaled = evalProgram (PROG statements eof) 
+printEvalOrContinue parseError = print parseError
+
+runByLines :: S.Seq PROG_EVAL -> IO()
+runByLines = mapM_ runOneLine
+  
+-- Run one lines should be called -> save identifiers from it
+runOneLine :: PROG_EVAL -> IO()
+runOneLine (PRINT_EVAL x) = print x
+runOneLine _ = print ""
+       
   
 run :: T.Text -> IO()
 run text = do

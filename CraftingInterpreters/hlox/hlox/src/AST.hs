@@ -2,13 +2,34 @@
 module AST where
   
 import qualified Data.Text as T
-import TokenHelper (Token)
+import TokenHelper (Token, line)
 import qualified Data.Sequence as S
 
 type TextType = T.Text
 
--- Lines only needed in operator expression because are the ones that can be items, that cannot be evaluated
-data EXPRESSION = EXP_LITERAL LITERAL | EXP_UNARY UNARY (S.Seq Token) | EXP_BINARY BINARY (S.Seq Token) | EXP_TERNARY TERNARY (S.Seq Token) | EXP_GROUPING GROUPING | NON_EXP String (S.Seq Token)
+type EOF = Token
+
+data PROGRAM = PROG (S.Seq STATEMENT) EOF | PARSE_ERROR TextType (S.Seq Token)
+
+instance Show PROGRAM where
+  show (PROG x _) = show x
+  show (PARSE_ERROR errMsg tokens) = mconcat ["ParseError: ", show errMsg, ". In line: " ,show (line (S.index tokens (S.length tokens-1)))]
+
+type TERMINATOR = Token
+
+data STATEMENT = EXPR_STMT EXPRESSION | PRINT_STMT EXPRESSION
+instance Show STATEMENT where 
+  show (EXPR_STMT x) = show x
+  show (PRINT_STMT x) = show x
+
+-- Tokens only needed in operator expression because there are some, that cannot be evaluated, and we want to show why
+data EXPRESSION = EXP_LITERAL LITERAL 
+                | EXP_UNARY UNARY (S.Seq Token) 
+                | EXP_BINARY BINARY (S.Seq Token) 
+                | EXP_TERNARY TERNARY (S.Seq Token) 
+                | EXP_GROUPING GROUPING 
+                | NON_EXP String (S.Seq Token)
+
 instance Show EXPRESSION where 
   show (EXP_LITERAL x) = show x
   show (EXP_UNARY x _) = show x

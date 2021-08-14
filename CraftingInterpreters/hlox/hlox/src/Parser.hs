@@ -7,11 +7,31 @@ import qualified Data.Sequence as S
 import TokenHelper
 import Data.Maybe
 import qualified Data.Map as M
+
+
  
 -- TODO: solve Synchronization 
 
-parse :: S.Seq Token -> EXPRESSION
-parse = createExpression
+parse :: S.Seq Token -> PROGRAM
+parse = createProgram
+
+createProgram :: S.Seq Token -> PROGRAM
+createProgram tokens
+  | tokenType eofToken /= EOF = PARSE_ERROR "Unterminated statement" eofStmtToken
+  | otherwise = PROG (createStatements (S.take (S.length stmtTokens-1) stmtTokens) S.empty) eofToken
+  where stmtTokens = breakIntoStatements tokens
+        eofStmtToken = S.index stmtTokens (S.length stmtTokens-1)
+        eofToken = S.index eofStmtToken 0
+        
+createStatements :: S.Seq (S.Seq Token) -> S.Seq STATEMENT -> S.Seq STATEMENT      
+createStatements stmtTokens exprSeq
+  | S.null stmtTokens = exprSeq
+  | otherwise = createStatements (S.drop 1 stmtTokens) expressions
+  where expressions = exprSeq S.|> expression
+        expr = S.index stmtTokens 0
+        isPrint = (tokenType <$> S.lookup 0 expr) == Just PRINT
+        expression = if isPrint then PRINT_STMT (createExpression (S.drop 1 expr)) else EXPR_STMT (createExpression expr)
+
 
 createExpression :: S.Seq Token -> EXPRESSION
 createExpression = createTernary
@@ -72,7 +92,7 @@ checkLiteralToken TokenHelper.LEFT_PAREN tokens
   | otherwise = EXP_GROUPING (GROUP (createExpression tokensToUse))
   where tokensToMatch = S.takeWhileL (\x -> tokenType x /= TokenHelper.RIGHT_PAREN) tokens
         tokensToUse = S.drop 1 tokensToMatch
-        eofFind = S.findIndexR (\x -> tokenType x == EOF) tokensToMatch
+        eofFind = S.findIndexR (\x -> tokenType x == SEMICOLON) tokensToMatch
         isEof = getIsAnyEOF eofFind
         isEmpty = S.null tokensToUse
 checkLiteralToken _ tokens = NON_EXP "Misplaced Token" tokens
@@ -128,7 +148,18 @@ handleTernaryCases getOp1 getOp2 indexOfOp1 indexOfOp2 tokens
         bothIsJust = isJust indexOfOp1 && isJust indexOfOp2
         xorIsJust = isJust indexOfOp1 /= isJust indexOfOp2
         properPlacement = ((-) <$> indexOfOp2 <*> indexOfOp1) > Just 1 && indexOfOp2 < Just (S.length tokens - 2)
-  
+   
+breakIntoStatements :: S.Seq Token -> S.Seq (S.Seq Token)     
+breakIntoStatements = breakTokens statements
+  where statements = S.empty
+
+breakTokens :: S.Seq (S.Seq Token) -> S.Seq Token -> S.Seq (S.Seq Token)
+breakTokens stmts tokens 
+  | S.null right = newStmts
+  | otherwise = breakTokens newStmts right
+  where scIndex = S.findIndexL (\x -> tokenType x == SEMICOLON) tokens
+        (left, right) = if isJust scIndex then S.splitAt (fromJust scIndex+1) tokens else (tokens, S.empty)
+        newStmts = stmts S.|> left
         
 findASTError :: EXPRESSION -> Maybe String
 findASTError (NON_EXP x y) = Just (show (NON_EXP x y))

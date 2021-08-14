@@ -120,8 +120,8 @@ recognizeToken text
   | tok == ">" = checkIfTwoLengthToken twoTok ">=" GREATER_EQUAL GREATER
   | tok == "/" = checkIfCommentOrDivision text
   | tok == " " = handleWhiteSpace
-  | tok == "/t" = handleWhiteSpace
-  | tok == "/n" = createNewLine
+  | tok == "\t" = handleWhiteSpace
+  | tok == "\n" = createNewLine
   | tok == "\"" = createString text
   | isDigit (T.head tok) = createNumber text
   | isAlpha (T.head tok) = createIdentifier text
