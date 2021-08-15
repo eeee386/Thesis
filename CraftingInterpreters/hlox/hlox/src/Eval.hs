@@ -8,7 +8,7 @@ import Data.Maybe
 import qualified Data.Sequence as S
 import qualified TokenHelper as TH
 
-data PROG_EVAL = EXPR_EVAL EVAL | PRINT_EVAL EVAL
+data PROG_EVAL = EXPR_EVAL EVAL | PRINT_EVAL EVAL | DEC_EVAL AST.TextType EVAL
 
 data EVAL = EVAL_NUMBER Double | EVAL_STRING AST.TextType | EVAL_BOOL Bool | EVAL_NIL | NON_EVAL AST.TextType (S.Seq TH.Token) deriving Eq
 instance Show EVAL where
@@ -21,9 +21,17 @@ instance Show EVAL where
 evalProgram :: PROGRAM -> S.Seq PROG_EVAL
 evalProgram (PROG x _) = fmap evalProgramHelper x
 
-evalProgramHelper :: STATEMENT -> PROG_EVAL 
-evalProgramHelper (PRINT_STMT x) = PRINT_EVAL (evalExpression x)
-evalProgramHelper (EXPR_STMT x) = EXPR_EVAL (evalExpression x)
+evalProgramHelper :: DECLARATION -> PROG_EVAL 
+evalProgramHelper (DEC_STMT (PRINT_STMT x)) = PRINT_EVAL (evalExpression x)
+evalProgramHelper (DEC_STMT (EXPR_STMT x)) = EXPR_EVAL (evalExpression x)
+evalProgramHelper (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) expr)) = handleVarDeclarationAndDefinition iden (evalExpression expr)
+evalProgramHelper (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden))) = handleVarDeclaration iden
+
+handleVarDeclaration :: TextType -> PROG_EVAL
+handleVarDeclaration iden = DEC_EVAL iden EVAL_NIL
+
+handleVarDeclarationAndDefinition :: TextType -> EVAL -> PROG_EVAL
+handleVarDeclarationAndDefinition = DEC_EVAL
 
 evalExpression :: EXPRESSION -> EVAL
 evalExpression (EXP_LITERAL (NUMBER x)) = EVAL_NUMBER x
@@ -119,8 +127,4 @@ createComparison = createMathOp EVAL_BOOL
 createEquality :: (Eq a) => a -> a -> (Bool -> Bool) -> EVAL
 createEquality l r ch = if l == r then EVAL_BOOL (ch True) else EVAL_BOOL False
 
-
-getExpressionFromStatement :: STATEMENT -> EXPRESSION
-getExpressionFromStatement (EXPR_STMT x) = x
-getExpressionFromStatement (PRINT_STMT x) = x
   

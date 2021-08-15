@@ -46,6 +46,13 @@ packages:
       sha256: 5bb0af2da4e4cc5472a17063ecdbda8f1117e5f3509fcd600f2cbd7e2b760f49
   original:
     hackage: containers-0.6.2.1
+- completed:
+    hackage: hashtables-1.2.4.1@sha256:09267f75fed6375617cfa049e28f8812b776e5c4ad811794efe150db314dcb4f,9821
+    pantry-tree:
+      size: 2894
+      sha256: b4fa31474d98869318b9190684eec802b6a282588b2dddfaf7b0dcb87e652132
+  original:
+    hackage: hashtables-1.2.4.1
 snapshots:
 - completed:
     size: 585603

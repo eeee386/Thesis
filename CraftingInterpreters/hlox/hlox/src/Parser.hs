@@ -17,21 +17,40 @@ parse = createProgram
 
 createProgram :: S.Seq Token -> PROGRAM
 createProgram tokens
-  | tokenType eofToken /= EOF = PARSE_ERROR "Unterminated statement" eofStmtToken
-  | otherwise = PROG (createStatements (S.take (S.length stmtTokens-1) stmtTokens) S.empty) eofToken
+  | tokenType eofToken /= EOF = PROG_ERROR (PARSE_ERROR "Unterminated statement" eofStmtToken)
+  | otherwise = PROG (createDeclaration (S.take (S.length stmtTokens-1) stmtTokens) S.empty) eofToken
   where stmtTokens = breakIntoStatements tokens
         eofStmtToken = S.index stmtTokens (S.length stmtTokens-1)
         eofToken = S.index eofStmtToken 0
         
-createStatements :: S.Seq (S.Seq Token) -> S.Seq STATEMENT -> S.Seq STATEMENT      
-createStatements stmtTokens exprSeq
-  | S.null stmtTokens = exprSeq
-  | otherwise = createStatements (S.drop 1 stmtTokens) expressions
-  where expressions = exprSeq S.|> expression
+createDeclaration :: S.Seq (S.Seq Token) -> S.Seq DECLARATION -> S.Seq DECLARATION      
+createDeclaration stmtTokens decSeq
+  | S.null stmtTokens = decSeq
+  | otherwise = createDeclaration (S.drop 1 stmtTokens) expressions
+  where expressions = decSeq S.|> dec
         expr = S.index stmtTokens 0
-        isPrint = (tokenType <$> S.lookup 0 expr) == Just PRINT
-        expression = if isPrint then PRINT_STMT (createExpression (S.drop 1 expr)) else EXPR_STMT (createExpression expr)
+        dec = handleCreateDeclaration expr
 
+handleCreateDeclaration :: S.Seq Token -> DECLARATION         
+handleCreateDeclaration expr
+  | isDec && isDefToo && hasIden && hasVal = DEC_VAR (VAR_DEC_DEF (fromJust iden) (createExpression defExpr))
+  | isDec && hasIden && not hasVal && not isDefToo = DEC_VAR (VAR_DEC (fromJust iden))
+  | isPrint = DEC_STMT (PRINT_STMT (createExpression expr))
+  | isExpressionStatement = DEC_STMT (EXPR_STMT (createExpression expr))
+  | otherwise = PARSE_ERROR "Not a valid declaration or expression" expr
+  where firstToken = S.lookup 0 expr
+        firstTokenType = tokenType <$> firstToken
+        iden = tokenType <$> S.lookup 1 expr
+        eqToken = S.lookup 2 expr
+        defExpr = S.drop 3 expr
+        isDec = firstTokenType == Just VAR 
+        isDefToo = (tokenType <$> eqToken) == Just EQUAL
+        hasIden = isJust iden
+        hasVal = S.null defExpr
+        isPrint = firstTokenType == Just PRINT
+        isExpressionStatement = firstTokenType /= Just VAR || firstTokenType /= Just PRINT
+                
+                
 
 createExpression :: S.Seq Token -> EXPRESSION
 createExpression = createTernary

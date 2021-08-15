@@ -2,20 +2,31 @@
 module AST where
   
 import qualified Data.Text as T
-import TokenHelper (Token, line)
+import TokenHelper (Token, line, TokenType)
 import qualified Data.Sequence as S
 
 type TextType = T.Text
 
 type EOF = Token
 
-data PROGRAM = PROG (S.Seq STATEMENT) EOF | PARSE_ERROR TextType (S.Seq Token)
-
+data PROGRAM = PROG (S.Seq DECLARATION) EOF | PROG_ERROR DECLARATION
 instance Show PROGRAM where
   show (PROG x _) = show x
+  show (PROG_ERROR x) = show x
+
+data DECLARATION = DEC_STMT STATEMENT | DEC_VAR VARIABLE_DECLARATION | PARSE_ERROR TextType (S.Seq Token)
+instance Show DECLARATION where
+  show (DEC_STMT x) = show x
+  show (DEC_VAR x) = show x
   show (PARSE_ERROR errMsg tokens) = mconcat ["ParseError: ", show errMsg, ". In line: " ,show (line (S.index tokens (S.length tokens-1)))]
 
-type TERMINATOR = Token
+
+type IDENTIFIER = TokenType
+
+data VARIABLE_DECLARATION = VAR_DEC_DEF IDENTIFIER EXPRESSION | VAR_DEC IDENTIFIER
+instance Show VARIABLE_DECLARATION where
+  show (VAR_DEC_DEF iden expr) = mconcat ["var", " ", show iden, " = ", show expr]
+  show (VAR_DEC iden) = mconcat ["var", " ", show iden] 
 
 data STATEMENT = EXPR_STMT EXPRESSION | PRINT_STMT EXPRESSION
 instance Show STATEMENT where 
@@ -81,3 +92,11 @@ instance Show OPERATOR where
   show QUESTION_MARK = "?"
   show COLON = ":"
   
+getParseError :: DECLARATION -> Maybe DECLARATION
+getParseError (PARSE_ERROR x y) = Just (PARSE_ERROR x y)
+getParseError _ = Nothing
+
+getExpressionFromStatement :: DECLARATION -> EXPRESSION
+getExpressionFromStatement (DEC_STMT (EXPR_STMT x)) = x
+getExpressionFromStatement (DEC_STMT (PRINT_STMT x)) = x
+getExpressionFromStatement (DEC_VAR (VAR_DEC_DEF _ x)) = x

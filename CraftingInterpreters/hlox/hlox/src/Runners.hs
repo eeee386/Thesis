@@ -24,9 +24,14 @@ printScanErrorOrContinue tokens = if null scanError then printEvalOrContinue par
         parsed = parse tokens
 
 printEvalOrContinue :: AST.PROGRAM -> IO ()
-printEvalOrContinue (PROG statements eof) = if null parserError then runByLines evaled else print (mconcat ["ParserError: ", show parserError])
-  where parserError = S.filter isJust (fmap (findASTError . getExpressionFromStatement) statements)
+printEvalOrContinue (PROG statements eof) = handleCases
+  where parseError = S.filter isJust (fmap getParseError statements) 
+        astError = S.filter isJust (fmap (findASTError . getExpressionFromStatement) statements)
         evaled = evalProgram (PROG statements eof) 
+        handleCases 
+          | (not . null) parseError = print (mconcat ["ParserError: ", show parseError])
+          | (not . null) astError = print (mconcat ["ParserError: ", show astError])
+          | otherwise = runByLines evaled
 printEvalOrContinue parseError = print parseError
 
 runByLines :: S.Seq PROG_EVAL -> IO()
