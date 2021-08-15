@@ -27,6 +27,7 @@ dependencies:
 - bytestring
 - vector
 - containers
+- hashtables
 
 library:
   source-dirs: src
