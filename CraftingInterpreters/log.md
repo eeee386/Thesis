@@ -9,3 +9,4 @@
 - Parser Types and Recursive Descent Parser
 - Error Handling
 - States (variables,scopes...) in a stateless side-effectless programming languages (will see how it turns out)
+  - State monad hashtable, for environments.
