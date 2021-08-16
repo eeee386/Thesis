@@ -10,3 +10,4 @@
 - Error Handling
 - States (variables,scopes...) in a stateless side-effectless programming languages (will see how it turns out)
   - State monad hashtable, for environments.
+  - Talk about monads (and functors, applicatives)
