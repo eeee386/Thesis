@@ -7,32 +7,28 @@ import qualified Data.Text as T
 import Data.Maybe
 import qualified Data.Sequence as S
 import qualified TokenHelper as TH
-
-data PROG_EVAL = EXPR_EVAL EVAL | PRINT_EVAL EVAL | DEC_EVAL AST.TextType EVAL
-
-data EVAL = EVAL_NUMBER Double | EVAL_STRING AST.TextType | EVAL_BOOL Bool | EVAL_NIL | NON_EVAL AST.TextType (S.Seq TH.Token) deriving Eq
-instance Show EVAL where
-  show (EVAL_NUMBER x) = show x
-  show (EVAL_STRING x) = show x
-  show (EVAL_BOOL x) = show x
-  show EVAL_NIL = "nil"
-  show (NON_EVAL x neLines) = mconcat ["RuntimeError: ", show x, getLineError neLines]
+import EvalTypes
+import Environment
   
-evalProgram :: PROGRAM -> S.Seq PROG_EVAL
+evalProgram :: PROGRAM -> S.Seq (IO PROG_EVAL)
 evalProgram (PROG x _) = fmap evalProgramHelper x
 
-evalProgramHelper :: DECLARATION -> PROG_EVAL 
-evalProgramHelper (DEC_STMT (PRINT_STMT x)) = PRINT_EVAL (evalExpression x)
-evalProgramHelper (DEC_STMT (EXPR_STMT x)) = EXPR_EVAL (evalExpression x)
+evalProgramHelper :: DECLARATION -> IO PROG_EVAL 
+evalProgramHelper (DEC_STMT (PRINT_STMT x)) = return (PRINT_EVAL (evalExpression x))
+evalProgramHelper (DEC_STMT (EXPR_STMT x)) = return (EXPR_EVAL (evalExpression x))
 evalProgramHelper (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) expr)) = handleVarDeclarationAndDefinition iden (evalExpression expr)
 evalProgramHelper (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden))) = handleVarDeclaration iden
 evalProgramHelper (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr)) = handleVarDeclarationAndDefinition iden (evalExpression expr)
 
-handleVarDeclaration :: TextType -> PROG_EVAL
-handleVarDeclaration iden = DEC_EVAL iden EVAL_NIL
+handleVarDeclaration :: TextType -> IO PROG_EVAL
+handleVarDeclaration iden = do 
+  addUpdateIdentifier iden EVAL_NIL
+  return (DEC_EVAL iden EVAL_NIL)
 
-handleVarDeclarationAndDefinition :: TextType -> EVAL -> PROG_EVAL
-handleVarDeclarationAndDefinition = DEC_EVAL
+handleVarDeclarationAndDefinition :: TextType -> EVAL -> IO PROG_EVAL
+handleVarDeclarationAndDefinition iden val = do 
+  addUpdateIdentifier iden val
+  return (DEC_EVAL iden val)  
 
 evalExpression :: EXPRESSION -> EVAL
 evalExpression (EXP_LITERAL (NUMBER x)) = EVAL_NUMBER x
@@ -93,11 +89,6 @@ evalTernary tokens predi trueRes falseRes
   where preppedPred = maybeEvalTruthy (evalExpression predi)
 
 -- Helpers
-getLineError :: S.Seq TH.Token -> String
-getLineError tokens = if firstLine /= secondLine then mconcat [". Between lines: ", show firstLine, "-", show secondLine] else mconcat [". In line: ", show firstLine]
-  where firstLine = TH.line (S.index tokens 0) 
-        secondLine = TH.line (S.index tokens (S.length tokens - 1))
- 
 maybeEvalNumber :: EVAL -> Maybe Double
 maybeEvalNumber (EVAL_NUMBER x) = Just x
 maybeEvalNumber _ = Nothing
