@@ -14,6 +14,7 @@ import qualified Data.Sequence as S
 import Parser
 import Eval
 import AST
+import Environment
 import Control.Monad
 import Data.Maybe
 
@@ -25,8 +26,8 @@ printScanErrorOrContinue tokens = if null scanError then printEvalOrContinue par
 
 printEvalOrContinue :: AST.PROGRAM -> IO ()
 printEvalOrContinue (PROG statements eof) = handleCases
-  where parseError = S.filter isJust (fmap getParseError statements) 
-        astError = S.filter isJust (fmap (findASTError . getExpressionFromStatement) statements)
+  where parseError = S.filter isJust (fmap getParseError statements)
+        astError = S.filter isJust (fmap getASTErrorFromStatement statements)
         evaled = evalProgram (PROG statements eof) 
         handleCases 
           | (not . null) parseError = print (mconcat ["ParserError: ", show parseError])
@@ -37,15 +38,18 @@ printEvalOrContinue parseError = print parseError
 runByLines :: S.Seq PROG_EVAL -> IO()
 runByLines = mapM_ runOneLine
   
--- Run one lines should be called -> save identifiers from it
+-- Run one lines should be called -> save identifiers from it (Maybe not necessary, will leave it as return, and we will see what happens)
 runOneLine :: PROG_EVAL -> IO()
 runOneLine (PRINT_EVAL x) = print x
-runOneLine _ = print ""
+runOneLine (EXPR_EVAL x) = return ()
+runOneLine y = addUpdateIdentifier y
+
        
   
 run :: T.Text -> IO()
 run text = do
   let tokens = scanTokens text
+  print (handleCreateDeclaration tokens)
   printScanErrorOrContinue tokens
 
 -- This is the code I used. Thanks Joel Chelliah!

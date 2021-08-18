@@ -26,29 +26,34 @@ createProgram tokens
 createDeclaration :: S.Seq (S.Seq Token) -> S.Seq DECLARATION -> S.Seq DECLARATION      
 createDeclaration stmtTokens decSeq
   | S.null stmtTokens = decSeq
-  | otherwise = createDeclaration (S.drop 1 stmtTokens) expressions
-  where expressions = decSeq S.|> dec
-        expr = S.index stmtTokens 0
+  | otherwise = createDeclaration (S.drop 1 stmtTokens) (decSeq S.|> dec)
+  where expr = S.index stmtTokens 0
         dec = handleCreateDeclaration expr
 
 handleCreateDeclaration :: S.Seq Token -> DECLARATION         
 handleCreateDeclaration expr
   | isDec && isDefToo && hasIden && hasVal = DEC_VAR (VAR_DEC_DEF (fromJust iden) (createExpression defExpr))
-  | isDec && hasIden && not hasVal && not isDefToo = DEC_VAR (VAR_DEC (fromJust iden))
-  | isPrint = DEC_STMT (PRINT_STMT (createExpression expr))
+  | isDec && hasIden && isOnlyDec = DEC_VAR (VAR_DEC (fromJust iden))
+  | isRedef && hasRedefVal = DEC_VAR (VAR_DEF (fromJust redefIden) (createExpression redefExpr))
+  | isPrint = DEC_STMT (PRINT_STMT (createExpression (S.drop 1 expr)))
   | isExpressionStatement = DEC_STMT (EXPR_STMT (createExpression expr))
   | otherwise = PARSE_ERROR "Not a valid declaration or expression" expr
   where firstToken = S.lookup 0 expr
         firstTokenType = tokenType <$> firstToken
         iden = tokenType <$> S.lookup 1 expr
-        eqToken = S.lookup 2 expr
+        eqOrTermToken = S.lookup 2 expr
         defExpr = S.drop 3 expr
-        isDec = firstTokenType == Just VAR 
-        isDefToo = (tokenType <$> eqToken) == Just EQUAL
+        isDec = firstTokenType == Just TokenHelper.VAR
+        isDefToo = (tokenType <$> eqOrTermToken) == Just TokenHelper.EQUAL
+        isOnlyDec = (tokenType <$> eqOrTermToken) == Just TokenHelper.SEMICOLON
         hasIden = isJust iden
-        hasVal = S.null defExpr
+        hasVal = not (S.null defExpr)
         isPrint = firstTokenType == Just PRINT
-        isExpressionStatement = firstTokenType /= Just VAR || firstTokenType /= Just PRINT
+        isExpressionStatement = firstTokenType /= Just VAR && firstTokenType /= Just PRINT
+        isRedef = (isIdentifier <$> firstTokenType) == Just True && (tokenType <$> S.lookup 1 expr) == Just TokenHelper.EQUAL
+        redefIden = firstTokenType
+        redefExpr = S.drop 2 expr
+        hasRedefVal = not (S.null redefExpr)
                 
                 
 
@@ -105,6 +110,7 @@ checkLiteralToken (TokenHelper.NUMBER a) _  = EXP_LITERAL (AST.NUMBER a)
 checkLiteralToken TokenHelper.FALSE _  = EXP_LITERAL AST.FALSE
 checkLiteralToken TokenHelper.TRUE _  = EXP_LITERAL AST.TRUE
 checkLiteralToken TokenHelper.NIL _ = EXP_LITERAL AST.NIL
+checkLiteralToken (TokenHelper.IDENTIFIER a) _ = EXP_LITERAL (AST.IDENTIFIER a)
 checkLiteralToken TokenHelper.LEFT_PAREN tokens
   | isEof = NON_EXP "Parenthesis not closed" tokens
   | isEmpty = NON_EXP "Empty parenthesis" tokens
@@ -180,12 +186,7 @@ breakTokens stmts tokens
         (left, right) = if isJust scIndex then S.splitAt (fromJust scIndex+1) tokens else (tokens, S.empty)
         newStmts = stmts S.|> left
         
-findASTError :: EXPRESSION -> Maybe String
-findASTError (NON_EXP x y) = Just (show (NON_EXP x y))
-findASTError (EXP_GROUPING (GROUP x)) = findASTError x
-findASTError (EXP_UNARY (UNARY_MINUS x) _) = findASTError x
-findASTError (EXP_UNARY (UNARY_BANG x) _) = findASTError x
-findASTError (EXP_BINARY (BIN left _ right) _) = (++) <$> findASTError left <*> findASTError right
-findASTError (EXP_TERNARY (TERN _ _ trueRes _ falseRes) _) = (++) <$> findASTError trueRes <*> findASTError falseRes
-findASTError _ = Nothing
-        
+
+isIdentifier :: TokenType -> Bool
+isIdentifier (TokenHelper.IDENTIFIER x) = True
+isIdentifier _ = False

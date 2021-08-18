@@ -23,10 +23,11 @@ instance Show DECLARATION where
 
 type IDENTIFIER = TokenType
 
-data VARIABLE_DECLARATION = VAR_DEC_DEF IDENTIFIER EXPRESSION | VAR_DEC IDENTIFIER
+data VARIABLE_DECLARATION = VAR_DEC_DEF IDENTIFIER EXPRESSION | VAR_DEC IDENTIFIER | VAR_DEF IDENTIFIER EXPRESSION
 instance Show VARIABLE_DECLARATION where
   show (VAR_DEC_DEF iden expr) = mconcat ["var", " ", show iden, " = ", show expr]
   show (VAR_DEC iden) = mconcat ["var", " ", show iden] 
+  show (VAR_DEF iden expr) = mconcat ["var", " ", show iden, " = ", show expr]
 
 data STATEMENT = EXPR_STMT EXPRESSION | PRINT_STMT EXPRESSION
 instance Show STATEMENT where 
@@ -49,13 +50,14 @@ instance Show EXPRESSION where
   show (NON_EXP x y) = mconcat [show x, " ", show y]
   show (EXP_TERNARY x _) = show x
 
-data LITERAL = NUMBER Double | STRING TextType | TRUE | FALSE | NIL
+data LITERAL = NUMBER Double | STRING TextType | TRUE | FALSE | NIL | IDENTIFIER TextType
 instance Show LITERAL where 
   show (NUMBER x) = show x
   show (STRING x) = T.unpack (T.concat [T.pack "\"", x, T.pack "\""])
   show TRUE = "true"
   show FALSE = "false"
   show NIL = "nil"  
+  show (IDENTIFIER x) = show x
    
 
 newtype GROUPING = GROUP EXPRESSION
@@ -96,7 +98,19 @@ getParseError :: DECLARATION -> Maybe DECLARATION
 getParseError (PARSE_ERROR x y) = Just (PARSE_ERROR x y)
 getParseError _ = Nothing
 
-getExpressionFromStatement :: DECLARATION -> EXPRESSION
-getExpressionFromStatement (DEC_STMT (EXPR_STMT x)) = x
-getExpressionFromStatement (DEC_STMT (PRINT_STMT x)) = x
-getExpressionFromStatement (DEC_VAR (VAR_DEC_DEF _ x)) = x
+getASTErrorFromStatement :: DECLARATION -> Maybe String
+getASTErrorFromStatement (DEC_STMT (EXPR_STMT x)) = findASTError x
+getASTErrorFromStatement (DEC_STMT (PRINT_STMT x)) = findASTError x
+getASTErrorFromStatement (DEC_VAR (VAR_DEC_DEF _ x)) = findASTError x
+getASTErrorFromStatement (DEC_VAR (VAR_DEF _ x)) = findASTError x
+getASTErrorFromStatement _ = Nothing
+
+
+findASTError :: EXPRESSION -> Maybe String
+findASTError (NON_EXP x y) = Just (show (NON_EXP x y))
+findASTError (EXP_GROUPING (GROUP x)) = findASTError x
+findASTError (EXP_UNARY (UNARY_MINUS x) _) = findASTError x
+findASTError (EXP_UNARY (UNARY_BANG x) _) = findASTError x
+findASTError (EXP_BINARY (BIN left _ right) _) = (++) <$> findASTError left <*> findASTError right
+findASTError (EXP_TERNARY (TERN _ _ trueRes _ falseRes) _) = (++) <$> findASTError trueRes <*> findASTError falseRes
+findASTError _ = Nothing

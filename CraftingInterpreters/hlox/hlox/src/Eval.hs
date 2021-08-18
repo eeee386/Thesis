@@ -26,6 +26,7 @@ evalProgramHelper (DEC_STMT (PRINT_STMT x)) = PRINT_EVAL (evalExpression x)
 evalProgramHelper (DEC_STMT (EXPR_STMT x)) = EXPR_EVAL (evalExpression x)
 evalProgramHelper (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) expr)) = handleVarDeclarationAndDefinition iden (evalExpression expr)
 evalProgramHelper (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden))) = handleVarDeclaration iden
+evalProgramHelper (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr)) = handleVarDeclarationAndDefinition iden (evalExpression expr)
 
 handleVarDeclaration :: TextType -> PROG_EVAL
 handleVarDeclaration iden = DEC_EVAL iden EVAL_NIL
