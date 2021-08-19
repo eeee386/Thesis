@@ -7,24 +7,20 @@ import qualified Data.HashTable.IO as HT
 import EvalTypes
 import AST
 
-values :: IO (HT.BasicHashTable AST.TextType EVAL)
-values = HT.new
+type HashTable = HT.BasicHashTable AST.TextType EVAL
 
-addUpdateIdentifier :: AST.TextType -> EVAL -> IO()
-addUpdateIdentifier iden value = do
-   val <- values
-   print "insert happens"
-   HT.insert val iden value
-   gett <- HT.lookup val iden
-   print gett
 
-getValueOfIdentifier :: AST.TextType -> IO (Maybe EVAL)
-getValueOfIdentifier iden = do
-  val <- values
-  print "this is called"
-  gett <- HT.lookup val iden
-  print gett
-  HT.lookup val iden
+createEnv :: IO HashTable
+createEnv = HT.new
+
+addUpdateIdentifier :: AST.TextType -> EVAL -> HashTable -> IO HashTable
+addUpdateIdentifier iden value vals = do
+   HT.insert vals iden value
+   return vals
+
+getValueOfIdentifier :: AST.TextType -> HashTable -> IO (Maybe EVAL)
+getValueOfIdentifier iden vals = do
+  HT.lookup vals iden
 
 
 

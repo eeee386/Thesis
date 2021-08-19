@@ -11,70 +11,86 @@ import EvalTypes
 import Environment
   
 evalProgram :: PROGRAM -> S.Seq (IO PROG_EVAL)
-evalProgram (PROG x _) = fmap evalProgramHelper x
+evalProgram (PROG x _) = eval x S.empty createEnv
 
-evalProgramHelper :: DECLARATION -> IO PROG_EVAL 
-evalProgramHelper (DEC_STMT (PRINT_STMT x)) = do 
-  expr <- evalExpression x
-  return (PRINT_EVAL expr)
-evalProgramHelper (DEC_STMT (EXPR_STMT x)) = do 
-  expr <- evalExpression x
-  return (EXPR_EVAL expr)
-evalProgramHelper (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) expr)) = handleVarDeclarationAndDefinition iden (evalExpression expr)
-evalProgramHelper (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden))) = handleVarDeclaration iden
-evalProgramHelper (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens)) = handleVarDefinition iden (evalExpression expr) tokens
+eval :: S.Seq DECLARATION -> S.Seq (IO PROG_EVAL) -> IO HashTable -> S.Seq (IO PROG_EVAL)
+eval decs evals env
+          | S.null decs = evals
+          | otherwise = eval (S.drop 1 decs) (evals S.|> ieval) newEnv
+          where res = evalProgramHelper (S.index decs 0) env
+                ieval = fst <$> res
+                newEnv = snd <$> res    
 
-handleVarDeclaration :: TextType -> IO PROG_EVAL
-handleVarDeclaration iden = do 
-  addUpdateIdentifier iden EVAL_NIL
-  return (DEC_EVAL iden EVAL_NIL)
+evalProgramHelper :: DECLARATION -> IO HashTable -> IO (PROG_EVAL, HashTable) 
+evalProgramHelper (DEC_STMT (PRINT_STMT x)) env = do 
+  locEnv <- env
+  expr <- evalExpression x locEnv
+  return (PRINT_EVAL expr, locEnv)
+evalProgramHelper (DEC_STMT (EXPR_STMT x)) env = do 
+  locEnv <- env
+  expr <- evalExpression x locEnv
+  return (EXPR_EVAL expr, locEnv)
+evalProgramHelper (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) expr)) env = do 
+  locEnv <- env
+  locExpr <- evalExpression expr locEnv
+  handleVarDeclarationAndDefinition iden locExpr locEnv
+evalProgramHelper (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden))) env = do 
+  locEnv <- env
+  handleVarDeclaration iden locEnv
+evalProgramHelper (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens)) env = do 
+  locEnv <- env
+  locExpr <- evalExpression expr locEnv
+  handleVarDefinition iden locExpr locEnv tokens 
 
-handleVarDeclarationAndDefinition :: TextType -> IO EVAL -> IO PROG_EVAL
-handleVarDeclarationAndDefinition iden val = do 
-  nVal <- val
-  addUpdateIdentifier iden nVal
-  return (DEC_EVAL iden nVal)  
+handleVarDeclaration :: TextType -> HashTable -> IO (PROG_EVAL, HashTable)
+handleVarDeclaration iden env = do 
+  newEnv <- addUpdateIdentifier iden EVAL_NIL env
+  return (DEC_EVAL iden EVAL_NIL, newEnv)
+
+handleVarDeclarationAndDefinition :: TextType -> EVAL -> HashTable -> IO (PROG_EVAL, HashTable)
+handleVarDeclarationAndDefinition iden val env = do 
+  newEnv <- addUpdateIdentifier iden val env
+  return (DEC_EVAL iden val, newEnv)  
   
-handleVarDefinition :: TextType -> IO EVAL -> S.Seq TH.Token -> IO PROG_EVAL
-handleVarDefinition iden val tokens = do 
-  newVal <- val
-  oldVal <- getValueOfIdentifier iden
+handleVarDefinition :: TextType -> EVAL -> HashTable -> S.Seq TH.Token -> IO (PROG_EVAL, HashTable)
+handleVarDefinition iden val env tokens = do
+  oldVal <- getValueOfIdentifier iden env
   if 
     isNothing oldVal 
   then 
-    return (DEC_EVAL iden (NON_EVAL "Identifier is not defined" tokens))
+    return (DEC_EVAL iden (NON_EVAL "Identifier is not defined" tokens), env)
   else do
-    addUpdateIdentifier iden newVal
-    return (DEC_EVAL iden newVal)  
+    newEnv <- addUpdateIdentifier iden val env
+    return (DEC_EVAL iden val, newEnv)  
 
-evalExpression :: EXPRESSION -> IO EVAL
-evalExpression (EXP_LITERAL (NUMBER x)) = return (EVAL_NUMBER x)
-evalExpression (EXP_LITERAL (STRING x)) = return (EVAL_STRING x)
-evalExpression (EXP_LITERAL FALSE) = return (EVAL_BOOL False)
-evalExpression (EXP_LITERAL TRUE) = return (EVAL_BOOL True)
-evalExpression (EXP_LITERAL NIL) = return EVAL_NIL
-evalExpression (EXP_LITERAL (IDENTIFIER x tokens)) = do 
-  val <- getValueOfIdentifier x
+evalExpression :: EXPRESSION -> HashTable -> IO EVAL
+evalExpression (EXP_LITERAL (NUMBER x)) _ = return (EVAL_NUMBER x)
+evalExpression (EXP_LITERAL (STRING x)) _ = return (EVAL_STRING x)
+evalExpression (EXP_LITERAL FALSE) _ = return (EVAL_BOOL False)
+evalExpression (EXP_LITERAL TRUE) _ = return (EVAL_BOOL True)
+evalExpression (EXP_LITERAL NIL) _ = return EVAL_NIL
+evalExpression (EXP_LITERAL (IDENTIFIER x tokens)) env = do 
+  val <- getValueOfIdentifier x env
   if isJust val then return (fromJust val) else return (NON_EVAL "Identifier is not defined" tokens) 
 
-evalExpression (EXP_GROUPING (GROUP x)) = evalExpression x
+evalExpression (EXP_GROUPING (GROUP x)) env = evalExpression x env
 
-evalExpression (EXP_UNARY (UNARY op x) tokens) = do 
-  expr <- evalExpression x
+evalExpression (EXP_UNARY (UNARY op x) tokens) env = do 
+  expr <- evalExpression x env
   return (evalUnary tokens op expr) 
 
-evalExpression (EXP_BINARY (BIN left op right) bLines) = do 
-  evaledLeft <- evalExpression left
-  evaledRight <- evalExpression right
+evalExpression (EXP_BINARY (BIN left op right) bLines) env = do 
+  evaledLeft <- evalExpression left env
+  evaledRight <- evalExpression right env
   return (evalBinary bLines evaledLeft op evaledRight) 
 
-evalExpression (EXP_TERNARY (TERN predi _ trueRes _ falseRes) tLines) = do 
-  evalTrueRes <- evalExpression trueRes
-  evalFalseRes <- evalExpression falseRes
-  evalPred <- evalExpression predi 
+evalExpression (EXP_TERNARY (TERN predi _ trueRes _ falseRes) tLines) env = do 
+  evalTrueRes <- evalExpression trueRes env
+  evalFalseRes <- evalExpression falseRes env
+  evalPred <- evalExpression predi env 
   return (evalTernary tLines evalPred evalTrueRes evalFalseRes)
 
-evalExpression _ = return (NON_EVAL "Expression cannot be evaluated" (S.fromList []))
+evalExpression _ _ = return (NON_EVAL "Expression cannot be evaluated" (S.fromList []))
 
 
 evalUnary :: S.Seq TH.Token -> OPERATOR -> EVAL -> EVAL

@@ -44,7 +44,8 @@ runOneLineIO ioprog = do
   runOneLine prog
 
 runOneLine :: PROG_EVAL -> IO()
-runOneLine x = print x
+runOneLine (PRINT_EVAL x) = print x
+runOneLine _ = return()
        
   
 run :: T.Text -> IO()
