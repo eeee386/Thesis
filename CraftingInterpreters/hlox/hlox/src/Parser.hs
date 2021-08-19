@@ -34,7 +34,7 @@ handleCreateDeclaration :: S.Seq Token -> DECLARATION
 handleCreateDeclaration expr
   | isDec && isDefToo && hasIden && hasVal = DEC_VAR (VAR_DEC_DEF (fromJust iden) (createExpression defExpr))
   | isDec && hasIden && isOnlyDec = DEC_VAR (VAR_DEC (fromJust iden))
-  | isRedef && hasRedefVal = DEC_VAR (VAR_DEF (fromJust redefIden) (createExpression redefExpr))
+  | isRedef && hasRedefVal = DEC_VAR (VAR_DEF (fromJust redefIden) (createExpression redefExpr) redefExpr)
   | isPrint = DEC_STMT (PRINT_STMT (createExpression (S.drop 1 expr)))
   | isExpressionStatement = DEC_STMT (EXPR_STMT (createExpression expr))
   | otherwise = PARSE_ERROR "Not a valid declaration or expression" expr
@@ -94,11 +94,14 @@ createFactor = createBinaryExpressions (M.fromList [(TokenHelper.SLASH, AST.SLAS
     
 createUnary :: S.Seq Token -> EXPRESSION
 createUnary tokens
-  | tType == Just TokenHelper.BANG = EXP_UNARY (UNARY_BANG (createUnary (S.drop 1 tokens))) tokens
-  | tType == Just TokenHelper.MINUS = EXP_UNARY (UNARY_MINUS (createUnary (S.drop 1 tokens))) tokens
+  | isUnary = EXP_UNARY (UNARY getOp (createUnary (S.drop 1 tokens))) tokens
   | otherwise = createLiteral tokens
   where token = S.lookup 0 tokens
         tType = tokenType <$> token
+        isUnary = tType == Just TokenHelper.BANG || tType == Just TokenHelper.MINUS
+        getOp 
+          | tType == Just TokenHelper.BANG = AST.BANG
+          | tType == Just TokenHelper.MINUS = AST.MINUS
   
 createLiteral :: S.Seq Token -> EXPRESSION
 createLiteral tokens = checkLiteralToken token tokens
@@ -110,7 +113,7 @@ checkLiteralToken (TokenHelper.NUMBER a) _  = EXP_LITERAL (AST.NUMBER a)
 checkLiteralToken TokenHelper.FALSE _  = EXP_LITERAL AST.FALSE
 checkLiteralToken TokenHelper.TRUE _  = EXP_LITERAL AST.TRUE
 checkLiteralToken TokenHelper.NIL _ = EXP_LITERAL AST.NIL
-checkLiteralToken (TokenHelper.IDENTIFIER a) _ = EXP_LITERAL (AST.IDENTIFIER a)
+checkLiteralToken (TokenHelper.IDENTIFIER a) tokens = EXP_LITERAL (AST.IDENTIFIER a tokens)
 checkLiteralToken TokenHelper.LEFT_PAREN tokens
   | isEof = NON_EXP "Parenthesis not closed" tokens
   | isEmpty = NON_EXP "Empty parenthesis" tokens

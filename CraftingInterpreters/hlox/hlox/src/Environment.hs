@@ -1,8 +1,8 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Environment where
 
 import qualified Data.HashTable.IO as HT
-import qualified Control.Monad.ST as ST
-import qualified Data.Text as T
 
 import EvalTypes
 import AST
@@ -10,15 +10,20 @@ import AST
 values :: IO (HT.BasicHashTable AST.TextType EVAL)
 values = HT.new
 
-addUpdateIdentifier :: TextType -> EVAL -> IO()
+addUpdateIdentifier :: AST.TextType -> EVAL -> IO()
 addUpdateIdentifier iden value = do
    val <- values
+   print "insert happens"
    HT.insert val iden value
-addIdentifier _ = return ()
+   gett <- HT.lookup val iden
+   print gett
 
-getValueOfIdentifier :: TextType -> IO(Maybe EVAL)
+getValueOfIdentifier :: AST.TextType -> IO (Maybe EVAL)
 getValueOfIdentifier iden = do
   val <- values
+  print "this is called"
+  gett <- HT.lookup val iden
+  print gett
   HT.lookup val iden
 
 

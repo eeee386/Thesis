@@ -14,9 +14,8 @@ import qualified Data.Sequence as S
 import Parser
 import Eval
 import AST
-import Environment
-import Control.Monad
 import Data.Maybe
+import EvalTypes
 
 
 printScanErrorOrContinue :: S.Seq Token -> IO ()
@@ -35,15 +34,17 @@ printEvalOrContinue (PROG statements eof) = handleCases
           | otherwise = runByLines evaled
 printEvalOrContinue parseError = print parseError
 
-runByLines :: S.Seq PROG_EVAL -> IO()
-runByLines = mapM_ runOneLine
+runByLines :: S.Seq (IO PROG_EVAL) -> IO()
+runByLines = mapM_ runOneLineIO
   
 -- Run one lines should be called -> save identifiers from it (Maybe not necessary, will leave it as return, and we will see what happens)
-runOneLine :: PROG_EVAL -> IO()
-runOneLine (PRINT_EVAL x) = print x
-runOneLine (EXPR_EVAL x) = return ()
-runOneLine y = addUpdateIdentifier y
+runOneLineIO :: IO PROG_EVAL -> IO ()
+runOneLineIO ioprog = do
+  prog <- ioprog
+  runOneLine prog
 
+runOneLine :: PROG_EVAL -> IO()
+runOneLine x = print x
        
   
 run :: T.Text -> IO()

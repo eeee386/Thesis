@@ -14,47 +14,81 @@ evalProgram :: PROGRAM -> S.Seq (IO PROG_EVAL)
 evalProgram (PROG x _) = fmap evalProgramHelper x
 
 evalProgramHelper :: DECLARATION -> IO PROG_EVAL 
-evalProgramHelper (DEC_STMT (PRINT_STMT x)) = return (PRINT_EVAL (evalExpression x))
-evalProgramHelper (DEC_STMT (EXPR_STMT x)) = return (EXPR_EVAL (evalExpression x))
+evalProgramHelper (DEC_STMT (PRINT_STMT x)) = do 
+  expr <- evalExpression x
+  return (PRINT_EVAL expr)
+evalProgramHelper (DEC_STMT (EXPR_STMT x)) = do 
+  expr <- evalExpression x
+  return (EXPR_EVAL expr)
 evalProgramHelper (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) expr)) = handleVarDeclarationAndDefinition iden (evalExpression expr)
 evalProgramHelper (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden))) = handleVarDeclaration iden
-evalProgramHelper (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr)) = handleVarDeclarationAndDefinition iden (evalExpression expr)
+evalProgramHelper (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens)) = handleVarDefinition iden (evalExpression expr) tokens
 
 handleVarDeclaration :: TextType -> IO PROG_EVAL
 handleVarDeclaration iden = do 
   addUpdateIdentifier iden EVAL_NIL
   return (DEC_EVAL iden EVAL_NIL)
 
-handleVarDeclarationAndDefinition :: TextType -> EVAL -> IO PROG_EVAL
+handleVarDeclarationAndDefinition :: TextType -> IO EVAL -> IO PROG_EVAL
 handleVarDeclarationAndDefinition iden val = do 
-  addUpdateIdentifier iden val
-  return (DEC_EVAL iden val)  
+  nVal <- val
+  addUpdateIdentifier iden nVal
+  return (DEC_EVAL iden nVal)  
+  
+handleVarDefinition :: TextType -> IO EVAL -> S.Seq TH.Token -> IO PROG_EVAL
+handleVarDefinition iden val tokens = do 
+  newVal <- val
+  oldVal <- getValueOfIdentifier iden
+  if 
+    isNothing oldVal 
+  then 
+    return (DEC_EVAL iden (NON_EVAL "Identifier is not defined" tokens))
+  else do
+    addUpdateIdentifier iden newVal
+    return (DEC_EVAL iden newVal)  
 
-evalExpression :: EXPRESSION -> EVAL
-evalExpression (EXP_LITERAL (NUMBER x)) = EVAL_NUMBER x
-evalExpression (EXP_LITERAL (STRING x)) = EVAL_STRING x
-evalExpression (EXP_LITERAL FALSE) = EVAL_BOOL False
-evalExpression (EXP_LITERAL TRUE) = EVAL_BOOL True
-evalExpression (EXP_LITERAL NIL) = EVAL_NIL
+evalExpression :: EXPRESSION -> IO EVAL
+evalExpression (EXP_LITERAL (NUMBER x)) = return (EVAL_NUMBER x)
+evalExpression (EXP_LITERAL (STRING x)) = return (EVAL_STRING x)
+evalExpression (EXP_LITERAL FALSE) = return (EVAL_BOOL False)
+evalExpression (EXP_LITERAL TRUE) = return (EVAL_BOOL True)
+evalExpression (EXP_LITERAL NIL) = return EVAL_NIL
+evalExpression (EXP_LITERAL (IDENTIFIER x tokens)) = do 
+  val <- getValueOfIdentifier x
+  if isJust val then return (fromJust val) else return (NON_EVAL "Identifier is not defined" tokens) 
+
 evalExpression (EXP_GROUPING (GROUP x)) = evalExpression x
-evalExpression (EXP_UNARY x tokens) = evalUnary tokens x 
-evalExpression (EXP_BINARY (BIN left op right) bLines) = evalBinary bLines left op right 
-evalExpression (EXP_TERNARY (TERN predi _ trueRes _ falseRes) tLines) = evalTernary tLines predi trueRes falseRes
-evalExpression _ = NON_EVAL "Expression cannot be evaluated" (S.fromList [])
 
-evalUnary :: S.Seq TH.Token -> UNARY -> EVAL
-evalUnary tokens (UNARY_BANG x) 
-  | isJust val = EVAL_BOOL (not (fromJust val))
-  | otherwise = NON_EVAL "Not an expression" tokens
-  where val = maybeEvalTruthy (evalExpression x)
-evalUnary tokens (UNARY_MINUS x) 
-  | isJust number = EVAL_NUMBER (-(fromJust number))
+evalExpression (EXP_UNARY (UNARY op x) tokens) = do 
+  expr <- evalExpression x
+  return (evalUnary tokens op expr) 
+
+evalExpression (EXP_BINARY (BIN left op right) bLines) = do 
+  evaledLeft <- evalExpression left
+  evaledRight <- evalExpression right
+  return (evalBinary bLines evaledLeft op evaledRight) 
+
+evalExpression (EXP_TERNARY (TERN predi _ trueRes _ falseRes) tLines) = do 
+  evalTrueRes <- evalExpression trueRes
+  evalFalseRes <- evalExpression falseRes
+  evalPred <- evalExpression predi 
+  return (evalTernary tLines evalPred evalTrueRes evalFalseRes)
+
+evalExpression _ = return (NON_EVAL "Expression cannot be evaluated" (S.fromList []))
+
+
+evalUnary :: S.Seq TH.Token -> OPERATOR -> EVAL -> EVAL
+evalUnary tokens op expr
+  | op == AST.MINUS && isJust valNum = EVAL_NUMBER (-(fromJust valNum))
+  | op == AST.BANG && isJust valTruthy = EVAL_BOOL (not (fromJust valTruthy))
   | otherwise = NON_EVAL "Operand must be a number" tokens
-  where number = maybeEvalNumber (evalExpression x)
+  where valNum = maybeEvalNumber expr
+        valTruthy = maybeEvalTruthy expr
+  
   
 
-evalBinary :: S.Seq TH.Token -> EXPRESSION -> OPERATOR -> EXPRESSION ->  EVAL
-evalBinary tokens left op right
+evalBinary :: S.Seq TH.Token -> EVAL -> OPERATOR -> EVAL -> EVAL
+evalBinary tokens evalLeft op evalRight
  | op == MINUS = getArithOp (-) 
  | op == SLASH = getArithOp (/)
  | op == STAR = getArithOp (*)
@@ -65,9 +99,7 @@ evalBinary tokens left op right
  | op == LESS_EQUAL = getCompOp (<=)
  | op == EQUAL_EQUAL = equals
  | op == BANG_EQUAL = notEquals
- where evalLeft = evalExpression left
-       evalRight = evalExpression right
-       leftNum = maybeEvalNumber evalLeft
+ where leftNum = maybeEvalNumber evalLeft
        rightNum = maybeEvalNumber evalRight
        leftStr = maybeEvalString evalLeft
        rightStr = maybeEvalString evalRight
@@ -81,12 +113,12 @@ evalBinary tokens left op right
          | otherwise = NON_EVAL "Operands must be two numbers or two strings" tokens
 
 
-evalTernary :: S.Seq TH.Token -> EXPRESSION -> EXPRESSION -> EXPRESSION -> EVAL
+evalTernary :: S.Seq TH.Token -> EVAL -> EVAL -> EVAL -> EVAL
 evalTernary tokens predi trueRes falseRes
-  | preppedPred == Just True = evalExpression trueRes
-  | preppedPred == Just False = evalExpression falseRes
+  | preppedPred == Just True = trueRes
+  | preppedPred == Just False = falseRes
   | otherwise = NON_EVAL "Ternary operator failed" tokens
-  where preppedPred = maybeEvalTruthy (evalExpression predi)
+  where preppedPred = maybeEvalTruthy predi
 
 -- Helpers
 maybeEvalNumber :: EVAL -> Maybe Double
@@ -117,6 +149,6 @@ createComparison :: S.Seq TH.Token -> Maybe Double -> Maybe Double -> (Double ->
 createComparison = createMathOp EVAL_BOOL
 
 createEquality :: (Eq a) => a -> a -> (Bool -> Bool) -> EVAL
-createEquality l r ch = if l == r then EVAL_BOOL (ch True) else EVAL_BOOL False
+createEquality l r ch = if l == r then EVAL_BOOL (ch True) else EVAL_BOOL (ch False)
 
   

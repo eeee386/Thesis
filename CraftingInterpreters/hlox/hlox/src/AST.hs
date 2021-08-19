@@ -23,11 +23,11 @@ instance Show DECLARATION where
 
 type IDENTIFIER = TokenType
 
-data VARIABLE_DECLARATION = VAR_DEC_DEF IDENTIFIER EXPRESSION | VAR_DEC IDENTIFIER | VAR_DEF IDENTIFIER EXPRESSION
+data VARIABLE_DECLARATION = VAR_DEC_DEF IDENTIFIER EXPRESSION | VAR_DEC IDENTIFIER | VAR_DEF IDENTIFIER EXPRESSION (S.Seq Token)
 instance Show VARIABLE_DECLARATION where
   show (VAR_DEC_DEF iden expr) = mconcat ["var", " ", show iden, " = ", show expr]
   show (VAR_DEC iden) = mconcat ["var", " ", show iden] 
-  show (VAR_DEF iden expr) = mconcat ["var", " ", show iden, " = ", show expr]
+  show (VAR_DEF iden expr _) = mconcat ["var", " ", show iden, " = ", show expr]
 
 data STATEMENT = EXPR_STMT EXPRESSION | PRINT_STMT EXPRESSION
 instance Show STATEMENT where 
@@ -50,24 +50,23 @@ instance Show EXPRESSION where
   show (NON_EXP x y) = mconcat [show x, " ", show y]
   show (EXP_TERNARY x _) = show x
 
-data LITERAL = NUMBER Double | STRING TextType | TRUE | FALSE | NIL | IDENTIFIER TextType
+data LITERAL = NUMBER Double | STRING TextType | TRUE | FALSE | NIL | IDENTIFIER TextType (S.Seq Token)
 instance Show LITERAL where 
   show (NUMBER x) = show x
   show (STRING x) = T.unpack (T.concat [T.pack "\"", x, T.pack "\""])
   show TRUE = "true"
   show FALSE = "false"
   show NIL = "nil"  
-  show (IDENTIFIER x) = show x
+  show (IDENTIFIER x y) = show x ++ show y
    
 
 newtype GROUPING = GROUP EXPRESSION
 instance Show GROUPING where 
   show (GROUP x) = mconcat ["(", show x, ")"]
 
-data UNARY = UNARY_MINUS EXPRESSION | UNARY_BANG EXPRESSION
+data UNARY = UNARY OPERATOR EXPRESSION
 instance Show UNARY where 
-  show (UNARY_MINUS x) = mconcat ["-", show x]
-  show (UNARY_BANG x) = mconcat ["!", show x]
+  show (UNARY op x) = mconcat [show op, show x]
 
 data BINARY = BIN EXPRESSION OPERATOR EXPRESSION
 instance Show BINARY where 
@@ -78,7 +77,7 @@ instance Show TERNARY where
   show (TERN v w x y z) = mconcat [show v, show w, show x, show y, show z]
 
 data OPERATOR = EQUAL_EQUAL | BANG_EQUAL | LESS | LESS_EQUAL | GREATER | GREATER_EQUAL
-               | PLUS  | MINUS | STAR | SLASH | QUESTION_MARK | COLON deriving Eq
+               | PLUS  | MINUS | STAR | SLASH | QUESTION_MARK | COLON | BANG deriving Eq
                
 instance Show OPERATOR where 
   show EQUAL_EQUAL = "=="
@@ -93,6 +92,7 @@ instance Show OPERATOR where
   show SLASH = "/"
   show QUESTION_MARK = "?"
   show COLON = ":"
+  show BANG = "!"
   
 getParseError :: DECLARATION -> Maybe DECLARATION
 getParseError (PARSE_ERROR x y) = Just (PARSE_ERROR x y)
@@ -102,15 +102,14 @@ getASTErrorFromStatement :: DECLARATION -> Maybe String
 getASTErrorFromStatement (DEC_STMT (EXPR_STMT x)) = findASTError x
 getASTErrorFromStatement (DEC_STMT (PRINT_STMT x)) = findASTError x
 getASTErrorFromStatement (DEC_VAR (VAR_DEC_DEF _ x)) = findASTError x
-getASTErrorFromStatement (DEC_VAR (VAR_DEF _ x)) = findASTError x
+getASTErrorFromStatement (DEC_VAR (VAR_DEF _ x _)) = findASTError x
 getASTErrorFromStatement _ = Nothing
 
 
 findASTError :: EXPRESSION -> Maybe String
 findASTError (NON_EXP x y) = Just (show (NON_EXP x y))
 findASTError (EXP_GROUPING (GROUP x)) = findASTError x
-findASTError (EXP_UNARY (UNARY_MINUS x) _) = findASTError x
-findASTError (EXP_UNARY (UNARY_BANG x) _) = findASTError x
+findASTError (EXP_UNARY (UNARY _ x) _) = findASTError x
 findASTError (EXP_BINARY (BIN left _ right) _) = (++) <$> findASTError left <*> findASTError right
 findASTError (EXP_TERNARY (TERN _ _ trueRes _ falseRes) _) = (++) <$> findASTError trueRes <*> findASTError falseRes
 findASTError _ = Nothing
