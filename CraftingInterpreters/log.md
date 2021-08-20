@@ -11,3 +11,4 @@
 - States (variables,scopes...) in a stateless side-effectless programming languages (will see how it turns out)
   - State monad hashtable, for environments.
   - Talk about monads (and functors, applicatives)
+  - I think we should talk about how the Environments work (sequence, and the last element is the innermost scope that we are in)

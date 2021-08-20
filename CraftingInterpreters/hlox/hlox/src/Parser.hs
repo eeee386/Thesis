@@ -46,7 +46,7 @@ handleCreateDeclaration expr
         isDec = firstTokenType == Just TokenHelper.VAR
         isDefToo = (tokenType <$> eqOrTermToken) == Just TokenHelper.EQUAL
         isOnlyDec = (tokenType <$> eqOrTermToken) == Just TokenHelper.SEMICOLON
-        hasIden = isJust iden
+        hasIden = isJust iden && isIdentifier (fromJust iden)
         hasVal = not (S.null defExpr)
         isPrint = firstTokenType == Just PRINT
         isExpressionStatement = firstTokenType /= Just VAR && firstTokenType /= Just PRINT
