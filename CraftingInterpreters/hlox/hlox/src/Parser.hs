@@ -32,28 +32,28 @@ createDeclaration stmtTokens decSeq
 
 handleCreateDeclaration :: S.Seq Token -> DECLARATION         
 handleCreateDeclaration expr
-  | isDec && isDefToo && hasIden && hasVal = DEC_VAR (VAR_DEC_DEF (fromJust iden) (createExpression defExpr))
-  | isDec && hasIden && isOnlyDec = DEC_VAR (VAR_DEC (fromJust iden))
-  | isRedef && hasRedefVal = DEC_VAR (VAR_DEF (fromJust redefIden) (createExpression redefExpr) redefExpr)
+  | isDecDef = DEC_VAR (VAR_DEC_DEF (fromJust iden) (createExpression defExpr))
+  | isOnlyDec = DEC_VAR (VAR_DEC (fromJust iden))
+  | isRedef = DEC_VAR (VAR_DEF (fromJust iden) (createExpression redefExpr) redefExpr)
   | isPrint = DEC_STMT (PRINT_STMT (createExpression (S.drop 1 expr)))
   | isExpressionStatement = DEC_STMT (EXPR_STMT (createExpression expr))
   | otherwise = PARSE_ERROR "Not a valid declaration or expression" expr
-  where firstToken = S.lookup 0 expr
+  where findAssignment = S.findIndexL (\x -> tokenType x == TokenHelper.EQUAL) expr
+        firstToken = S.lookup 0 expr
         firstTokenType = tokenType <$> firstToken
-        iden = tokenType <$> S.lookup 1 expr
-        eqOrTermToken = S.lookup 2 expr
         defExpr = S.drop 3 expr
-        isDec = firstTokenType == Just TokenHelper.VAR
-        isDefToo = (tokenType <$> eqOrTermToken) == Just TokenHelper.EQUAL
-        isOnlyDec = (tokenType <$> eqOrTermToken) == Just TokenHelper.SEMICOLON
-        hasIden = isJust iden && isIdentifier (fromJust iden)
-        hasVal = not (S.null defExpr)
+        redefExpr = S.drop 2 expr
+        secondTokenType = tokenType <$> S.lookup 1 expr
+        isDec = firstTokenType == Just TokenHelper.VAR && (isIdentifier <$> secondTokenType) == Just True 
+        isOnlyDec = isDec && (tokenType <$> S.lookup 2 expr) == Just TokenHelper.SEMICOLON 
+        isDecDef = isDec && findAssignment == Just 2 && not (S.null defExpr)
+        isRedef = (isIdentifier <$> firstTokenType) == Just True && findAssignment == Just 1 && not (S.null redefExpr)
         isPrint = firstTokenType == Just PRINT
         isExpressionStatement = firstTokenType /= Just VAR && firstTokenType /= Just PRINT
-        isRedef = (isIdentifier <$> firstTokenType) == Just True && (tokenType <$> S.lookup 1 expr) == Just TokenHelper.EQUAL
-        redefIden = firstTokenType
-        redefExpr = S.drop 2 expr
-        hasRedefVal = not (S.null redefExpr)
+        iden
+          | isRedef = firstTokenType
+          | isDec = secondTokenType
+          | otherwise = Nothing
                 
                 
 
@@ -75,21 +75,21 @@ createTernary tokens = handleTernaryCases getOp1 getOp2 indexOfOp1 indexOfOp2 to
 
 createEquality :: S.Seq Token -> EXPRESSION
 createEquality = createBinaryExpressions (M.fromList [(TokenHelper.EQUAL_EQUAL, AST.EQUAL_EQUAL), 
-                                                      (TokenHelper.BANG_EQUAL, AST.BANG_EQUAL)]) createComparison
+                                                      (TokenHelper.BANG_EQUAL, AST.BANG_EQUAL)]) createEquality createComparison
 
 createComparison :: S.Seq Token -> EXPRESSION
 createComparison = createBinaryExpressions (M.fromList [(TokenHelper.LESS, AST.LESS),
                                                         (TokenHelper.LESS_EQUAL, AST.LESS_EQUAL),
                                                         (TokenHelper.GREATER, AST.GREATER),
-                                                        (TokenHelper.GREATER_EQUAL, AST.GREATER_EQUAL)]) createTerm
+                                                        (TokenHelper.GREATER_EQUAL, AST.GREATER_EQUAL)]) createComparison createTerm
 
 createTerm :: S.Seq Token -> EXPRESSION
 createTerm = createBinaryExpressions (M.fromList [(TokenHelper.PLUS, AST.PLUS), 
-                                                  (TokenHelper.MINUS, AST.MINUS)]) createFactor
+                                                  (TokenHelper.MINUS, AST.MINUS)]) createTerm createFactor
 
 createFactor :: S.Seq Token -> EXPRESSION
 createFactor = createBinaryExpressions (M.fromList [(TokenHelper.SLASH, AST.SLASH), 
-                                                    (TokenHelper.STAR, AST.STAR)]) createUnary
+                                                    (TokenHelper.STAR, AST.STAR)]) createFactor createUnary
 
     
 createUnary :: S.Seq Token -> EXPRESSION
@@ -134,11 +134,11 @@ getIsAnyEOF :: Maybe Int -> Bool
 getIsAnyEOF (Just _) = True
 getIsAnyEOF Nothing = False
 
-createBinaryExpressions :: M.Map TokenType OPERATOR -> (S.Seq Token -> EXPRESSION) -> S.Seq Token -> EXPRESSION
-createBinaryExpressions tokenExpMap nextPrec tokens = handleBinaryCases
+createBinaryExpressions :: M.Map TokenType OPERATOR -> (S.Seq Token -> EXPRESSION) -> (S.Seq Token -> EXPRESSION) -> S.Seq Token -> EXPRESSION
+createBinaryExpressions tokenExpMap thisPrec nextPrec tokens = handleBinaryCases
   where
     indexOfOp = S.findIndexL (\x -> tokenType x `elem` M.keys tokenExpMap) tokens
-    bin = prepBinary getOp (fromJust indexOfOp) tokens nextPrec
+    bin = prepBinary getOp (fromJust indexOfOp) tokens thisPrec nextPrec
     getOp indx = tokenExpMap M.! token
       where token = tokenType (S.index tokens indx)
     handleBinaryCases
@@ -146,8 +146,8 @@ createBinaryExpressions tokenExpMap nextPrec tokens = handleBinaryCases
       | indexOfOp > Just (S.length tokens - 2) = NON_EXP "Missing operands from right side" tokens
       | otherwise = nextPrec tokens
 
-prepBinary :: (Int -> OPERATOR) -> Int -> S.Seq Token -> (S.Seq Token -> EXPRESSION) -> BINARY
-prepBinary getOperation idx tokens nextPrec = AST.BIN (nextPrec left) op (nextPrec right)
+prepBinary :: (Int -> OPERATOR) -> Int -> S.Seq Token -> (S.Seq Token -> EXPRESSION) -> (S.Seq Token -> EXPRESSION) -> BINARY
+prepBinary getOperation idx tokens thisPrec nextPrec = AST.BIN (nextPrec left) op (thisPrec right)
    where split = splitTokens idx
          left = fst split
          right = S.drop 1 (snd split) 
@@ -191,5 +191,5 @@ breakTokens stmts tokens
         
 
 isIdentifier :: TokenType -> Bool
-isIdentifier (TokenHelper.IDENTIFIER x) = True
+isIdentifier (TokenHelper.IDENTIFIER _) = True
 isIdentifier _ = False

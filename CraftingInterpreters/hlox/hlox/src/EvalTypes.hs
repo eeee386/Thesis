@@ -18,4 +18,17 @@ getLineError :: S.Seq TH.Token -> String
 getLineError tokens = if firstLine /= secondLine then mconcat [". Between lines: ", show firstLine, "-", show secondLine] else mconcat [". In line: ", show firstLine]
   where firstLine = TH.line (S.index tokens 0) 
         secondLine = TH.line (S.index tokens (S.length tokens - 1))
+        
+hasRuntimeError :: PROG_EVAL -> Bool
+hasRuntimeError (EXPR_EVAL (NON_EVAL _ _)) = True
+hasRuntimeError (PRINT_EVAL (NON_EVAL _ _)) = True
+hasRuntimeError (DEC_EVAL _ (NON_EVAL _ _)) = True
+hasRuntimeError _ = False
+
+createRuntimeError :: PROG_EVAL -> PROG_EVAL
+createRuntimeError (EXPR_EVAL (NON_EVAL x y )) = PRINT_EVAL (NON_EVAL x y)
+createRuntimeError (DEC_EVAL _ (NON_EVAL x y)) = PRINT_EVAL (NON_EVAL x y)
+createRuntimeError x = x
+
+
 

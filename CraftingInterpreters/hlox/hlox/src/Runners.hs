@@ -35,13 +35,22 @@ printEvalOrContinue (PROG statements eof) = handleCases
 printEvalOrContinue parseError = print parseError
 
 runByLines :: S.Seq (IO PROG_EVAL) -> IO()
-runByLines = mapM_ runOneLineIO
-  
--- Run one lines should be called -> save identifiers from it (Maybe not necessary, will leave it as return, and we will see what happens)
-runOneLineIO :: IO PROG_EVAL -> IO ()
-runOneLineIO ioprog = do
-  prog <- ioprog
-  runOneLine prog
+runByLines pseq = do
+  if
+    S.null pseq
+  then 
+    return()
+  else do
+    prog <- S.index pseq 0
+    if 
+      hasRuntimeError prog 
+    then do
+      let errline = createRuntimeError prog
+      runOneLine errline
+      return()
+    else do
+      runOneLine prog
+      runByLines (S.drop 1 pseq) 
 
 runOneLine :: PROG_EVAL -> IO()
 runOneLine (PRINT_EVAL x) = print x
@@ -51,7 +60,7 @@ runOneLine _ = return()
 run :: T.Text -> IO()
 run text = do
   let tokens = scanTokens text
-  print (handleCreateDeclaration tokens)
+  print (parse tokens)
   printScanErrorOrContinue tokens
 
 -- This is the code I used. Thanks Joel Chelliah!
