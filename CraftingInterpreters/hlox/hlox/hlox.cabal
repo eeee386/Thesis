@@ -28,11 +28,11 @@ library
       Environment
       Error
       Eval
+      EvalTypes
       Parser
       Runners
       Scanner
       TokenHelper
-      EvalTypes
   other-modules:
       Paths_hlox
   hs-source-dirs:
