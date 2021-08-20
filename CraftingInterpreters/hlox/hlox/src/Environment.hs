@@ -55,7 +55,7 @@ updateIdentifierInSpecificEnvironment iden value env index = do
   HT.insert locEnv iden value
   return (S.insertAt index locEnv delEnv)
   
-   
+  
 updateIdentifierToEnvironment :: AST.TextType -> EVAL -> Environments -> IO (Environments, Bool)
 updateIdentifierToEnvironment iden value env = do
   values <- mapM (getValueOfIdentifier iden) env

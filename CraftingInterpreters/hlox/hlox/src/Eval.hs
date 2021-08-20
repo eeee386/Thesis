@@ -11,9 +11,9 @@ import EvalTypes
 import Environment
   
 evalProgram :: PROGRAM -> S.Seq (IO PROG_EVAL)
-evalProgram (PROG x _) = eval x S.empty createEnv
+evalProgram (PROG x _) = eval x S.empty createGlobalEnvironment
 
-eval :: S.Seq DECLARATION -> S.Seq (IO PROG_EVAL) -> IO HashTable -> S.Seq (IO PROG_EVAL)
+eval :: S.Seq DECLARATION -> S.Seq (IO PROG_EVAL) -> IO Environments -> S.Seq (IO PROG_EVAL)
 eval decs evals env
           | S.null decs = evals
           | otherwise = eval (S.drop 1 decs) (evals S.|> ieval) newEnv
@@ -21,7 +21,7 @@ eval decs evals env
                 ieval = fst <$> res
                 newEnv = snd <$> res    
 
-evalProgramHelper :: DECLARATION -> IO HashTable -> IO (PROG_EVAL, HashTable) 
+evalProgramHelper :: DECLARATION -> IO Environments -> IO (PROG_EVAL, Environments) 
 evalProgramHelper (DEC_STMT (PRINT_STMT x)) env = do 
   locEnv <- env
   expr <- evalExpression x locEnv
@@ -42,35 +42,30 @@ evalProgramHelper (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens)) env = do
   locExpr <- evalExpression expr locEnv
   handleVarDefinition iden locExpr locEnv tokens 
 
-handleVarDeclaration :: TextType -> HashTable -> IO (PROG_EVAL, HashTable)
+handleVarDeclaration :: TextType -> Environments -> IO (PROG_EVAL, Environments)
 handleVarDeclaration iden env = do 
-  newEnv <- addUpdateIdentifier iden EVAL_NIL env
+  newEnv <- addIdentifierToEnvironment iden EVAL_NIL env
   return (DEC_EVAL iden EVAL_NIL, newEnv)
 
-handleVarDeclarationAndDefinition :: TextType -> EVAL -> HashTable -> IO (PROG_EVAL, HashTable)
+handleVarDeclarationAndDefinition :: TextType -> EVAL -> Environments -> IO (PROG_EVAL, Environments)
 handleVarDeclarationAndDefinition iden val env = do 
-  newEnv <- addUpdateIdentifier iden val env
+  newEnv <- addIdentifierToEnvironment iden val env
   return (DEC_EVAL iden val, newEnv)  
   
-handleVarDefinition :: TextType -> EVAL -> HashTable -> S.Seq TH.Token -> IO (PROG_EVAL, HashTable)
+handleVarDefinition :: TextType -> EVAL -> Environments -> S.Seq TH.Token -> IO (PROG_EVAL, Environments)
 handleVarDefinition iden val env tokens = do
-  oldVal <- getValueOfIdentifier iden env
-  if 
-    isNothing oldVal 
-  then 
-    return (DEC_EVAL iden (NON_EVAL "Identifier is not defined" tokens), env)
-  else do
-    newEnv <- addUpdateIdentifier iden val env
-    return (DEC_EVAL iden val, newEnv)  
+  (newEnv, isSuccess) <- updateIdentifierToEnvironment iden val env
+  if isSuccess then return (DEC_EVAL iden val, newEnv) else return (DEC_EVAL iden (NON_EVAL "Identifier is not defined" tokens), env)
+    
 
-evalExpression :: EXPRESSION -> HashTable -> IO EVAL
+evalExpression :: EXPRESSION -> Environments -> IO EVAL
 evalExpression (EXP_LITERAL (NUMBER x)) _ = return (EVAL_NUMBER x)
 evalExpression (EXP_LITERAL (STRING x)) _ = return (EVAL_STRING x)
 evalExpression (EXP_LITERAL FALSE) _ = return (EVAL_BOOL False)
 evalExpression (EXP_LITERAL TRUE) _ = return (EVAL_BOOL True)
 evalExpression (EXP_LITERAL NIL) _ = return EVAL_NIL
 evalExpression (EXP_LITERAL (IDENTIFIER x tokens)) env = do 
-  val <- getValueOfIdentifier x env
+  val <- findValueOfIdentifier x env
   if isJust val then return (fromJust val) else return (NON_EVAL "Identifier is not defined" tokens) 
 
 evalExpression (EXP_GROUPING (GROUP x)) env = evalExpression x env
