@@ -15,12 +15,12 @@ parse = createProgram
 createProgram :: S.Seq Token -> PROGRAM
 createProgram tokens
   | eofType /= EOF = PROG_ERROR (PARSE_ERROR "Unterminated statement" eofStmtToken)
-  | otherwise = PROG (createDeclaration (S.take (S.length stmtTokens-1) stmtTokens) S.empty) eofToken
+  | otherwise = PROG (createDeclaration (S.take (S.length stmtTokens-1) stmtTokens) S.empty)
   where stmtTokens = breakIntoStatements tokens
         eofStmtToken = S.index stmtTokens (S.length stmtTokens-1)
         eofToken = S.index eofStmtToken 0
         eofType = tokenType eofToken
-      
+
 createDeclaration :: S.Seq (S.Seq Token) -> S.Seq DECLARATION -> S.Seq DECLARATION      
 createDeclaration stmtTokens decSeq
   | S.null stmtTokens = decSeq
@@ -57,7 +57,7 @@ handleCreateDeclaration expr
 
 
 createBlock :: S.Seq Token -> DECLARATION
-createBlock = handleBlock            
+createBlock = handleBlock
                 
 
 createExpression :: S.Seq Token -> EXPRESSION
@@ -178,7 +178,7 @@ handleTernaryCases getOp1 getOp2 indexOfOp1 indexOfOp2 tokens
   where tern = prepTernary getOp1 getOp2 (fromJust indexOfOp1) (fromJust indexOfOp2) tokens createEquality
         bothIsJust = isJust indexOfOp1 && isJust indexOfOp2
         xorIsJust = isJust indexOfOp1 /= isJust indexOfOp2
-        properPlacement = ((-) <$> indexOfOp2 <*> indexOfOp1) > Just 1 && indexOfOp2 < Just (S.length tokens - 2) 
+        properPlacement = ((-) <$> indexOfOp2 <*> indexOfOp1) > Just 1 && indexOfOp2 < Just (S.length tokens - 2)
 
 breakIntoStatements :: S.Seq Token -> S.Seq (S.Seq Token)     
 breakIntoStatements = breakTokens statements
@@ -190,21 +190,21 @@ breakTokens stmts tokens
   | isStartOfBlock = breakTokens (stmts S.|> bLeft) bRight
   | otherwise = breakTokens newStmts right
   where isStartOfBlock = (tokenType <$> (tokens S.!? 0)) == Just LEFT_BRACE
-        bIndex = S.findIndexL (\x -> tokenType x == RIGHT_BRACE) tokens
+        bIndex = S.findIndexR (\x -> tokenType x == RIGHT_BRACE) tokens
         scIndex = S.findIndexL (\x -> tokenType x == SEMICOLON) tokens
         (bLeft, bRight) = if isJust bIndex then S.splitAt (fromJust bIndex+1) tokens else (tokens, S.empty)
         (left, right) = if isJust scIndex then S.splitAt (fromJust scIndex+1) tokens else (tokens, S.empty)
         newStmts = stmts S.|> left
-        
-        
+
+
 handleBlock :: S.Seq Token -> DECLARATION
 handleBlock tokens
   | not hasRightBrace = PARSE_ERROR "Brace is not closed" tokens
   | isEmpty = PARSE_ERROR "Empty Block" tokens
   | otherwise = DEC_STMT (BLOCK_STMT (createDeclaration tokensToUse S.empty))
-  where indexOfRightBrace = S.findIndexL (\x -> tokenType x == TokenHelper.RIGHT_BRACE) tokens
+  where indexOfRightBrace = S.findIndexR (\x -> tokenType x == TokenHelper.RIGHT_BRACE) tokens
         hasRightBrace = isJust indexOfRightBrace
-        tokensToMatch = S.drop 1 (S.takeWhileL (\x -> tokenType x /= TokenHelper.RIGHT_BRACE) tokens)
+        tokensToMatch = S.drop 1 (S.take (fromJust indexOfRightBrace) tokens)
         isEmpty = S.null tokensToMatch
         tokensToUse = breakIntoStatements tokensToMatch
 

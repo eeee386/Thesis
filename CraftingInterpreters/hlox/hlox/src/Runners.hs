@@ -24,10 +24,10 @@ printScanErrorOrContinue tokens = if null scanError then printEvalOrContinue par
         parsed = parse tokens
 
 printEvalOrContinue :: AST.PROGRAM -> IO ()
-printEvalOrContinue (PROG statements eof) = handleCases
+printEvalOrContinue (PROG statements) = handleCases
   where parseError = S.filter isJust (fmap getParseError statements)
         astError = S.filter isJust (fmap getASTErrorFromStatement statements)
-        evaled = evalProgram (PROG statements eof)
+        evaled = evalProgram (PROG statements)
         handleCases
           | (not . null) parseError = print (mconcat ["ParserError: ", show parseError])
           | (not . null) astError = print (mconcat ["ParserError: ", show astError])
@@ -57,7 +57,8 @@ run :: T.Text -> IO()
 run text = do
   let tokens = scanTokens text
   let parsed = parse tokens
-  print (parsed)
+  evaled <- evalProgram parsed
+  print evaled
   printScanErrorOrContinue tokens
 
 -- This is the code I used. Thanks Joel Chelliah!

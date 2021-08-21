@@ -11,7 +11,7 @@ import EvalTypes
 import Environment
   
 evalProgram :: PROGRAM -> IO (S.Seq PROG_EVAL)
-evalProgram (PROG x _) = fst (eval x S.empty createGlobalEnvironment)
+evalProgram (PROG x) = fst (eval x S.empty createGlobalEnvironment)
 
 evalBlock :: S.Seq DECLARATION -> Environments -> IO (IO (S.Seq PROG_EVAL), IO Environments)
 evalBlock x env = do 

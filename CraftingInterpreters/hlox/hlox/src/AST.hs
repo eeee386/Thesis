@@ -7,11 +7,9 @@ import qualified Data.Sequence as S
 
 type TextType = T.Text
 
-type EOF = Token
-
-data PROGRAM = PROG (S.Seq DECLARATION) EOF | PROG_ERROR DECLARATION
+data PROGRAM = PROG (S.Seq DECLARATION) | PROG_ERROR DECLARATION
 instance Show PROGRAM where
-  show (PROG x _) = show x
+  show (PROG x) = show x
   show (PROG_ERROR x) = show x
 
 data DECLARATION = DEC_STMT STATEMENT | DEC_VAR VARIABLE_DECLARATION | PARSE_ERROR TextType (S.Seq Token)
