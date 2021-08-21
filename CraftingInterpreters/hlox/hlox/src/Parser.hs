@@ -48,7 +48,7 @@ handleCreateDeclaration expr
         isDecDef = isDec && findAssignment == Just 2 && not (S.null defExpr)
         isRedef = (isIdentifier <$> firstTokenType) == Just True && findAssignment == Just 1 && not (S.null redefExpr)
         isPrint = firstTokenType == Just PRINT
-        isExpressionStatement = firstTokenType /= Just VAR && firstTokenType /= Just PRINT
+        isExpressionStatement = firstTokenType /= Just VAR && firstTokenType /= Just PRINT && firstTokenType /= Just LEFT_BRACE
         isBlock = firstTokenType == Just LEFT_BRACE
         iden
           | isRedef = firstTokenType
@@ -206,7 +206,7 @@ handleBlock tokens
         hasRightBrace = isJust indexOfRightBrace
         tokensToMatch = S.drop 1 (S.takeWhileL (\x -> tokenType x /= TokenHelper.RIGHT_BRACE) tokens)
         isEmpty = S.null tokensToMatch
-        tokensToUse = breakIntoStatements (tokensToMatch S.|> Token {tokenType=EOB, line=line (S.index tokens (S.length tokens-1))})
+        tokensToUse = breakIntoStatements tokensToMatch
 
 isIdentifier :: TokenType -> Bool
 isIdentifier (TokenHelper.IDENTIFIER _) = True

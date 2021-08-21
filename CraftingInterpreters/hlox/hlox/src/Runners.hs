@@ -56,7 +56,8 @@ runOneLine _ = return()
 run :: T.Text -> IO()
 run text = do
   let tokens = scanTokens text
-  print (handleBlock tokens)
+  let parsed = parse tokens
+  print (parsed)
   printScanErrorOrContinue tokens
 
 -- This is the code I used. Thanks Joel Chelliah!

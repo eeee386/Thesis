@@ -16,8 +16,8 @@ instance Show EVAL where
   
 getLineError :: S.Seq TH.Token -> String
 getLineError tokens = if firstLine /= secondLine then mconcat [". Between lines: ", show firstLine, "-", show secondLine] else mconcat [". In line: ", show firstLine]
-  where firstLine = TH.line (S.index tokens 0) 
-        secondLine = TH.line (S.index tokens (S.length tokens - 1))
+  where firstLine = TH.line <$> S.lookup 0 tokens 
+        secondLine = TH.line <$> S.lookup (S.length tokens - 1) tokens
         
 hasRuntimeError :: PROG_EVAL -> Bool
 hasRuntimeError (EXPR_EVAL (NON_EVAL _ _)) = True
