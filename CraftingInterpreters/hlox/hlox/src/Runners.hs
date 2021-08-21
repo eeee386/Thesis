@@ -31,26 +31,31 @@ printEvalOrContinue (PROG statements) = handleCases
         handleCases
           | (not . null) parseError = print (mconcat ["ParserError: ", show parseError])
           | (not . null) astError = print (mconcat ["ParserError: ", show astError])
-          | otherwise = runByLinesIO evaled
+          | otherwise = runEvalsIO evaled
 printEvalOrContinue parseError = print parseError
 
-runByLinesIO :: IO (S.Seq PROG_EVAL) -> IO()
-runByLinesIO pseqIO = do
+runEvalsIO :: IO (S.Seq PROG_EVAL) -> IO()
+runEvalsIO pseqIO = do
   pseq <- pseqIO
-  runByLines pseq
+  runEvals pseq
 
-runByLines :: S.Seq PROG_EVAL -> IO()
-runByLines pseq
+runEvals :: S.Seq PROG_EVAL -> IO()
+runEvals pseq
   | S.null pseq = return()
-  | hasRuntimeError prog = runOneLine (createRuntimeError prog)
+  | hasRuntimeError prog = runRuntimeError (createRuntimeError prog)
   | otherwise = do
-    runOneLine prog
-    runByLines (S.drop 1 pseq)
+    runOneEval prog
+    runEvals (S.drop 1 pseq)
   where prog = S.index pseq 0
+  
+runRuntimeError :: Maybe RUNTIME_ERROR -> IO()
+runRuntimeError (Just (RUNTIME_ERROR x)) = print x
+runRuntimeError Nothing = return()
 
-runOneLine :: PROG_EVAL -> IO()
-runOneLine (PRINT_EVAL x) = print x
-runOneLine _ = return()
+runOneEval :: PROG_EVAL -> IO()
+runOneEval (PRINT_EVAL x) = print x
+runOneEval (BLOCK_EVAL x) = runEvals x
+runOneEval _ = return()
        
   
 run :: T.Text -> IO()

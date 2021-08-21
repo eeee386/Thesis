@@ -33,6 +33,7 @@ library
       Runners
       Scanner
       TokenHelper
+      Utils
   other-modules:
       Paths_hlox
   hs-source-dirs:

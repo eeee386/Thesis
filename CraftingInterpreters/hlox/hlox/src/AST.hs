@@ -4,13 +4,13 @@ module AST where
 import qualified Data.Text as T
 import TokenHelper (Token, line, TokenType)
 import qualified Data.Sequence as S
+import Utils
 
 type TextType = T.Text
 
-data PROGRAM = PROG (S.Seq DECLARATION) | PROG_ERROR DECLARATION
+newtype PROGRAM = PROG (S.Seq DECLARATION)
 instance Show PROGRAM where
   show (PROG x) = show x
-  show (PROG_ERROR x) = show x
 
 data DECLARATION = DEC_STMT STATEMENT | DEC_VAR VARIABLE_DECLARATION | PARSE_ERROR TextType (S.Seq Token)
 instance Show DECLARATION where
@@ -92,9 +92,12 @@ instance Show OPERATOR where
   show COLON = ":"
   show BANG = "!"
   
-getParseError :: DECLARATION -> Maybe DECLARATION
-getParseError (PARSE_ERROR x y) = Just (PARSE_ERROR x y)
-getParseError _ = Nothing
+findParseError :: S.Seq DECLARATION -> Maybe DECLARATION
+findParseError = findElement isParseError 
+
+isParseError :: DECLARATION -> Bool
+isParseError (PARSE_ERROR _ _) = True
+isParseError _ = False
 
 getASTErrorFromStatement :: DECLARATION -> Maybe String
 getASTErrorFromStatement (DEC_STMT (EXPR_STMT x)) = findASTError x

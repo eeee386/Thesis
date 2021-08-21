@@ -7,6 +7,7 @@ import qualified Data.Sequence as S
 import TokenHelper
 import Data.Maybe
 import qualified Data.Map as M
+import Utils
 
 
 parse :: S.Seq Token -> PROGRAM
@@ -14,7 +15,7 @@ parse = createProgram
 
 createProgram :: S.Seq Token -> PROGRAM
 createProgram tokens
-  | eofType /= EOF = PROG_ERROR (PARSE_ERROR "Unterminated statement" eofStmtToken)
+  | eofType /= EOF = PROG (S.singleton (PARSE_ERROR "Unterminated statement" eofStmtToken))
   | otherwise = PROG (createDeclaration (S.take (S.length stmtTokens-1) stmtTokens) S.empty)
   where stmtTokens = breakIntoStatements tokens
         eofStmtToken = S.index stmtTokens (S.length stmtTokens-1)
@@ -200,12 +201,14 @@ breakTokens stmts tokens
 handleBlock :: S.Seq Token -> DECLARATION
 handleBlock tokens
   | not hasRightBrace = PARSE_ERROR "Brace is not closed" tokens
+  | not isTerminated = PARSE_ERROR "Unterminated statement" tokens
   | isEmpty = PARSE_ERROR "Empty Block" tokens
   | otherwise = DEC_STMT (BLOCK_STMT (createDeclaration tokensToUse S.empty))
   where indexOfRightBrace = S.findIndexR (\x -> tokenType x == TokenHelper.RIGHT_BRACE) tokens
         hasRightBrace = isJust indexOfRightBrace
         tokensToMatch = S.drop 1 (S.take (fromJust indexOfRightBrace) tokens)
         isEmpty = S.null tokensToMatch
+        isTerminated = (tokenType <$> getLast tokensToMatch) == Just SEMICOLON
         tokensToUse = breakIntoStatements tokensToMatch
 
 isIdentifier :: TokenType -> Bool

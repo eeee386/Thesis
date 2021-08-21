@@ -14,11 +14,11 @@ evalProgram :: PROGRAM -> IO (S.Seq PROG_EVAL)
 evalProgram (PROG x) = fst (eval x S.empty createGlobalEnvironment)
 
 evalBlock :: S.Seq DECLARATION -> Environments -> IO (IO (S.Seq PROG_EVAL), IO Environments)
-evalBlock x env = do 
+evalBlock x env = do
   let (pseqIO, envIO) = eval x S.empty (createLocalEnvironment env)
   let newEnvIO = deleteLocalEnvironment <$> envIO
   return (pseqIO, newEnvIO)
-  
+
 
 eval :: S.Seq DECLARATION -> S.Seq (IO PROG_EVAL) -> IO Environments -> (IO (S.Seq PROG_EVAL), IO Environments)
 eval decs evals env
@@ -27,8 +27,8 @@ eval decs evals env
           where res = evalProgramHelper (S.index decs 0) env
                 ieval = fst <$> res
                 newEnv = snd <$> res
-                
-               
+
+
 evalProgramHelper :: DECLARATION -> IO Environments -> IO (PROG_EVAL, Environments) 
 evalProgramHelper (DEC_STMT (PRINT_STMT x)) env = do 
   locEnv <- env
@@ -49,12 +49,16 @@ evalProgramHelper (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens)) env = do
   locEnv <- env
   locExpr <- evalExpression expr locEnv
   handleVarDefinition iden locExpr locEnv tokens 
-evalProgramHelper (DEC_STMT (BLOCK_STMT x)) env = do 
+evalProgramHelper (DEC_STMT (BLOCK_STMT x)) env = do
   locEnv <- env
   (seqProgIO, newEnvIO) <- evalBlock x locEnv
   newEnv <- newEnvIO
   seqProg <- seqProgIO
   return (BLOCK_EVAL seqProg, newEnv)
+evalProgramHelper x env = do
+  locEnv <- env
+  print x
+  return (EXPR_EVAL , S.empty, locEnv)
 
 handleVarDeclaration :: TextType -> Environments -> IO (PROG_EVAL, Environments)
 handleVarDeclaration iden env = do 
