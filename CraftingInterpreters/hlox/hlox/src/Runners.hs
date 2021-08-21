@@ -27,30 +27,26 @@ printEvalOrContinue :: AST.PROGRAM -> IO ()
 printEvalOrContinue (PROG statements eof) = handleCases
   where parseError = S.filter isJust (fmap getParseError statements)
         astError = S.filter isJust (fmap getASTErrorFromStatement statements)
-        evaled = evalProgram (PROG statements eof) 
-        handleCases 
+        evaled = evalProgram (PROG statements eof)
+        handleCases
           | (not . null) parseError = print (mconcat ["ParserError: ", show parseError])
           | (not . null) astError = print (mconcat ["ParserError: ", show astError])
-          | otherwise = runByLines evaled
+          | otherwise = runByLinesIO evaled
 printEvalOrContinue parseError = print parseError
 
-runByLines :: S.Seq (IO PROG_EVAL) -> IO()
-runByLines pseq = do
-  if
-    S.null pseq
-  then 
-    return()
-  else do
-    prog <- S.index pseq 0
-    if 
-      hasRuntimeError prog 
-    then do
-      let errline = createRuntimeError prog
-      runOneLine errline
-      return()
-    else do
-      runOneLine prog
-      runByLines (S.drop 1 pseq) 
+runByLinesIO :: IO (S.Seq PROG_EVAL) -> IO()
+runByLinesIO pseqIO = do
+  pseq <- pseqIO
+  runByLines pseq
+
+runByLines :: S.Seq PROG_EVAL -> IO()
+runByLines pseq
+  | S.null pseq = return()
+  | hasRuntimeError prog = runOneLine (createRuntimeError prog)
+  | otherwise = do
+    runOneLine prog
+    runByLines (S.drop 1 pseq)
+  where prog = S.index pseq 0
 
 runOneLine :: PROG_EVAL -> IO()
 runOneLine (PRINT_EVAL x) = print x
@@ -60,7 +56,7 @@ runOneLine _ = return()
 run :: T.Text -> IO()
 run text = do
   let tokens = scanTokens text
-  print (parse tokens)
+  print (handleBlock tokens)
   printScanErrorOrContinue tokens
 
 -- This is the code I used. Thanks Joel Chelliah!

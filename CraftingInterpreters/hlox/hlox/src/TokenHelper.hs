@@ -25,7 +25,7 @@ data TokenType =     LEFT_PAREN | RIGHT_PAREN | LEFT_BRACE | RIGHT_BRACE |
                      
                      COMMENT | BLOCK_COMMENT | WHITE_SPACE | 
                  
-                     EOF | NOT_TOKEN TextType deriving (Show, Eq, Ord)             
+                     EOF | EOB | NOT_TOKEN TextType deriving (Show, Eq, Ord)             
                      
 data Token = Token {
 tokenType :: TokenType

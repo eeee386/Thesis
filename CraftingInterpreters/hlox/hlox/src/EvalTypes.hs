@@ -4,7 +4,7 @@ import AST
 import qualified Data.Sequence as S
 import qualified TokenHelper as TH
   
-data PROG_EVAL = EXPR_EVAL EVAL | PRINT_EVAL EVAL | DEC_EVAL AST.TextType EVAL deriving Show
+data PROG_EVAL = EXPR_EVAL EVAL | PRINT_EVAL EVAL | BLOCK_EVAL (S.Seq PROG_EVAL) | DEC_EVAL AST.TextType EVAL deriving Show
 
 data EVAL = EVAL_NUMBER Double | EVAL_STRING AST.TextType | EVAL_BOOL Bool | EVAL_NIL | NON_EVAL AST.TextType (S.Seq TH.Token) deriving Eq
 instance Show EVAL where
