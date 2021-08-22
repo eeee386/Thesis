@@ -5,6 +5,7 @@ import qualified Data.Text as T
 import TokenHelper (Token, line, TokenType)
 import qualified Data.Sequence as S
 import Utils
+import Data.Maybe
 
 type TextType = T.Text
 
@@ -92,18 +93,33 @@ instance Show OPERATOR where
   show COLON = ":"
   show BANG = "!"
   
-findParseError :: S.Seq DECLARATION -> Maybe DECLARATION
-findParseError = findElement isParseError 
+findParseError :: S.Seq DECLARATION -> S.Seq DECLARATION -> S.Seq DECLARATION
+findParseError decs pdecs
+  | S.null decs = pdecs
+  | isParseError el = findParseError (S.drop 1 decs) (pdecs S.|> el)
+  | isBlock el = findParseError (S.drop 1 decs) (pdecs S.>< findParseError (getDecsFromBlock el) S.empty)
+  | otherwise = findParseError (S.drop 1 decs) pdecs
+  where el = S.index decs 0
+  
+isBlock :: DECLARATION -> Bool
+isBlock (DEC_STMT (BLOCK_STMT _)) = True
+isBlock _ = False
+
+getDecsFromBlock :: DECLARATION -> S.Seq DECLARATION
+getDecsFromBlock (DEC_STMT (BLOCK_STMT x)) = x
 
 isParseError :: DECLARATION -> Bool
 isParseError (PARSE_ERROR _ _) = True
 isParseError _ = False
+
+
 
 getASTErrorFromStatement :: DECLARATION -> Maybe String
 getASTErrorFromStatement (DEC_STMT (EXPR_STMT x)) = findASTError x
 getASTErrorFromStatement (DEC_STMT (PRINT_STMT x)) = findASTError x
 getASTErrorFromStatement (DEC_VAR (VAR_DEC_DEF _ x)) = findASTError x
 getASTErrorFromStatement (DEC_VAR (VAR_DEF _ x _)) = findASTError x
+getASTErrorFromStatement (DEC_STMT (BLOCK_STMT x)) = S.lookup 0 $ fmap fromJust $ S.filter isJust $ fmap getASTErrorFromStatement x
 getASTErrorFromStatement _ = Nothing
 
 

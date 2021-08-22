@@ -31,35 +31,45 @@ createDeclaration stmtTokens decSeq
 
 handleCreateDeclaration :: S.Seq Token -> DECLARATION         
 handleCreateDeclaration expr
-  | isDecDef = DEC_VAR (VAR_DEC_DEF (fromJust iden) (createExpression defExpr))
-  | isOnlyDec = DEC_VAR (VAR_DEC (fromJust iden))
-  | isRedef = DEC_VAR (VAR_DEF (fromJust iden) (createExpression redefExpr) redefExpr)
+  | isBlockToken = handleBlock expr
+  | isAssignment || isVar = handleAssignmentOrDecDef isVar (fromJust findAssignment) expr firstTokenType
   | isPrint = DEC_STMT (PRINT_STMT (createExpression (S.drop 1 expr)))
   | isExpressionStatement = DEC_STMT (EXPR_STMT (createExpression expr))
-  | isBlock = handleBlock expr
   | otherwise = PARSE_ERROR "Not a valid declaration or expression" expr
-  where findAssignment = S.findIndexL (\x -> tokenType x == TokenHelper.EQUAL) expr
-        firstToken = S.lookup 0 expr
+  where firstToken = S.lookup 0 expr
         firstTokenType = tokenType <$> firstToken
-        defExpr = S.drop 3 expr
-        redefExpr = S.drop 2 expr
-        secondTokenType = tokenType <$> S.lookup 1 expr
-        isDec = firstTokenType == Just TokenHelper.VAR && (isIdentifier <$> secondTokenType) == Just True
-        isOnlyDec = isDec && (tokenType <$> S.lookup 2 expr) == Just TokenHelper.SEMICOLON
-        isDecDef = isDec && findAssignment == Just 2 && not (S.null defExpr)
-        isRedef = (isIdentifier <$> firstTokenType) == Just True && findAssignment == Just 1 && not (S.null redefExpr)
+        findAssignment = S.findIndexL (tokenIsType TokenHelper.EQUAL) expr
+        isAssignment = isJust findAssignment
+        isVar = firstTokenType == Just TokenHelper.VAR
         isPrint = firstTokenType == Just PRINT
         isExpressionStatement = firstTokenType /= Just VAR && firstTokenType /= Just PRINT && firstTokenType /= Just LEFT_BRACE
-        isBlock = firstTokenType == Just LEFT_BRACE
-        iden
+        isBlockToken = firstTokenType == Just LEFT_BRACE        
+
+handleAssignmentOrDecDef :: Bool -> Int -> S.Seq Token -> Maybe TokenType -> DECLARATION
+handleAssignmentOrDecDef isVar findAssignment expr firstTokenType
+  | isDecDef = DEC_VAR (VAR_DEC_DEF (fromJust lValue) (createExpression defExpr))
+  | isOnlyDec = DEC_VAR (VAR_DEC (fromJust lValue))
+  | isRedef = DEC_VAR (VAR_DEF (fromJust lValue) (createExpression redefExpr) redefExpr)
+  | otherwise = PARSE_ERROR "Not a valid declaration" expr
+  where defExpr = S.drop 3 expr
+        redefExpr = S.drop 2 expr
+        secondTokenType = tokenType <$> S.lookup 1 expr
+        isDec = isVar && (isIdentifier <$> secondTokenType) == Just True
+        isOnlyDec = isDec && (tokenType <$> S.lookup 2 expr) == Just TokenHelper.SEMICOLON
+        isDecDef = isDec && findAssignment == 2 && not (S.null defExpr)
+        isRedef = (isIdentifier <$> firstTokenType) == Just True && findAssignment == 1 && not (S.null redefExpr)
+        lValue
           | isRedef = firstTokenType
           | isDec = secondTokenType
           | otherwise = Nothing
+          
+handleLValue :: Maybe TokenType -> Maybe TokenType
+handleLValue (Just (TokenHelper.IDENTIFIER x)) = Just (TokenHelper.IDENTIFIER changed)
+  where changed = id x
+handleLValue _ = Nothing
 
 
-createBlock :: S.Seq Token -> DECLARATION
-createBlock = handleBlock
-                
+
 
 createExpression :: S.Seq Token -> EXPRESSION
 createExpression = createTernary
@@ -69,8 +79,8 @@ createExpression = createTernary
 createTernary :: S.Seq Token -> EXPRESSION
 createTernary tokens = handleTernaryCases getOp1 getOp2 indexOfOp1 indexOfOp2 tokens
   where 
-    indexOfOp1 = S.findIndexL (\x -> tokenType x == TokenHelper.QUESTION_MARK) tokens
-    indexOfOp2 = S.findIndexL (\x -> tokenType x == TokenHelper.COLON) tokens
+    indexOfOp1 = S.findIndexL (tokenIsType TokenHelper.QUESTION_MARK) tokens
+    indexOfOp2 = S.findIndexL (tokenIsType TokenHelper.COLON) tokens
     getOp1 indx 
       | tokenType (S.index tokens indx) == TokenHelper.QUESTION_MARK = AST.QUESTION_MARK
     getOp2 indx 
@@ -122,9 +132,9 @@ checkLiteralToken TokenHelper.LEFT_PAREN tokens
   | isEof = NON_EXP "Parenthesis not closed" tokens
   | isEmpty = NON_EXP "Empty parenthesis" tokens
   | otherwise = EXP_GROUPING (GROUP (createExpression tokensToUse))
-  where tokensToMatch = S.takeWhileL (\x -> tokenType x /= TokenHelper.RIGHT_PAREN) tokens
+  where tokensToMatch = S.takeWhileL (not . tokenIsType RIGHT_PAREN) tokens
         tokensToUse = S.drop 1 tokensToMatch
-        eofFind = S.findIndexR (\x -> tokenType x == SEMICOLON) tokensToMatch
+        eofFind = S.findIndexR (tokenIsType SEMICOLON) tokensToMatch
         isEof = getIsAnyEOF eofFind
         isEmpty = S.null tokensToUse
 checkLiteralToken _ tokens = NON_EXP "Misplaced Token" tokens
@@ -191,8 +201,8 @@ breakTokens stmts tokens
   | isStartOfBlock = breakTokens (stmts S.|> bLeft) bRight
   | otherwise = breakTokens newStmts right
   where isStartOfBlock = (tokenType <$> (tokens S.!? 0)) == Just LEFT_BRACE
-        bIndex = S.findIndexR (\x -> tokenType x == RIGHT_BRACE) tokens
-        scIndex = S.findIndexL (\x -> tokenType x == SEMICOLON) tokens
+        bIndex = S.findIndexR (tokenIsType RIGHT_BRACE) tokens
+        scIndex = S.findIndexL (tokenIsType SEMICOLON) tokens
         (bLeft, bRight) = if isJust bIndex then S.splitAt (fromJust bIndex+1) tokens else (tokens, S.empty)
         (left, right) = if isJust scIndex then S.splitAt (fromJust scIndex+1) tokens else (tokens, S.empty)
         newStmts = stmts S.|> left
@@ -204,7 +214,7 @@ handleBlock tokens
   | not isTerminated = PARSE_ERROR "Unterminated statement" tokens
   | isEmpty = PARSE_ERROR "Empty Block" tokens
   | otherwise = DEC_STMT (BLOCK_STMT (createDeclaration tokensToUse S.empty))
-  where indexOfRightBrace = S.findIndexR (\x -> tokenType x == TokenHelper.RIGHT_BRACE) tokens
+  where indexOfRightBrace = S.findIndexR (tokenIsType TokenHelper.RIGHT_BRACE) tokens
         hasRightBrace = isJust indexOfRightBrace
         tokensToMatch = S.drop 1 (S.take (fromJust indexOfRightBrace) tokens)
         isEmpty = S.null tokensToMatch

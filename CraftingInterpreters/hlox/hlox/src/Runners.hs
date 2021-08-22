@@ -16,64 +16,12 @@ import Eval
 import AST
 import Data.Maybe
 import EvalTypes
-
-
-printScanErrorOrContinue :: S.Seq Token -> IO ()
-printScanErrorOrContinue tokens = if null scanError then printEvalOrContinue parsed else print scanError
-  where scanError = S.filter (isNotToken . tokenType) tokens
-        parsed = parse tokens
-
-printEvalOrContinue :: AST.PROGRAM -> IO ()
-printEvalOrContinue (PROG statements) = handleCases
-  where parseError = S.filter isJust (fmap getParseError statements)
-        astError = S.filter isJust (fmap getASTErrorFromStatement statements)
-        evaled = evalProgram (PROG statements)
-        handleCases
-          | (not . null) parseError = print (mconcat ["ParserError: ", show parseError])
-          | (not . null) astError = print (mconcat ["ParserError: ", show astError])
-          | otherwise = runEvalsIO evaled
-printEvalOrContinue parseError = print parseError
-
-runEvalsIO :: IO (S.Seq PROG_EVAL) -> IO()
-runEvalsIO pseqIO = do
-  pseq <- pseqIO
-  runEvals pseq
-
-runEvals :: S.Seq PROG_EVAL -> IO()
-runEvals pseq
-  | S.null pseq = return()
-  | hasRuntimeError prog = runRuntimeError (createRuntimeError prog)
-  | otherwise = do
-    runOneEval prog
-    runEvals (S.drop 1 pseq)
-  where prog = S.index pseq 0
-  
-runRuntimeError :: Maybe RUNTIME_ERROR -> IO()
-runRuntimeError (Just (RUNTIME_ERROR x)) = print x
-runRuntimeError Nothing = return()
-
-runOneEval :: PROG_EVAL -> IO()
-runOneEval (PRINT_EVAL x) = print x
-runOneEval (BLOCK_EVAL x) = runEvals x
-runOneEval _ = return()
-       
   
 run :: T.Text -> IO()
 run text = do
   let tokens = scanTokens text
-  let parsed = parse tokens
-  evaled <- evalProgram parsed
-  print evaled
   printScanErrorOrContinue tokens
 
--- This is the code I used. Thanks Joel Chelliah!
--- https://github.com/joelchelliah/simple-repl-in-haskell/blob/master/README.md
-readFromRepl :: IO String
-readFromRepl = putStr "Lox> "
-     >> hFlush stdout
-     >> getLine
-
--- TODO: We will have to deal with variables and block scopes, good luck future me.
 runLoxFile :: T.Text -> IO ()
 runLoxFile arg = do
   text <- TIO.readFile (T.unpack arg)
@@ -102,3 +50,52 @@ startFromTerminal = do
     args <- getArgs
     let newArgs = map T.pack args
     startLox newArgs
+    
+    
+-- Helpers
+
+-- This is the code I used. Thanks Joel Chelliah!
+-- https://github.com/joelchelliah/simple-repl-in-haskell/blob/master/README.md
+readFromRepl :: IO String
+readFromRepl = putStr "Lox> "
+     >> hFlush stdout
+     >> getLine
+
+printScanErrorOrContinue :: S.Seq Token -> IO ()
+printScanErrorOrContinue tokens = if null scanError then printEvalOrContinue parsed else print scanError
+  where scanError = S.filter (isNotToken . tokenType) tokens
+        parsed = parse tokens
+
+printEvalOrContinue :: AST.PROGRAM -> IO ()
+printEvalOrContinue (PROG statements) = handleCases
+  where parseError = findParseError statements S.empty
+        astError = S.filter isJust (fmap getASTErrorFromStatement statements)
+        evaled = evalProgram (PROG statements)
+        handleCases
+          | (not . null) parseError = print (mconcat ["ParserError: ", show parseError])
+          | (not . null) astError = print (mconcat ["ParserError: ", show astError])
+          | otherwise = runEvalsIO evaled
+printEvalOrContinue parseError = print parseError
+
+runEvalsIO :: IO (S.Seq PROG_EVAL) -> IO()
+runEvalsIO pseqIO = do
+  pseq <- pseqIO
+  runEvals pseq
+
+runEvals :: S.Seq PROG_EVAL -> IO()
+runEvals pseq
+  | S.null pseq = return()
+  | hasRuntimeError prog = runRuntimeError (createRuntimeError prog)
+  | otherwise = do
+    runOneEval prog
+    runEvals (S.drop 1 pseq)
+  where prog = S.index pseq 0
+
+runRuntimeError :: Maybe RUNTIME_ERROR -> IO()
+runRuntimeError (Just (RUNTIME_ERROR x)) = print x
+runRuntimeError Nothing = return()
+
+runOneEval :: PROG_EVAL -> IO()
+runOneEval (PRINT_EVAL x) = print x
+runOneEval (BLOCK_EVAL x) = runEvals x
+runOneEval _ = return() 

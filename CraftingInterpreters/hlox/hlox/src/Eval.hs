@@ -58,7 +58,7 @@ evalProgramHelper (DEC_STMT (BLOCK_STMT x)) env = do
 evalProgramHelper x env = do
   locEnv <- env
   print x
-  return (EXPR_EVAL , S.empty, locEnv)
+  return (EXPR_EVAL (NON_EVAL "Unknown error occured" S.empty), locEnv)
 
 handleVarDeclaration :: TextType -> Environments -> IO (PROG_EVAL, Environments)
 handleVarDeclaration iden env = do 
