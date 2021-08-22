@@ -22,6 +22,21 @@ createProgram tokens
         eofToken = S.index eofStmtToken 0
         eofType = tokenType eofToken
 
+-- isIf, isBlock, isSimple should call createDeclarations with new (reduced tokens) and new decSeq with added dec
+createDeclarations :: S.Seq Token -> S.Seq DECLARATION -> S.Seq DECLARATION
+createDeclarations tokens decSeq 
+  | isLastParseError decSeq || S.null tokens = decSeq
+  | isIf = handleIf tokens decSeq
+  | isBlock = handleBlock tokens decSeq
+  | isSimple = handleSimpleDeclaration tokens decSeq
+  | otherwise = decSeq S.|> PARSE_ERROR "Not a valid declaration or expression" expr
+  where firstToken = S.lookup 0 tokens
+        firstTokenType = tokenType <$> firstToken
+        isIf = firstTokenType == Just IF
+        isBlock = firstTokenType == Just LEFT_BRACE
+        isLastParseError = (isParseError <$> getLast decSeq) == Just True
+  
+
 createDeclaration :: S.Seq (S.Seq Token) -> S.Seq DECLARATION -> S.Seq DECLARATION      
 createDeclaration stmtTokens decSeq
   | S.null stmtTokens = decSeq
@@ -31,6 +46,7 @@ createDeclaration stmtTokens decSeq
 
 handleCreateDeclaration :: S.Seq Token -> DECLARATION         
 handleCreateDeclaration expr
+  | isIf = handleIf expr
   | isBlockToken = handleBlock expr
   | isAssignment || isVar = handleAssignmentOrDecDef isVar findAssignment expr firstTokenType
   | isPrint = DEC_STMT (PRINT_STMT (createExpression (S.drop 1 expr)))
@@ -43,7 +59,9 @@ handleCreateDeclaration expr
         isVar = firstTokenType == Just TokenHelper.VAR
         isPrint = firstTokenType == Just PRINT
         isExpressionStatement = firstTokenType /= Just VAR && firstTokenType /= Just PRINT && firstTokenType /= Just LEFT_BRACE
-        isBlockToken = firstTokenType == Just LEFT_BRACE        
+        isBlockToken = firstTokenType == Just LEFT_BRACE
+        isIf = firstTokenType == Just IF
+                
 
 handleAssignmentOrDecDef :: Bool -> Maybe Int -> S.Seq Token -> Maybe TokenType -> DECLARATION
 handleAssignmentOrDecDef isVar findAssignment expr firstTokenType
@@ -68,7 +86,7 @@ handleLValue (Just (TokenHelper.IDENTIFIER x)) = Just (TokenHelper.IDENTIFIER ch
   where changed = id x
 handleLValue _ = Nothing
 
-
+handleIf :: S.Seq Token -> DECLARATION
 
 
 createExpression :: S.Seq Token -> EXPRESSION

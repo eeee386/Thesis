@@ -27,11 +27,18 @@ instance Show VARIABLE_DECLARATION where
   show (VAR_DEC iden) = mconcat ["var", " ", show iden] 
   show (VAR_DEF iden expr _) = mconcat ["var", " ", show iden, " = ", show expr]
 
-data STATEMENT = EXPR_STMT EXPRESSION | PRINT_STMT EXPRESSION | BLOCK_STMT (S.Seq DECLARATION)
+data STATEMENT = EXPR_STMT EXPRESSION 
+               | PRINT_STMT EXPRESSION 
+               | BLOCK_STMT (S.Seq DECLARATION) 
+               | IF_STMT EXPRESSION STATEMENT 
+               | IF_ELSE_STMT EXPRESSION STATEMENT STATEMENT
+
 instance Show STATEMENT where 
   show (EXPR_STMT x) = show x
   show (PRINT_STMT x) = show x
   show (BLOCK_STMT x) = show x
+  show (IF_STMT expr stmt) = mconcat ["if (", show expr, ")", show stmt]
+  show (IF_ELSE_STMT expr ifStmt elseStmt) = mconcat ["if (", show expr, ") ", show ifStmt, " else ", show elseStmt]
 
 -- Tokens only needed in operator expression because there are some, that cannot be evaluated, and we want to show why
 data EXPRESSION = EXP_LITERAL LITERAL 
