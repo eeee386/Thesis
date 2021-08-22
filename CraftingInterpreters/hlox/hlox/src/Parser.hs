@@ -9,45 +9,51 @@ import Data.Maybe
 import qualified Data.Map as M
 import Utils
 
+-- Create new file ParseExpressions.hs, take out createExpression and everything under it
 
 parse :: S.Seq Token -> PROGRAM
 parse = createProgram
 
 createProgram :: S.Seq Token -> PROGRAM
-createProgram tokens
-  | eofType /= EOF = PROG (S.singleton (PARSE_ERROR "Unterminated statement" eofStmtToken))
-  | otherwise = PROG (createDeclaration (S.take (S.length stmtTokens-1) stmtTokens) S.empty)
-  where stmtTokens = breakIntoStatements tokens
-        eofStmtToken = S.index stmtTokens (S.length stmtTokens-1)
-        eofToken = S.index eofStmtToken 0
-        eofType = tokenType eofToken
+createProgram tokens = PROG (createDeclarations tokens S.empty)
 
--- isIf, isBlock, isSimple should call createDeclarations with new (reduced tokens) and new decSeq with added dec
 createDeclarations :: S.Seq Token -> S.Seq DECLARATION -> S.Seq DECLARATION
 createDeclarations tokens decSeq 
-  | isLastParseError decSeq || S.null tokens = decSeq
-  | isIf = handleIf tokens decSeq
-  | isBlock = handleBlock tokens decSeq
-  | isSimple = handleSimpleDeclaration tokens decSeq
-  | otherwise = decSeq S.|> PARSE_ERROR "Not a valid declaration or expression" expr
+  | isLastParseError || S.null tokens = decSeq
+  | otherwise = createDeclarations rest decSeq S.|> dec
+  where isLastParseError = (isParseError <$> getLast decSeq) == Just True
+        (dec, rest) = createDeclaration tokens
+        
+createDeclaration :: S.Seq Token -> (DECLARATION, S.Seq Token)
+createDeclaration tokens
+  | isIf = handleIf tokens
+  | isBlockDec = handleBlock tokens
+  | otherwise = handleSimpleDeclaration tokens
   where firstToken = S.lookup 0 tokens
         firstTokenType = tokenType <$> firstToken
         isIf = firstTokenType == Just IF
-        isBlock = firstTokenType == Just LEFT_BRACE
-        isLastParseError = (isParseError <$> getLast decSeq) == Just True
+        isBlockDec = firstTokenType == Just LEFT_BRACE
   
+-- Cut tokens in parse errors, because it will cause infinite recursion
+handleBlock :: S.Seq Token -> (DECLARATION, S.Seq Token)
+handleBlock tokens
+  | isClosed = (DEC_STMT (BLOCK_STMT (createDeclarations innerDecTokens S.empty)), right)
+  | otherwise = (PARSE_ERROR "Block is not closed" tokens, right)
+  where index = S.findIndexR (tokenIsType RIGHT_BRACE) tokens
+        isClosed = isJust index
+        (left, right) = if isJust index then S.splitAt (fromJust index+1) tokens else (tokens, S.empty)
+        innerDecTokens = S.drop 1 (S.take (fromJust index) left)
 
-createDeclaration :: S.Seq (S.Seq Token) -> S.Seq DECLARATION -> S.Seq DECLARATION      
-createDeclaration stmtTokens decSeq
-  | S.null stmtTokens = decSeq
-  | otherwise = createDeclaration (S.drop 1 stmtTokens) (decSeq S.|> dec)
-  where expr = S.index stmtTokens 0
-        dec = handleCreateDeclaration expr
-
-handleCreateDeclaration :: S.Seq Token -> DECLARATION         
-handleCreateDeclaration expr
-  | isIf = handleIf expr
-  | isBlockToken = handleBlock expr
+handleSimpleDeclaration :: S.Seq Token -> (DECLARATION, S.Seq Token)
+handleSimpleDeclaration tokens 
+  | not isTerminated = (PARSE_ERROR "Statement is not terminated" expr, rest)
+  | otherwise = (buildSimpleDecFromTokens expr, rest)
+  where index = S.findIndexL (tokenIsType SEMICOLON) tokens
+        isTerminated = isJust index
+        (expr, rest) = if isTerminated then S.splitAt (fromJust index+1) tokens else (tokens, S.empty)
+        
+buildSimpleDecFromTokens :: S.Seq Token -> DECLARATION         
+buildSimpleDecFromTokens expr
   | isAssignment || isVar = handleAssignmentOrDecDef isVar findAssignment expr firstTokenType
   | isPrint = DEC_STMT (PRINT_STMT (createExpression (S.drop 1 expr)))
   | isExpressionStatement = DEC_STMT (EXPR_STMT (createExpression expr))
@@ -59,9 +65,7 @@ handleCreateDeclaration expr
         isVar = firstTokenType == Just TokenHelper.VAR
         isPrint = firstTokenType == Just PRINT
         isExpressionStatement = firstTokenType /= Just VAR && firstTokenType /= Just PRINT && firstTokenType /= Just LEFT_BRACE
-        isBlockToken = firstTokenType == Just LEFT_BRACE
-        isIf = firstTokenType == Just IF
-                
+
 
 handleAssignmentOrDecDef :: Bool -> Maybe Int -> S.Seq Token -> Maybe TokenType -> DECLARATION
 handleAssignmentOrDecDef isVar findAssignment expr firstTokenType
@@ -86,8 +90,29 @@ handleLValue (Just (TokenHelper.IDENTIFIER x)) = Just (TokenHelper.IDENTIFIER ch
   where changed = id x
 handleLValue _ = Nothing
 
-handleIf :: S.Seq Token -> DECLARATION
-
+handleIf :: S.Seq Token -> (DECLARATION, S.Seq Token)
+handleIf tokens
+  | not isLeftParen = (PARSE_ERROR "Parenthesis should after if" tokens, tokens)
+  | not isRightParen = (PARSE_ERROR "Parentesis is not closed" tokens, tokens)
+  | not isElseToo && isJust ifStmt = (DEC_STMT (IF_STMT expr (fromJust ifStmt)), restToCheck)
+  | isElseToo && isJust ifStmt && isJust elseStmt = (DEC_STMT (IF_ELSE_STMT expr (fromJust ifStmt) (fromJust elseStmt)), moreRestToCheck)
+  | otherwise = (PARSE_ERROR "Not a valid if statement" tokens, tokens)
+  where maybeLeftParen = S.lookup 1 tokens
+        isLeftParen = (tokenIsType LEFT_PAREN <$> maybeLeftParen) == Just True
+        rightParenIndex = S.findIndexL (tokenIsType RIGHT_PAREN) tokens
+        isRightParen = isJust rightParenIndex
+        exprTokens = S.drop 2 (S.takeWhileL (not . tokenIsType RIGHT_PAREN) tokens)
+        expr = createExpression exprTokens
+        nextTokens = S.drop (fromJust rightParenIndex) tokens
+        (ifDec, restToCheck) = createDeclaration nextTokens
+        ifStmt = getStmtFromDec ifDec
+        isElseToo = (tokenType <$> S.lookup 0 restToCheck) == Just ELSE
+        (elseDec, moreRestToCheck) = createDeclaration restToCheck
+        elseStmt = getStmtFromDec elseDec
+        
+getStmtFromDec :: DECLARATION -> Maybe STATEMENT
+getStmtFromDec (DEC_STMT x) = Just x
+getStmtFromDec _ = Nothing
 
 createExpression :: S.Seq Token -> EXPRESSION
 createExpression = createTernary
@@ -208,36 +233,6 @@ handleTernaryCases getOp1 getOp2 indexOfOp1 indexOfOp2 tokens
         bothIsJust = isJust indexOfOp1 && isJust indexOfOp2
         xorIsJust = isJust indexOfOp1 /= isJust indexOfOp2
         properPlacement = ((-) <$> indexOfOp2 <*> indexOfOp1) > Just 1 && indexOfOp2 < Just (S.length tokens - 2)
-
-breakIntoStatements :: S.Seq Token -> S.Seq (S.Seq Token)     
-breakIntoStatements = breakTokens statements
-  where statements = S.empty
-
-breakTokens :: S.Seq (S.Seq Token) -> S.Seq Token -> S.Seq (S.Seq Token)
-breakTokens stmts tokens 
-  | S.null right = newStmts
-  | isStartOfBlock = breakTokens (stmts S.|> bLeft) bRight
-  | otherwise = breakTokens newStmts right
-  where isStartOfBlock = (tokenType <$> (tokens S.!? 0)) == Just LEFT_BRACE
-        bIndex = S.findIndexR (tokenIsType RIGHT_BRACE) tokens
-        scIndex = S.findIndexL (tokenIsType SEMICOLON) tokens
-        (bLeft, bRight) = if isJust bIndex then S.splitAt (fromJust bIndex+1) tokens else (tokens, S.empty)
-        (left, right) = if isJust scIndex then S.splitAt (fromJust scIndex+1) tokens else (tokens, S.empty)
-        newStmts = stmts S.|> left
-
-
-handleBlock :: S.Seq Token -> DECLARATION
-handleBlock tokens
-  | not hasRightBrace = PARSE_ERROR "Brace is not closed" tokens
-  | not isTerminated = PARSE_ERROR "Unterminated statement" tokens
-  | isEmpty = PARSE_ERROR "Empty Block" tokens
-  | otherwise = DEC_STMT (BLOCK_STMT (createDeclaration tokensToUse S.empty))
-  where indexOfRightBrace = S.findIndexR (tokenIsType TokenHelper.RIGHT_BRACE) tokens
-        hasRightBrace = isJust indexOfRightBrace
-        tokensToMatch = S.drop 1 (S.take (fromJust indexOfRightBrace) tokens)
-        isEmpty = S.null tokensToMatch
-        isTerminated = (tokenType <$> getLast tokensToMatch) == Just SEMICOLON
-        tokensToUse = breakIntoStatements tokensToMatch
 
 isIdentifier :: TokenType -> Bool
 isIdentifier (TokenHelper.IDENTIFIER _) = True

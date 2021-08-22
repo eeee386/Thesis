@@ -12,3 +12,6 @@ findElement pr s = S.index s <$> index
   
 tokenIsType :: TokenType -> Token -> Bool
 tokenIsType tType token = tokenType token == tType
+
+-- Find matching brace
+-- Find matching paren
