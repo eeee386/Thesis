@@ -12,3 +12,5 @@
   - State monad hashtable, for environments.
   - Talk about monads (and functors, applicatives)
   - I think we should talk about how the Environments work (sequence, and the last element is the innermost scope that we are in)
+  
+- One gripe with Haskell: An even more fine-tuned type handling would be better, maybe I am not using the language the right way

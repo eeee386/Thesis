@@ -16,10 +16,11 @@ import Eval
 import AST
 import Data.Maybe
 import EvalTypes
-  
+
 run :: T.Text -> IO()
 run text = do
   let tokens = scanTokens text
+  print (parse tokens)
   printScanErrorOrContinue tokens
 
 runLoxFile :: T.Text -> IO ()
@@ -50,8 +51,8 @@ startFromTerminal = do
     args <- getArgs
     let newArgs = map T.pack args
     startLox newArgs
-    
-    
+
+
 -- Helpers
 
 -- This is the code I used. Thanks Joel Chelliah!
@@ -98,4 +99,4 @@ runRuntimeError Nothing = return()
 runOneEval :: PROG_EVAL -> IO()
 runOneEval (PRINT_EVAL x) = print x
 runOneEval (BLOCK_EVAL x) = runEvals x
-runOneEval _ = return() 
+runOneEval _ = return()

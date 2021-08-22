@@ -32,7 +32,7 @@ createDeclaration stmtTokens decSeq
 handleCreateDeclaration :: S.Seq Token -> DECLARATION         
 handleCreateDeclaration expr
   | isBlockToken = handleBlock expr
-  | isAssignment || isVar = handleAssignmentOrDecDef isVar (fromJust findAssignment) expr firstTokenType
+  | isAssignment || isVar = handleAssignmentOrDecDef isVar findAssignment expr firstTokenType
   | isPrint = DEC_STMT (PRINT_STMT (createExpression (S.drop 1 expr)))
   | isExpressionStatement = DEC_STMT (EXPR_STMT (createExpression expr))
   | otherwise = PARSE_ERROR "Not a valid declaration or expression" expr
@@ -45,7 +45,7 @@ handleCreateDeclaration expr
         isExpressionStatement = firstTokenType /= Just VAR && firstTokenType /= Just PRINT && firstTokenType /= Just LEFT_BRACE
         isBlockToken = firstTokenType == Just LEFT_BRACE        
 
-handleAssignmentOrDecDef :: Bool -> Int -> S.Seq Token -> Maybe TokenType -> DECLARATION
+handleAssignmentOrDecDef :: Bool -> Maybe Int -> S.Seq Token -> Maybe TokenType -> DECLARATION
 handleAssignmentOrDecDef isVar findAssignment expr firstTokenType
   | isDecDef = DEC_VAR (VAR_DEC_DEF (fromJust lValue) (createExpression defExpr))
   | isOnlyDec = DEC_VAR (VAR_DEC (fromJust lValue))
@@ -56,8 +56,8 @@ handleAssignmentOrDecDef isVar findAssignment expr firstTokenType
         secondTokenType = tokenType <$> S.lookup 1 expr
         isDec = isVar && (isIdentifier <$> secondTokenType) == Just True
         isOnlyDec = isDec && (tokenType <$> S.lookup 2 expr) == Just TokenHelper.SEMICOLON
-        isDecDef = isDec && findAssignment == 2 && not (S.null defExpr)
-        isRedef = (isIdentifier <$> firstTokenType) == Just True && findAssignment == 1 && not (S.null redefExpr)
+        isDecDef = isDec && findAssignment == Just 2 && not (S.null defExpr)
+        isRedef = (isIdentifier <$> firstTokenType) == Just True && findAssignment == Just 1 && not (S.null redefExpr)
         lValue
           | isRedef = firstTokenType
           | isDec = secondTokenType
