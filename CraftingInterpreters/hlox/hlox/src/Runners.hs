@@ -16,10 +16,14 @@ import Eval
 import AST
 import Data.Maybe
 import EvalTypes
+import Utils
 
 run :: T.Text -> IO()
 run text = do
   let tokens = scanTokens text
+  print tokens
+  print (S.findIndexL (tokenIsType SEMICOLON) tokens)
+  print (findMatchingBraceIndex tokens)
   printScanErrorOrContinue tokens
 
 runLoxFile :: T.Text -> IO ()

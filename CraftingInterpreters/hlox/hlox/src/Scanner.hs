@@ -131,7 +131,7 @@ recognizeToken text
         twoTok = T.take 2 text 
 
 scanTokens :: T.Text -> S.Seq Token
-scanTokens src = (S.|>) (S.filter (\x -> tokenType x /= WHITE_SPACE && tokenType x /= COMMENT) (scanTokensWithData 0 1 S.empty src)) (Token {tokenType=EOF, line= length (T.lines src)})
+scanTokens src = S.filter (\x -> tokenType x /= WHITE_SPACE && tokenType x /= COMMENT) (scanTokensWithData 0 1 S.empty src)
   where
     isAtEnd current = current == T.length src
     scanTokensWithData :: Int -> Int -> S.Seq Token -> T.Text -> S.Seq Token
