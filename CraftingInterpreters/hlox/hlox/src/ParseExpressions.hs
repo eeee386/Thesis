@@ -23,6 +23,10 @@ createTernary tokens = handleTernaryCases getOp1 getOp2 indexOfOp1 indexOfOp2 to
       | tokenType (S.index tokens indx) == TokenHelper.COLON = AST.COLON
 
 
+createLogic :: S.Seq Token -> EXPRESSION
+createLogic = createBinaryExpressions (M.fromList [(TokenHelper.AND, AST.AND), 
+                                                   (TokenHelper.OR, AST.OR)]) createLogic createEquality
+
 createEquality :: S.Seq Token -> EXPRESSION
 createEquality = createBinaryExpressions (M.fromList [(TokenHelper.EQUAL_EQUAL, AST.EQUAL_EQUAL), 
                                                       (TokenHelper.BANG_EQUAL, AST.BANG_EQUAL)]) createEquality createComparison
@@ -54,7 +58,7 @@ createUnary tokens
           | tType == Just TokenHelper.MINUS = AST.MINUS
   
 createLiteral :: S.Seq Token -> EXPRESSION
-createLiteral tokens 
+createLiteral tokens
   | isMoreTokens = NON_EXP "Surplus Tokens" tokens
   | otherwise = checkLiteralToken token tokens
   where isMoreTokens = checkSurplus (S.drop 1 tokens)
@@ -124,8 +128,8 @@ handleTernaryCases :: (Int -> OPERATOR) -> (Int -> OPERATOR) -> Maybe Int -> May
 handleTernaryCases getOp1 getOp2 indexOfOp1 indexOfOp2 tokens
   | bothIsJust && properPlacement = EXP_TERNARY tern tokens
   | xorIsJust || (bothIsJust && not properPlacement) = NON_EXP "Not a valid ternary operator" tokens
-  | otherwise = createEquality tokens
-  where tern = prepTernary getOp1 getOp2 (fromJust indexOfOp1) (fromJust indexOfOp2) tokens createEquality
+  | otherwise = createLogic tokens
+  where tern = prepTernary getOp1 getOp2 (fromJust indexOfOp1) (fromJust indexOfOp2) tokens createLogic
         bothIsJust = isJust indexOfOp1 && isJust indexOfOp2
         xorIsJust = isJust indexOfOp1 /= isJust indexOfOp2
         properPlacement = ((-) <$> indexOfOp2 <*> indexOfOp1) > Just 1 && indexOfOp2 < Just (S.length tokens - 2)
@@ -137,4 +141,4 @@ isIdentifier _ = False
 checkSurplus :: S.Seq Token -> Bool
 checkSurplus tokens = not (empty || terminated)
   where empty = S.null tokens
-        terminated = (tokenType <$> S.lookup 0 tokens) == Just SEMICOLON 
+        terminated = (tokenType <$> S.lookup 0 tokens) == Just SEMICOLON

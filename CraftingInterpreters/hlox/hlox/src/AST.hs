@@ -83,7 +83,7 @@ instance Show TERNARY where
   show (TERN v w x y z) = mconcat [show v, show w, show x, show y, show z]
 
 data OPERATOR = EQUAL_EQUAL | BANG_EQUAL | LESS | LESS_EQUAL | GREATER | GREATER_EQUAL
-               | PLUS  | MINUS | STAR | SLASH | QUESTION_MARK | COLON | BANG deriving Eq
+               | PLUS  | MINUS | STAR | SLASH | QUESTION_MARK | COLON | BANG | AND | OR deriving Eq
                
 instance Show OPERATOR where 
   show EQUAL_EQUAL = "=="
@@ -99,6 +99,8 @@ instance Show OPERATOR where
   show QUESTION_MARK = "?"
   show COLON = ":"
   show BANG = "!"
+  show OR = " or "
+  show AND = " and "
   
 findParseError :: S.Seq DECLARATION -> S.Seq DECLARATION -> S.Seq DECLARATION
 findParseError decs pdecs
