@@ -54,8 +54,11 @@ createUnary tokens
           | tType == Just TokenHelper.MINUS = AST.MINUS
   
 createLiteral :: S.Seq Token -> EXPRESSION
-createLiteral tokens = checkLiteralToken token tokens
-  where token = tokenType (S.index tokens 0)
+createLiteral tokens 
+  | isMoreTokens = NON_EXP "Surplus Tokens" tokens
+  | otherwise = checkLiteralToken token tokens
+  where isMoreTokens = checkSurplus (S.drop 1 tokens)
+        token = tokenType (S.index tokens 0)
 
 checkLiteralToken :: TokenType -> S.Seq Token -> EXPRESSION
 checkLiteralToken (TokenHelper.STRING a) _ = EXP_LITERAL (AST.STRING a)
@@ -130,3 +133,8 @@ handleTernaryCases getOp1 getOp2 indexOfOp1 indexOfOp2 tokens
 isIdentifier :: TokenType -> Bool
 isIdentifier (TokenHelper.IDENTIFIER _) = True
 isIdentifier _ = False
+
+checkSurplus :: S.Seq Token -> Bool
+checkSurplus tokens = not (empty || terminated)
+  where empty = S.null tokens
+        terminated = (tokenType <$> S.lookup 0 tokens) == Just SEMICOLON 

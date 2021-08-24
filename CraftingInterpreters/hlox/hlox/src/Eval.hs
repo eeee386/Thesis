@@ -55,6 +55,15 @@ evalProgramHelper (DEC_STMT (BLOCK_STMT x)) env = do
   newEnv <- newEnvIO
   seqProg <- seqProgIO
   return (BLOCK_EVAL seqProg, newEnv)
+evalProgramHelper (DEC_STMT (IF_STMT expr stmt)) env = do
+  locEnv <- env
+  exprVal <- evalExpression expr locEnv
+  -- TODO: fix this ugly hack
+  if maybeEvalTruthy exprVal == Just True then evalProgramHelper (createDecFromStatementForIf stmt) env else return (EXPR_EVAL EVAL_NIL, locEnv)
+evalProgramHelper (DEC_STMT (IF_ELSE_STMT expr stmt1 stmt2)) env = do
+  locEnv <- env
+  exprVal <- evalExpression expr locEnv
+  if maybeEvalTruthy exprVal == Just True then evalProgramHelper (createDecFromStatementForIf stmt1) env else evalProgramHelper (createDecFromStatementForIf stmt2) env 
 evalProgramHelper x env = do
   locEnv <- env
   print x
@@ -180,4 +189,9 @@ createComparison = createMathOp EVAL_BOOL
 createEquality :: (Eq a) => a -> a -> (Bool -> Bool) -> EVAL
 createEquality l r ch = if l == r then EVAL_BOOL (ch True) else EVAL_BOOL (ch False)
 
-  
+createDecFromStatementForIf :: STATEMENT -> DECLARATION
+createDecFromStatementForIf (EXPR_STMT x) = DEC_STMT (EXPR_STMT x)
+createDecFromStatementForIf (PRINT_STMT x) = DEC_STMT (PRINT_STMT x)
+createDecFromStatementForIf (BLOCK_STMT xs) = DEC_STMT (BLOCK_STMT xs)
+createDecFromStatementForIf (IF_STMT ex st) = DEC_STMT (IF_STMT ex st)
+createDecFromStatementForIf (IF_ELSE_STMT ex st1 st2) = DEC_STMT (IF_ELSE_STMT ex st1 st2)

@@ -101,11 +101,11 @@ handleIf tokens
         isRightParen = isJust rightParenIndex
         exprTokens = S.drop 2 (S.takeWhileL (not . tokenIsType RIGHT_PAREN) tokens)
         expr = createExpression exprTokens
-        nextTokens = S.drop (fromJust rightParenIndex) tokens
+        nextTokens = S.drop (fromJust rightParenIndex+1) tokens
         (ifDec, restToCheck) = createDeclaration nextTokens
         ifStmt = getStmtFromDec ifDec
         isElseToo = (tokenType <$> S.lookup 0 restToCheck) == Just ELSE
-        (elseDec, moreRestToCheck) = createDeclaration restToCheck
+        (elseDec, moreRestToCheck) = createDeclaration (S.drop 1 restToCheck)
         elseStmt = getStmtFromDec elseDec
         (err, rest) = synchronize tokens
         
