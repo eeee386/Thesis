@@ -59,11 +59,21 @@ evalProgramHelper (DEC_STMT (IF_STMT expr stmt)) env = do
   locEnv <- env
   exprVal <- evalExpression expr locEnv
   -- TODO: fix this ugly hack
-  if maybeEvalTruthy exprVal == Just True then evalProgramHelper (createDecFromStatementForIf stmt) env else return (EXPR_EVAL EVAL_NIL, locEnv)
+  if maybeEvalTruthy exprVal == Just True then evalProgramHelper (createDecFromStatementForIf stmt) env else return (EXPR_EVAL EVAL_NIL, locEnv)  
 evalProgramHelper (DEC_STMT (IF_ELSE_STMT expr stmt1 stmt2)) env = do
   locEnv <- env
   exprVal <- evalExpression expr locEnv
   if maybeEvalTruthy exprVal == Just True then evalProgramHelper (createDecFromStatementForIf stmt1) env else evalProgramHelper (createDecFromStatementForIf stmt2) env 
+evalProgramHelper (DEC_STMT (WHILE_STMT expr stmt)) env = do
+  locEnv <- env
+  exprVal <- evalExpression expr locEnv
+  print "is called"
+  if maybeEvalTruthy exprVal == Just True then do 
+    print "looping"
+    (_, newEnv) <- evalProgramHelper (createDecFromStatementForIf stmt) env
+    evalProgramHelper (DEC_STMT (WHILE_STMT expr stmt)) (return newEnv)
+  else return (EXPR_EVAL EVAL_NIL, locEnv) 
+
 evalProgramHelper x env = do
   locEnv <- env
   print x

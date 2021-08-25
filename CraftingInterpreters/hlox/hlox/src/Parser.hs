@@ -25,12 +25,14 @@ createDeclarations tokens decSeq
 createDeclaration :: S.Seq Token -> (DECLARATION, S.Seq Token)
 createDeclaration tokens
   | isIf = handleIf tokens
+  | isWhile = handleWhile tokens
   | isBlockDec = handleBlock tokens
   | otherwise = handleSimpleDeclaration tokens
   where firstToken = S.lookup 0 tokens
         firstTokenType = tokenType <$> firstToken
         isIf = firstTokenType == Just IF
         isBlockDec = firstTokenType == Just LEFT_BRACE
+        isWhile = firstTokenType == Just WHILE
   
 -- Cut tokens in parse errors, because it will cause infinite recursion
 handleBlock :: S.Seq Token -> (DECLARATION, S.Seq Token)
@@ -107,6 +109,24 @@ handleIf tokens
         isElseToo = (tokenType <$> S.lookup 0 restToCheck) == Just ELSE
         (elseDec, moreRestToCheck) = createDeclaration (S.drop 1 restToCheck)
         elseStmt = getStmtFromDec elseDec
+        (err, rest) = synchronize tokens
+        
+        
+handleWhile :: S.Seq Token -> (DECLARATION, S.Seq Token)
+handleWhile tokens
+  | not isLeftParen = (PARSE_ERROR "Parenthesis should be after while" err, rest)
+  | not isRightParen = (PARSE_ERROR "Parenthesis is not closed" err, rest)
+  | isJust whileStmt = (DEC_STMT (WHILE_STMT expr (fromJust whileStmt)), restToCheck)
+  | otherwise = (PARSE_ERROR "Not a valid while statement" err, rest)
+  where maybeLeftParen = S.lookup 1 tokens
+        isLeftParen = (tokenIsType LEFT_PAREN <$> maybeLeftParen) == Just True
+        rightParenIndex = S.findIndexL (tokenIsType RIGHT_PAREN) tokens
+        isRightParen = isJust rightParenIndex
+        exprTokens = S.drop 2 (S.takeWhileL (not . tokenIsType RIGHT_PAREN) tokens)
+        expr = createExpression exprTokens
+        nextTokens = S.drop (fromJust rightParenIndex+1) tokens
+        (whileDec, restToCheck) = createDeclaration nextTokens
+        whileStmt = getStmtFromDec whileDec
         (err, rest) = synchronize tokens
         
 getStmtFromDec :: DECLARATION -> Maybe STATEMENT
