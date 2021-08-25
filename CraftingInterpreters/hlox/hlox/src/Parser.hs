@@ -18,7 +18,7 @@ createProgram tokens = PROG (createDeclarations tokens S.empty)
 createDeclarations :: S.Seq Token -> S.Seq DECLARATION -> S.Seq DECLARATION
 createDeclarations tokens decSeq 
   | isLastParseError || S.null tokens = decSeq
-  | otherwise = createDeclarations rest decSeq S.|> dec
+  | otherwise = createDeclarations rest (decSeq S.|> dec)
   where isLastParseError = (isParseError <$> getLast decSeq) == Just True
         (dec, rest) = createDeclaration tokens
         

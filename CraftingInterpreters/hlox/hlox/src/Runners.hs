@@ -22,6 +22,7 @@ import Utils
 run :: T.Text -> IO()
 run text = do
   let tokens = scanTokens text
+  print tokens
   print (parse tokens)
   printScanErrorOrContinue tokens
 

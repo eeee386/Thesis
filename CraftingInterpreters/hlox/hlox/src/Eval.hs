@@ -70,12 +70,12 @@ evalProgramHelper x env = do
   return (EXPR_EVAL (NON_EVAL "Unknown error occured" S.empty), locEnv)
 
 handleVarDeclaration :: TextType -> Environments -> IO (PROG_EVAL, Environments)
-handleVarDeclaration iden env = do 
+handleVarDeclaration iden env = do
   newEnv <- addIdentifierToEnvironment iden EVAL_NIL env
   return (DEC_EVAL iden EVAL_NIL, newEnv)
 
 handleVarDeclarationAndDefinition :: TextType -> EVAL -> Environments -> IO (PROG_EVAL, Environments)
-handleVarDeclarationAndDefinition iden val env = do 
+handleVarDeclarationAndDefinition iden val env = do
   newEnv <- addIdentifierToEnvironment iden val env
   return (DEC_EVAL iden val, newEnv)  
   
@@ -147,7 +147,7 @@ evalBinary tokens evalLeft op evalRight
        getCompOp = createComparison tokens leftNum rightNum
        equals = createEquality evalLeft evalRight id
        notEquals = createEquality evalLeft evalRight not
-       handlePlus 
+       handlePlus
          | isJust leftNum && isJust rightNum = getArithOp (+)
          | isJust leftStr && isJust rightStr = concatTwoString (fromJust leftStr) (fromJust rightStr)
          | otherwise = NON_EVAL "Operands must be two numbers or two strings" tokens
