@@ -4,7 +4,7 @@ import AST
 import qualified Data.Sequence as S
 import qualified TokenHelper as TH
   
-data PROG_EVAL = EXPR_EVAL EVAL | PRINT_EVAL EVAL | BLOCK_EVAL (S.Seq PROG_EVAL) | DEC_EVAL AST.TextType EVAL deriving Show
+data PROG_EVAL = EXPR_EVAL EVAL | PRINT_EVAL EVAL | BLOCK_EVAL (S.Seq PROG_EVAL) | DEC_EVAL AST.TextType EVAL | SKIP_EVAL deriving Show
 
 newtype RUNTIME_ERROR = RUNTIME_ERROR EVAL
 
@@ -35,3 +35,6 @@ createRuntimeError (DEC_EVAL _ (NON_EVAL x y)) = Just (RUNTIME_ERROR (NON_EVAL x
 createRuntimeError (PRINT_EVAL (NON_EVAL x y)) = Just (RUNTIME_ERROR (NON_EVAL x y))
 createRuntimeError _ = Nothing
 
+runRuntimeError :: Maybe RUNTIME_ERROR -> IO()
+runRuntimeError (Just (RUNTIME_ERROR x)) = print x
+runRuntimeError Nothing = return()

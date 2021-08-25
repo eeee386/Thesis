@@ -72,32 +72,8 @@ printEvalOrContinue :: AST.PROGRAM -> IO ()
 printEvalOrContinue (PROG statements) = handleCases
   where parseError = findParseError statements S.empty
         astError = S.filter isJust (fmap getASTErrorFromStatement statements)
-        evaled = evalProgram (PROG statements)
         handleCases
           | (not . null) parseError = print (mconcat ["ParserError: ", show parseError])
           | (not . null) astError = print (mconcat ["ParserError: ", show astError])
-          | otherwise = runEvalsIO evaled
+          | otherwise = evalProgram (PROG statements)
 printEvalOrContinue parseError = print parseError
-
-runEvalsIO :: IO (S.Seq PROG_EVAL) -> IO()
-runEvalsIO pseqIO = do
-  pseq <- pseqIO
-  runEvals pseq
-
-runEvals :: S.Seq PROG_EVAL -> IO()
-runEvals pseq
-  | S.null pseq = return()
-  | hasRuntimeError prog = runRuntimeError (createRuntimeError prog)
-  | otherwise = do
-    runOneEval prog
-    runEvals (S.drop 1 pseq)
-  where prog = S.index pseq 0
-
-runRuntimeError :: Maybe RUNTIME_ERROR -> IO()
-runRuntimeError (Just (RUNTIME_ERROR x)) = print x
-runRuntimeError Nothing = return()
-
-runOneEval :: PROG_EVAL -> IO()
-runOneEval (PRINT_EVAL x) = print x
-runOneEval (BLOCK_EVAL x) = runEvals x
-runOneEval _ = return()

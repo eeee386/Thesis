@@ -10,29 +10,40 @@ import qualified TokenHelper as TH
 import EvalTypes
 import Environment
   
-evalProgram :: PROGRAM -> IO (S.Seq PROG_EVAL)
-evalProgram (PROG x) = fst (eval x S.empty createGlobalEnvironment)
+evalProgram :: PROGRAM -> IO ()
+evalProgram (PROG x) = do 
+  eval x SKIP_EVAL createGlobalEnvironment
+  return ()
 
-evalBlock :: S.Seq DECLARATION -> Environments -> IO (IO (S.Seq PROG_EVAL), IO Environments)
+evalBlock :: S.Seq DECLARATION -> Environments -> IO (IO PROG_EVAL, IO Environments)
 evalBlock x env = do
-  let (pseqIO, envIO) = eval x S.empty (createLocalEnvironment env)
+  (pIO, envIO) <- eval x SKIP_EVAL (createLocalEnvironment env)
   let newEnvIO = deleteLocalEnvironment <$> envIO
-  return (pseqIO, newEnvIO)
+  return (pIO, newEnvIO)
 
 
-eval :: S.Seq DECLARATION -> S.Seq (IO PROG_EVAL) -> IO Environments -> (IO (S.Seq PROG_EVAL), IO Environments)
-eval decs evals env
-          | S.null decs = (sequence evals, env)
-          | otherwise = eval (S.drop 1 decs) (evals S.|> ieval) newEnv
-          where res = evalProgramHelper (S.index decs 0) env
-                ieval = fst <$> res
-                newEnv = snd <$> res
+eval :: S.Seq DECLARATION -> PROG_EVAL -> IO Environments -> IO (IO PROG_EVAL, IO Environments)
+eval decs prev env = do
+  if 
+    S.null decs 
+  then do 
+    return (return prev, env) 
+  else do
+    (ev, newEnv) <- evalProgramHelper (S.index decs 0) env
+    if 
+      hasRuntimeError ev 
+    then do
+      runRuntimeError (createRuntimeError ev)
+      return (return ev, env)
+    else do
+      eval (S.drop 1 decs) ev (return newEnv)
 
 
 evalProgramHelper :: DECLARATION -> IO Environments -> IO (PROG_EVAL, Environments) 
 evalProgramHelper (DEC_STMT (PRINT_STMT x)) env = do 
   locEnv <- env
   expr <- evalExpression x locEnv
+  print expr
   return (PRINT_EVAL expr, locEnv)
 evalProgramHelper (DEC_STMT (EXPR_STMT x)) env = do 
   locEnv <- env
@@ -51,15 +62,14 @@ evalProgramHelper (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens)) env = do
   handleVarDefinition iden locExpr locEnv tokens 
 evalProgramHelper (DEC_STMT (BLOCK_STMT x)) env = do
   locEnv <- env
-  (seqProgIO, newEnvIO) <- evalBlock x locEnv
+  (evIO, newEnvIO) <- evalBlock x locEnv
   newEnv <- newEnvIO
-  seqProg <- seqProgIO
-  return (BLOCK_EVAL seqProg, newEnv)
+  ev <- evIO
+  return (ev, newEnv)
 evalProgramHelper (DEC_STMT (IF_STMT expr stmt)) env = do
   locEnv <- env
   exprVal <- evalExpression expr locEnv
-  -- TODO: fix this ugly hack
-  if maybeEvalTruthy exprVal == Just True then evalProgramHelper (createDecFromStatementForIf stmt) env else return (EXPR_EVAL EVAL_NIL, locEnv)  
+  if maybeEvalTruthy exprVal == Just True then evalProgramHelper (createDecFromStatementForIf stmt) env else return (SKIP_EVAL, locEnv)  
 evalProgramHelper (DEC_STMT (IF_ELSE_STMT expr stmt1 stmt2)) env = do
   locEnv <- env
   exprVal <- evalExpression expr locEnv
@@ -67,12 +77,10 @@ evalProgramHelper (DEC_STMT (IF_ELSE_STMT expr stmt1 stmt2)) env = do
 evalProgramHelper (DEC_STMT (WHILE_STMT expr stmt)) env = do
   locEnv <- env
   exprVal <- evalExpression expr locEnv
-  print "is called"
   if maybeEvalTruthy exprVal == Just True then do 
-    print "looping"
     (_, newEnv) <- evalProgramHelper (createDecFromStatementForIf stmt) env
     evalProgramHelper (DEC_STMT (WHILE_STMT expr stmt)) (return newEnv)
-  else return (EXPR_EVAL EVAL_NIL, locEnv) 
+  else return (SKIP_EVAL, locEnv) 
 
 evalProgramHelper x env = do
   locEnv <- env
