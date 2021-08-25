@@ -137,8 +137,8 @@ evalBinary tokens evalLeft op evalRight
  | op == LESS_EQUAL = getCompOp (<=)
  | op == EQUAL_EQUAL = equals
  | op == BANG_EQUAL = notEquals
- | op == AND = handleLogic (&&)
- | op == OR = handleLogic (||)
+ | op == AND = createAnd evalLeft evalRight
+ | op == OR = createOr evalLeft evalRight
  where leftNum = maybeEvalNumber evalLeft
        rightNum = maybeEvalNumber evalRight
        leftStr = maybeEvalString evalLeft
@@ -147,7 +147,6 @@ evalBinary tokens evalLeft op evalRight
        getCompOp = createComparison tokens leftNum rightNum
        equals = createEquality evalLeft evalRight id
        notEquals = createEquality evalLeft evalRight not
-       handleLogic = createLogic tokens (maybeEvalTruthy evalLeft) (maybeEvalTruthy evalRight)
        handlePlus 
          | isJust leftNum && isJust rightNum = getArithOp (+)
          | isJust leftStr && isJust rightStr = concatTwoString (fromJust leftStr) (fromJust rightStr)
@@ -189,8 +188,12 @@ createArithmeticOps = createMathOp EVAL_NUMBER
 createComparison :: S.Seq TH.Token -> Maybe Double -> Maybe Double -> (Double -> Double -> Bool) -> EVAL
 createComparison = createMathOp EVAL_BOOL
 
-createLogic :: S.Seq TH.Token -> Maybe Bool -> Maybe Bool -> (Bool -> Bool -> Bool) -> EVAL
-createLogic tokens l r f = if isJust l && isJust r then EVAL_BOOL (f (fromJust l) (fromJust r)) else NON_EVAL "Not a valid logic operation" tokens
+createOr :: EVAL -> EVAL -> EVAL
+createOr l r = if maybeEvalTruthy l == Just True then l else r
+
+createAnd :: EVAL -> EVAL -> EVAL
+createAnd l r = if maybeEvalTruthy l == Just False then l else r
+
 
 createEquality :: (Eq a) => a -> a -> (Bool -> Bool) -> EVAL
 createEquality l r ch = if l == r then EVAL_BOOL (ch True) else EVAL_BOOL (ch False)
