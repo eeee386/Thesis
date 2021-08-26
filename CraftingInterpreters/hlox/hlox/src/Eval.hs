@@ -15,14 +15,14 @@ evalProgram (PROG x) = do
   eval x SKIP_EVAL createGlobalEnvironment
   return ()
 
-evalBlock :: S.Seq DECLARATION -> Environments -> IO (IO PROG_EVAL, IO Environments)
+evalBlock :: S.Seq DECLARATION -> Environments -> IO (IO EVAL, IO Environments)
 evalBlock x env = do
   (pIO, envIO) <- eval x SKIP_EVAL (createLocalEnvironment env)
   let newEnvIO = deleteLocalEnvironment <$> envIO
   return (pIO, newEnvIO)
 
 
-eval :: S.Seq DECLARATION -> PROG_EVAL -> IO Environments -> IO (IO PROG_EVAL, IO Environments)
+eval :: S.Seq DECLARATION -> EVAL -> IO Environments -> IO (IO EVAL, IO Environments)
 eval decs prev env = do
   if 
     S.null decs 
@@ -33,22 +33,22 @@ eval decs prev env = do
     if 
       hasRuntimeError ev 
     then do
-      runRuntimeError (createRuntimeError ev)
+      print ev
       return (return ev, env)
     else do
       eval (S.drop 1 decs) ev (return newEnv)
 
 
-evalProgramHelper :: DECLARATION -> IO Environments -> IO (PROG_EVAL, Environments) 
+evalProgramHelper :: DECLARATION -> IO Environments -> IO (EVAL, Environments) 
 evalProgramHelper (DEC_STMT (PRINT_STMT x)) env = do 
   locEnv <- env
   expr <- evalExpression x locEnv
   print expr
-  return (PRINT_EVAL expr, locEnv)
+  return (expr, locEnv)
 evalProgramHelper (DEC_STMT (EXPR_STMT x)) env = do 
   locEnv <- env
   expr <- evalExpression x locEnv
-  return (EXPR_EVAL expr, locEnv)
+  return (expr, locEnv)
 evalProgramHelper (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) expr)) env = do 
   locEnv <- env
   locExpr <- evalExpression expr locEnv
@@ -85,22 +85,22 @@ evalProgramHelper (DEC_STMT (WHILE_STMT expr stmt)) env = do
 evalProgramHelper x env = do
   locEnv <- env
   print x
-  return (EXPR_EVAL (NON_EVAL "Unknown error occured" S.empty), locEnv)
+  return (RUNTIME_ERROR "Unknown error occured" S.empty, locEnv)
 
-handleVarDeclaration :: TextType -> Environments -> IO (PROG_EVAL, Environments)
+handleVarDeclaration :: TextType -> Environments -> IO (EVAL, Environments)
 handleVarDeclaration iden env = do
   newEnv <- addIdentifierToEnvironment iden EVAL_NIL env
   return (DEC_EVAL iden EVAL_NIL, newEnv)
 
-handleVarDeclarationAndDefinition :: TextType -> EVAL -> Environments -> IO (PROG_EVAL, Environments)
+handleVarDeclarationAndDefinition :: TextType -> EVAL -> Environments -> IO (EVAL, Environments)
 handleVarDeclarationAndDefinition iden val env = do
   newEnv <- addIdentifierToEnvironment iden val env
   return (DEC_EVAL iden val, newEnv)  
   
-handleVarDefinition :: TextType -> EVAL -> Environments -> S.Seq TH.Token -> IO (PROG_EVAL, Environments)
+handleVarDefinition :: TextType -> EVAL -> Environments -> S.Seq TH.Token -> IO (EVAL, Environments)
 handleVarDefinition iden val env tokens = do
   (newEnv, isSuccess) <- updateIdentifierToEnvironment iden val env
-  if isSuccess then return (DEC_EVAL iden val, newEnv) else return (DEC_EVAL iden (NON_EVAL "Identifier is not defined" tokens), env)
+  if isSuccess then return (DEC_EVAL iden val, newEnv) else return (RUNTIME_ERROR "Identifier is not defined" tokens, env)
     
 
 evalExpression :: EXPRESSION -> Environments -> IO EVAL
@@ -111,7 +111,7 @@ evalExpression (EXP_LITERAL TRUE) _ = return (EVAL_BOOL True)
 evalExpression (EXP_LITERAL NIL) _ = return EVAL_NIL
 evalExpression (EXP_LITERAL (IDENTIFIER x tokens)) env = do 
   val <- findValueOfIdentifier x env
-  if isJust val then return (fromJust val) else return (NON_EVAL "Identifier is not defined" tokens) 
+  if isJust val then return (fromJust val) else return (RUNTIME_ERROR "Identifier is not defined" tokens) 
 
 evalExpression (EXP_GROUPING (GROUP x)) env = evalExpression x env
 
@@ -130,14 +130,14 @@ evalExpression (EXP_TERNARY (TERN predi _ trueRes _ falseRes) tLines) env = do
   evalPred <- evalExpression predi env 
   return (evalTernary tLines evalPred evalTrueRes evalFalseRes)
 
-evalExpression _ _ = return (NON_EVAL "Expression cannot be evaluated" (S.fromList []))
+evalExpression _ _ = return (RUNTIME_ERROR "Expression cannot be evaluated" (S.fromList []))
 
 
 evalUnary :: S.Seq TH.Token -> OPERATOR -> EVAL -> EVAL
 evalUnary tokens op expr
   | op == AST.MINUS && isJust valNum = EVAL_NUMBER (-(fromJust valNum))
   | op == AST.BANG && isJust valTruthy = EVAL_BOOL (not (fromJust valTruthy))
-  | otherwise = NON_EVAL "Operand must be a number" tokens
+  | otherwise = RUNTIME_ERROR "Operand must be a number" tokens
   where valNum = maybeEvalNumber expr
         valTruthy = maybeEvalTruthy expr
   
@@ -168,14 +168,14 @@ evalBinary tokens evalLeft op evalRight
        handlePlus
          | isJust leftNum && isJust rightNum = getArithOp (+)
          | isJust leftStr && isJust rightStr = concatTwoString (fromJust leftStr) (fromJust rightStr)
-         | otherwise = NON_EVAL "Operands must be two numbers or two strings" tokens
+         | otherwise = RUNTIME_ERROR "Operands must be two numbers or two strings" tokens
 
 
 evalTernary :: S.Seq TH.Token -> EVAL -> EVAL -> EVAL -> EVAL
 evalTernary tokens predi trueRes falseRes
   | preppedPred == Just True = trueRes
   | preppedPred == Just False = falseRes
-  | otherwise = NON_EVAL "Ternary operator failed" tokens
+  | otherwise = RUNTIME_ERROR "Ternary operator failed" tokens
   where preppedPred = maybeEvalTruthy predi
 
 -- Helpers
@@ -198,7 +198,7 @@ concatTwoString :: AST.TextType -> AST.TextType -> EVAL
 concatTwoString l r = EVAL_STRING (T.concat [l,r])
 
 createMathOp :: (a -> EVAL) -> S.Seq TH.Token -> Maybe Double -> Maybe Double -> (Double -> Double -> a)  -> EVAL
-createMathOp x tokens l r f = if isJust l && isJust r then x (f (fromJust l) (fromJust r)) else NON_EVAL "Operands must be numbers" tokens
+createMathOp x tokens l r f = if isJust l && isJust r then x (f (fromJust l) (fromJust r)) else RUNTIME_ERROR "Operands must be numbers" tokens
 
 createArithmeticOps :: S.Seq TH.Token -> Maybe Double -> Maybe Double -> (Double -> Double -> Double) -> EVAL
 createArithmeticOps = createMathOp EVAL_NUMBER
