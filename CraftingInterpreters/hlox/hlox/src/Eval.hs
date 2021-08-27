@@ -29,9 +29,9 @@ eval decs prev env = do
   then do 
     return (return prev, env) 
   else do
-    (ev, newEnv) <- evalProgramHelper (S.index decs 0) env
+    (ev, newEnv) <- evalDeclaration (S.index decs 0) env
     if 
-      hasRuntimeError ev 
+      isRuntimeError ev 
     then do
       print ev
       return (return ev, env)
@@ -39,50 +39,71 @@ eval decs prev env = do
       eval (S.drop 1 decs) ev (return newEnv)
 
 
-evalProgramHelper :: DECLARATION -> IO Environments -> IO (EVAL, Environments) 
-evalProgramHelper (DEC_STMT (PRINT_STMT x)) env = do 
+evalDeclaration :: DECLARATION -> IO Environments -> IO (EVAL, Environments) 
+evalDeclaration (DEC_STMT (PRINT_STMT x)) env = do 
   locEnv <- env
   expr <- evalExpression x locEnv
   print expr
   return (expr, locEnv)
-evalProgramHelper (DEC_STMT (EXPR_STMT x)) env = do 
+evalDeclaration (DEC_STMT (EXPR_STMT x)) env = do 
   locEnv <- env
   expr <- evalExpression x locEnv
   return (expr, locEnv)
-evalProgramHelper (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) expr)) env = do 
+evalDeclaration (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) expr)) env = do 
   locEnv <- env
   locExpr <- evalExpression expr locEnv
   handleVarDeclarationAndDefinition iden locExpr locEnv
-evalProgramHelper (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden))) env = do 
+evalDeclaration (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden))) env = do 
   locEnv <- env
   handleVarDeclaration iden locEnv
-evalProgramHelper (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens)) env = do 
+evalDeclaration (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens)) env = do 
   locEnv <- env
   locExpr <- evalExpression expr locEnv
   handleVarDefinition iden locExpr locEnv tokens 
-evalProgramHelper (DEC_STMT (BLOCK_STMT x)) env = do
+evalDeclaration (DEC_STMT (BLOCK_STMT x)) env = do
   locEnv <- env
   (evIO, newEnvIO) <- evalBlock x locEnv
   newEnv <- newEnvIO
   ev <- evIO
   return (ev, newEnv)
-evalProgramHelper (DEC_STMT (IF_STMT expr stmt)) env = do
+evalDeclaration (DEC_STMT (IF_STMT expr stmt)) env = do
   locEnv <- env
   exprVal <- evalExpression expr locEnv
-  if maybeEvalTruthy exprVal == Just True then evalProgramHelper (createDecFromStatementForIf stmt) env else return (SKIP_EVAL, locEnv)  
-evalProgramHelper (DEC_STMT (IF_ELSE_STMT expr stmt1 stmt2)) env = do
+  if maybeEvalTruthy exprVal == Just True then evalDeclaration (createDecFromStatement stmt) env else return (SKIP_EVAL, locEnv)  
+evalDeclaration (DEC_STMT (IF_ELSE_STMT expr stmt1 stmt2)) env = do
   locEnv <- env
   exprVal <- evalExpression expr locEnv
-  if maybeEvalTruthy exprVal == Just True then evalProgramHelper (createDecFromStatementForIf stmt1) env else evalProgramHelper (createDecFromStatementForIf stmt2) env 
-evalProgramHelper (DEC_STMT (WHILE_STMT expr stmt)) env = do
-  locEnv <- env
-  exprVal <- evalExpression expr locEnv
-  if maybeEvalTruthy exprVal == Just True then do 
-    (_, newEnv) <- evalProgramHelper (createDecFromStatementForIf stmt) env
-    evalProgramHelper (DEC_STMT (WHILE_STMT expr stmt)) (return newEnv)
-  else return (SKIP_EVAL, locEnv) 
+  if maybeEvalTruthy exprVal == Just True then evalDeclaration (createDecFromStatement stmt1) env else evalDeclaration (createDecFromStatement stmt2) env
+  
+evalDeclaration (DEC_STMT (WHILE_STMT expr stmt)) env = do
+  evalDeclaration (DEC_STMT (LOOP expr SKIP_DEC stmt)) env
+    
+evalDeclaration (DEC_STMT (FOR_STMT varDec expr incDec stmt)) env = do
+  nonIOEnv <- env
+  let locEnvIO =  createLocalEnvironment nonIOEnv
+  (ev, decEnv) <- evalDeclaration varDec locEnvIO
+  if isRuntimeError ev then do
+    return (ev, nonIOEnv)
+  else do
+    checkEval <- evalExpression expr decEnv
+    if isRuntimeError checkEval then do return (checkEval, decEnv) else do  
+      (newEv, newEnv) <- evalDeclaration (createDecFromStatement stmt) (return decEnv)
+      if isRuntimeError newEv then do return (newEv, newEnv) else do  
+        evalDeclaration (DEC_STMT (LOOP expr incDec stmt)) (return newEnv)
+  
+evalDeclaration (DEC_STMT (LOOP expr dec stmt)) env = do
+  firstEnv <- env
+  (ev, secondEnv) <- if (not . isSkipDec) dec then evalDeclaration dec (return firstEnv) else return (SKIP_EVAL, firstEnv)
+  if isRuntimeError ev then do return (ev, secondEnv) else do
+    checkEval <- evalExpression expr secondEnv
+    if isRuntimeError checkEval then do return (checkEval, secondEnv) else do  
+      if maybeEvalTruthy checkEval == Just True then do 
+        (newEv, newEnv) <- evalDeclaration (createDecFromStatement stmt) (return secondEnv)
+        if isRuntimeError newEv then do return (newEv, newEnv) else do  
+          evalDeclaration (DEC_STMT (LOOP expr dec stmt)) (return newEnv)
+      else return (SKIP_EVAL, secondEnv) 
 
-evalProgramHelper x env = do
+evalDeclaration x env = do
   locEnv <- env
   print x
   return (RUNTIME_ERROR "Unknown error occured" S.empty, locEnv)
@@ -216,9 +237,12 @@ createAnd l r = if maybeEvalTruthy l == Just False then l else r
 createEquality :: (Eq a) => a -> a -> (Bool -> Bool) -> EVAL
 createEquality l r ch = if l == r then EVAL_BOOL (ch True) else EVAL_BOOL (ch False)
 
-createDecFromStatementForIf :: STATEMENT -> DECLARATION
-createDecFromStatementForIf (EXPR_STMT x) = DEC_STMT (EXPR_STMT x)
-createDecFromStatementForIf (PRINT_STMT x) = DEC_STMT (PRINT_STMT x)
-createDecFromStatementForIf (BLOCK_STMT xs) = DEC_STMT (BLOCK_STMT xs)
-createDecFromStatementForIf (IF_STMT ex st) = DEC_STMT (IF_STMT ex st)
-createDecFromStatementForIf (IF_ELSE_STMT ex st1 st2) = DEC_STMT (IF_ELSE_STMT ex st1 st2)
+createDecFromStatement :: STATEMENT -> DECLARATION
+createDecFromStatement (EXPR_STMT x) = DEC_STMT (EXPR_STMT x)
+createDecFromStatement (PRINT_STMT x) = DEC_STMT (PRINT_STMT x)
+createDecFromStatement (BLOCK_STMT xs) = DEC_STMT (BLOCK_STMT xs)
+createDecFromStatement (IF_STMT ex st) = DEC_STMT (IF_STMT ex st)
+createDecFromStatement (IF_ELSE_STMT ex st1 st2) = DEC_STMT (IF_ELSE_STMT ex st1 st2)
+createDecFromStatement (WHILE_STMT ex st) = DEC_STMT (WHILE_STMT ex st)
+createDecFromStatement (FOR_STMT vDec ex iDec st) = DEC_STMT (FOR_STMT vDec ex iDec st)
+createDecFromStatement (LOOP ex dec st) = DEC_STMT (LOOP ex dec st)

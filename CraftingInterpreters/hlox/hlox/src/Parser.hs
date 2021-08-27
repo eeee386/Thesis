@@ -26,6 +26,7 @@ createDeclaration :: S.Seq Token -> (DECLARATION, S.Seq Token)
 createDeclaration tokens
   | isIf = handleIf tokens
   | isWhile = handleWhile tokens
+  | isFor = handleFor tokens
   | isBlockDec = handleBlock tokens
   | otherwise = handleSimpleDeclaration tokens
   where firstToken = S.lookup 0 tokens
@@ -33,6 +34,7 @@ createDeclaration tokens
         isIf = firstTokenType == Just IF
         isBlockDec = firstTokenType == Just LEFT_BRACE
         isWhile = firstTokenType == Just WHILE
+        isFor = firstTokenType == Just FOR
   
 -- Cut tokens in parse errors, because it will cause infinite recursion
 handleBlock :: S.Seq Token -> (DECLARATION, S.Seq Token)
@@ -128,6 +130,32 @@ handleWhile tokens
         (whileDec, restToCheck) = createDeclaration nextTokens
         whileStmt = getStmtFromDec whileDec
         (err, rest) = synchronize tokens
+        
+handleFor :: S.Seq Token -> (DECLARATION, S.Seq Token)
+handleFor tokens
+  | not isLeftParen = (PARSE_ERROR "Parenthesis should be after for" err, rest)
+  | isParseError firstDec = (firstDec, firstDecRest)
+  | not isSecondSemicolon = (PARSE_ERROR "Invalid parts in for loop" err, rest)
+  | not isRightParen = (PARSE_ERROR "Parenthesis is not closed" err, rest)
+  | isJust forStmt = (DEC_STMT (FOR_STMT firstDec secondExpression thirdDeclaration (fromJust forStmt) ),forRest)
+  | otherwise = (PARSE_ERROR "Not a valid for statement" err, rest)
+  where maybeLeftParen = S.lookup 1 tokens
+        isLeftParen = (tokenIsType LEFT_PAREN <$> maybeLeftParen) == Just True
+        (firstDec, firstDecRest) = handleSimpleDeclaration (S.drop 2 tokens)
+        secondSemicolon = S.findIndexL (tokenIsType SEMICOLON) firstDecRest
+        isSecondSemicolon = isJust secondSemicolon
+        (secondTokens, secRest) = if isSecondSemicolon then S.splitAt (fromJust secondSemicolon+1) firstDecRest else synchronize tokens
+        secondExpression = createExpression secondTokens
+        maybeRightParen = S.findIndexL (tokenIsType RIGHT_PAREN) secRest
+        isRightParen = isJust maybeRightParen
+        (thirdTokens, thirdRest) = if isRightParen then S.splitAt (fromJust maybeRightParen) secRest else synchronize tokens
+        thirdDeclaration = buildSimpleDecFromTokens thirdTokens
+        (forDec, forRest) = createDeclaration (S.drop 1 thirdRest)
+        forStmt = getStmtFromDec forDec
+        (err, rest) = synchronize tokens
+        
+
+        
         
 getStmtFromDec :: DECLARATION -> Maybe STATEMENT
 getStmtFromDec (DEC_STMT x) = Just x

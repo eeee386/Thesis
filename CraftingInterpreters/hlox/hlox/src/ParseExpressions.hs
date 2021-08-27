@@ -49,13 +49,27 @@ createFactor = createBinaryExpressions (M.fromList [(TokenHelper.SLASH, AST.SLAS
 createUnary :: S.Seq Token -> EXPRESSION
 createUnary tokens
   | isUnary = EXP_UNARY (UNARY getOp (createUnary (S.drop 1 tokens))) tokens
-  | otherwise = createLiteral tokens
+  | otherwise = createCall tokens
   where token = S.lookup 0 tokens
         tType = tokenType <$> token
         isUnary = tType == Just TokenHelper.BANG || tType == Just TokenHelper.MINUS
         getOp 
           | tType == Just TokenHelper.BANG = AST.BANG
           | tType == Just TokenHelper.MINUS = AST.MINUS
+          
+          
+createCall :: S.Seq Token -> EXPRESSION
+createCall tokens 
+  | not isIden || (isIden && not isCall) = createLiteral tokens
+  | not hasRightParen = NON_EXP "Missing right parenthesis from function call" tokens
+  | otherwise = chainCall rest (CALL_FUNC iden (S.singleton args))
+  where isIden = (isIdentifierToken <$> S.lookup 0 tokens) == Just True
+        isCall = isIden && (tokenType <$> S.lookup 1 tokens) == Just LEFT_PAREN
+        rightParentIndex = S.findIndexL (tokenIsType RIGHT_PAREN) tokens
+        hasRightParen = isJust rightParentIndex
+        argsTokens = S.drop 2 (S.takeWhileL tokenIsType RIGHT_PAREN tokens)
+        args = buildArgs argsTokens S.empty      
+
   
 createLiteral :: S.Seq Token -> EXPRESSION
 createLiteral tokens
@@ -134,9 +148,32 @@ handleTernaryCases getOp1 getOp2 indexOfOp1 indexOfOp2 tokens
         xorIsJust = isJust indexOfOp1 /= isJust indexOfOp2
         properPlacement = ((-) <$> indexOfOp2 <*> indexOfOp1) > Just 1 && indexOfOp2 < Just (S.length tokens - 2)
 
+chainCall :: S.Seq Token -> CALL -> (EXPRESSION, S.Seq Token)
+chainCall tokens (CALL_FUNC iden callArgs) = 
+  | S.null tokens || not isCall= (CALL (CALL_FUNC iden callArgs), tokens)
+  | not hasRightParen = NON_EXP "Missing right parenthesis from function call" tokens
+  | otherwise = chainCall rest (CALL_FUNC iden (callArgs S.|> args))
+  where isCall = (tokenType <$> S.lookup 1 tokens) == Just LEFT_PAREN
+        rightParentIndex = S.findIndexL (tokenIsType RIGHT_PAREN) tokens
+        hasRightParen = isJust rightParentIndex
+        argsTokens = S.drop 2 (S.takeWhileL tokenIsType RIGHT_PAREN tokens)
+        args = buildArgs argsTokens S.empty     
+
+buildArgs :: S.Seq Token -> S.Seq EXPRESSION -> ARGUMENTS
+buildArgs tokens exprs
+ | S.null tokens = ARGS (exprs)
+ | S.null exprTokens = INVALID_ARGS "Empty argument" tokens
+ | otherwise = buildArgs rest (exprs S.|> newExpr)
+ where exprTokens = S.takeWhileL (tokenIsType COMMA) tokens
+       newExpr = createExpression (exprTokens S.|> Token{tokenType=SEMICOLON, line=line (getLast exprTokens)})
+       rest = S.drop (S.length exprTokens+1) tokens
+
 isIdentifier :: TokenType -> Bool
 isIdentifier (TokenHelper.IDENTIFIER _) = True
 isIdentifier _ = False
+
+isIdentifierToken :: Token -> Bool
+isIdentifierToken t = isIdentifier (tokenType t)
 
 checkSurplus :: S.Seq Token -> Bool
 checkSurplus tokens = not (empty || terminated)

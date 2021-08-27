@@ -13,11 +13,13 @@ newtype PROGRAM = PROG (S.Seq DECLARATION)
 instance Show PROGRAM where
   show (PROG x) = show x
 
-data DECLARATION = DEC_STMT STATEMENT | DEC_VAR VARIABLE_DECLARATION | PARSE_ERROR TextType (S.Seq Token)
+data DECLARATION = DEC_STMT STATEMENT | DEC_VAR VARIABLE_DECLARATION | PARSE_ERROR TextType (S.Seq Token) | SKIP_DEC
+
 instance Show DECLARATION where
   show (DEC_STMT x) = show x
   show (DEC_VAR x) = show x
   show (PARSE_ERROR errMsg tokens) = mconcat ["ParseError: ", show errMsg, ". In line: " ,show (line (S.index tokens (S.length tokens-1)))]
+  show SKIP_DEC = "skip dec"
 
 type IDENTIFIER = TokenType
 
@@ -33,6 +35,8 @@ data STATEMENT = EXPR_STMT EXPRESSION
                | IF_STMT EXPRESSION STATEMENT 
                | IF_ELSE_STMT EXPRESSION STATEMENT STATEMENT
                | WHILE_STMT EXPRESSION STATEMENT
+               | FOR_STMT DECLARATION EXPRESSION DECLARATION STATEMENT
+               | LOOP EXPRESSION DECLARATION STATEMENT
 
 instance Show STATEMENT where 
   show (EXPR_STMT x) = show x
@@ -41,6 +45,8 @@ instance Show STATEMENT where
   show (IF_STMT expr stmt) = mconcat ["if (", show expr, ")", show stmt]
   show (IF_ELSE_STMT expr ifStmt elseStmt) = mconcat ["if (", show expr, ") ", show ifStmt, " else ", show elseStmt]
   show (WHILE_STMT expr stmt) = mconcat ["while (", show expr, ")", show stmt]
+  show (FOR_STMT dec expr1 expr2 stmt) = mconcat ["for(", show dec, ";", show expr1, ";", show expr2, ")", show stmt]
+  show (LOOP expr1 expr2 stmt) = mconcat ["loop ", show expr1, " ", show expr2, " ", show stmt]
 
 -- Tokens only needed in operator expression because there are some, that cannot be evaluated, and we want to show why
 data EXPRESSION = EXP_LITERAL LITERAL 
@@ -48,6 +54,7 @@ data EXPRESSION = EXP_LITERAL LITERAL
                 | EXP_BINARY BINARY (S.Seq Token) 
                 | EXP_TERNARY TERNARY (S.Seq Token) 
                 | EXP_GROUPING GROUPING
+                | EXP_CALL CALL
                 | NON_EXP String (S.Seq Token)
 
 instance Show EXPRESSION where 
@@ -71,6 +78,10 @@ instance Show LITERAL where
 newtype GROUPING = GROUP EXPRESSION
 instance Show GROUPING where 
   show (GROUP x) = mconcat ["(", show x, ")"]
+  
+data CALL = CALL_FUNC LITERAL (S.Seq ARGUMENTS)
+instance Show CALL where
+  show (CALL_FUNC lit args) = mconcat [show lit, "(", show args, ")"]
 
 data UNARY = UNARY OPERATOR EXPRESSION
 instance Show UNARY where 
@@ -83,6 +94,11 @@ instance Show BINARY where
 data TERNARY = TERN EXPRESSION OPERATOR EXPRESSION OPERATOR EXPRESSION
 instance Show TERNARY where 
   show (TERN v w x y z) = mconcat [show v, show w, show x, show y, show z]
+  
+  
+newtype ARGUMENTS = ARGS (S.Seq EXPRESSION) | INVALID_ARGS TextType (S.Seq Token)
+instance Show ARGUMENTS where
+  show (ARGS exprs) = show exprs
 
 data OPERATOR = EQUAL_EQUAL | BANG_EQUAL | LESS | LESS_EQUAL | GREATER | GREATER_EQUAL
                | PLUS  | MINUS | STAR | SLASH | QUESTION_MARK | COLON | BANG | AND | OR deriving Eq
@@ -122,6 +138,10 @@ getDecsFromBlock (DEC_STMT (BLOCK_STMT x)) = x
 isParseError :: DECLARATION -> Bool
 isParseError (PARSE_ERROR _ _) = True
 isParseError _ = False
+
+isSkipDec :: DECLARATION -> Bool
+isSkipDec (SKIP_DEC) = True
+isSkipDec _ = False
 
 
 

@@ -20,6 +20,6 @@ getLineError tokens = if firstLine /= secondLine then mconcat [". Between lines:
         secondLine = TH.line <$> S.lookup (S.length tokens - 1) tokens
         
         
-hasRuntimeError :: EVAL -> Bool
-hasRuntimeError (RUNTIME_ERROR _ _) = True
-hasRuntimeError _ = False
+isRuntimeError :: EVAL -> Bool
+isRuntimeError (RUNTIME_ERROR _ _) = True
+isRuntimeError _ = False
