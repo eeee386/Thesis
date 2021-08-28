@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module ParseExpressions where
   
 import qualified Data.Sequence as S
@@ -45,7 +46,7 @@ createFactor :: S.Seq Token -> EXPRESSION
 createFactor = createBinaryExpressions (M.fromList [(TokenHelper.SLASH, AST.SLASH), 
                                                     (TokenHelper.STAR, AST.STAR)]) createFactor createUnary
 
-    
+
 createUnary :: S.Seq Token -> EXPRESSION
 createUnary tokens
   | isUnary = EXP_UNARY (UNARY getOp (createUnary (S.drop 1 tokens))) tokens
@@ -53,24 +54,29 @@ createUnary tokens
   where token = S.lookup 0 tokens
         tType = tokenType <$> token
         isUnary = tType == Just TokenHelper.BANG || tType == Just TokenHelper.MINUS
-        getOp 
+        getOp
           | tType == Just TokenHelper.BANG = AST.BANG
           | tType == Just TokenHelper.MINUS = AST.MINUS
-          
-          
+
+
 createCall :: S.Seq Token -> EXPRESSION
-createCall tokens 
+createCall tokens
   | not isIden || (isIden && not isCall) = createLiteral tokens
   | not hasRightParen = NON_EXP "Missing right parenthesis from function call" tokens
-  | otherwise = chainCall rest (CALL_FUNC iden (S.singleton args))
-  where isIden = (isIdentifierToken <$> S.lookup 0 tokens) == Just True
+  | otherwise = chainCall rest (CALL_FUNC (createASTIdentifier tokens tIden) (S.singleton args))
+  where maybeIden = S.lookup 0 tokens
+        isIden = (isIdentifierToken <$> maybeIden) == Just True
+        iden = fromJust maybeIden
+        tIden = tokenType iden
         isCall = isIden && (tokenType <$> S.lookup 1 tokens) == Just LEFT_PAREN
         rightParentIndex = S.findIndexL (tokenIsType RIGHT_PAREN) tokens
         hasRightParen = isJust rightParentIndex
-        argsTokens = S.drop 2 (S.takeWhileL tokenIsType RIGHT_PAREN tokens)
-        args = buildArgs argsTokens S.empty      
+        argsTokens = S.drop 2 (S.takeWhileL (tokenIsType RIGHT_PAREN) tokens)
+        rest = S.drop (S.length argsTokens+1) tokens
+        args = buildArgs argsTokens S.empty
 
-  
+
+
 createLiteral :: S.Seq Token -> EXPRESSION
 createLiteral tokens
   | isMoreTokens = NON_EXP "Surplus Tokens" tokens
@@ -121,10 +127,10 @@ prepBinary :: (Int -> OPERATOR) -> Int -> S.Seq Token -> (S.Seq Token -> EXPRESS
 prepBinary getOperation idx tokens thisPrec nextPrec = AST.BIN (nextPrec left) op (thisPrec right)
    where split = splitTokens idx
          left = fst split
-         right = S.drop 1 (snd split) 
+         right = S.drop 1 (snd split)
          op = getOperation idx
          splitTokens indx = S.splitAt indx tokens
-         
+
 prepTernary :: (Int -> OPERATOR) -> (Int -> OPERATOR) -> Int -> Int -> S.Seq Token -> (S.Seq Token -> EXPRESSION) -> TERNARY
 prepTernary getOp1 getOp2 idx1 idx2 tokens nextPrec = AST.TERN (nextPrec left) op1 (nextPrec middle) op2 (nextPrec right)
   where splitTokens indx tList = S.splitAt indx tList
@@ -148,16 +154,17 @@ handleTernaryCases getOp1 getOp2 indexOfOp1 indexOfOp2 tokens
         xorIsJust = isJust indexOfOp1 /= isJust indexOfOp2
         properPlacement = ((-) <$> indexOfOp2 <*> indexOfOp1) > Just 1 && indexOfOp2 < Just (S.length tokens - 2)
 
-chainCall :: S.Seq Token -> CALL -> (EXPRESSION, S.Seq Token)
-chainCall tokens (CALL_FUNC iden callArgs) = 
-  | S.null tokens || not isCall= (CALL (CALL_FUNC iden callArgs), tokens)
+chainCall :: S.Seq Token -> CALL -> EXPRESSION
+chainCall tokens (CALL_FUNC iden callArgs)
+  | S.null tokens || not isCall= EXP_CALL (CALL_FUNC iden callArgs)
   | not hasRightParen = NON_EXP "Missing right parenthesis from function call" tokens
   | otherwise = chainCall rest (CALL_FUNC iden (callArgs S.|> args))
   where isCall = (tokenType <$> S.lookup 1 tokens) == Just LEFT_PAREN
         rightParentIndex = S.findIndexL (tokenIsType RIGHT_PAREN) tokens
         hasRightParen = isJust rightParentIndex
-        argsTokens = S.drop 2 (S.takeWhileL tokenIsType RIGHT_PAREN tokens)
-        args = buildArgs argsTokens S.empty     
+        argsTokens = S.drop 2 (S.takeWhileL (tokenIsType RIGHT_PAREN) tokens)
+        rest = S.drop (S.length argsTokens+1) tokens
+        args = buildArgs argsTokens S.empty
 
 buildArgs :: S.Seq Token -> S.Seq EXPRESSION -> ARGUMENTS
 buildArgs tokens exprs
@@ -165,7 +172,7 @@ buildArgs tokens exprs
  | S.null exprTokens = INVALID_ARGS "Empty argument" tokens
  | otherwise = buildArgs rest (exprs S.|> newExpr)
  where exprTokens = S.takeWhileL (tokenIsType COMMA) tokens
-       newExpr = createExpression (exprTokens S.|> Token{tokenType=SEMICOLON, line=line (getLast exprTokens)})
+       newExpr = createExpression (exprTokens S.|> Token{tokenType=SEMICOLON, line=line $ fromJust $ getLast exprTokens})
        rest = S.drop (S.length exprTokens+1) tokens
 
 isIdentifier :: TokenType -> Bool
@@ -174,6 +181,9 @@ isIdentifier _ = False
 
 isIdentifierToken :: Token -> Bool
 isIdentifierToken t = isIdentifier (tokenType t)
+
+createASTIdentifier ::S.Seq Token ->  TokenType -> EXPRESSION
+createASTIdentifier tokens (TokenHelper.IDENTIFIER a) = EXP_LITERAL (AST.IDENTIFIER a tokens)
 
 checkSurplus :: S.Seq Token -> Bool
 checkSurplus tokens = not (empty || terminated)

@@ -1,6 +1,5 @@
--- TODO: Hold line param for Evaluation errors
 module AST where
-  
+
 import qualified Data.Text as T
 import TokenHelper (Token, line, TokenType)
 import qualified Data.Sequence as S
@@ -64,6 +63,7 @@ instance Show EXPRESSION where
   show (EXP_GROUPING x) = show x
   show (NON_EXP x y) = mconcat [show x, " ", show y]
   show (EXP_TERNARY x _) = show x
+  show (EXP_CALL x) = mconcat ["Function: ", show x]
 
 data LITERAL = NUMBER Double | STRING TextType | TRUE | FALSE | NIL | IDENTIFIER TextType (S.Seq Token)
 instance Show LITERAL where 
@@ -71,7 +71,7 @@ instance Show LITERAL where
   show (STRING x) = T.unpack (T.concat [T.pack "\"", x, T.pack "\""])
   show TRUE = "true"
   show FALSE = "false"
-  show NIL = "nil"  
+  show NIL = "nil"
   show (IDENTIFIER x _) = show x
    
 
@@ -79,7 +79,7 @@ newtype GROUPING = GROUP EXPRESSION
 instance Show GROUPING where 
   show (GROUP x) = mconcat ["(", show x, ")"]
   
-data CALL = CALL_FUNC LITERAL (S.Seq ARGUMENTS)
+data CALL = CALL_FUNC EXPRESSION (S.Seq ARGUMENTS)
 instance Show CALL where
   show (CALL_FUNC lit args) = mconcat [show lit, "(", show args, ")"]
 
@@ -96,13 +96,14 @@ instance Show TERNARY where
   show (TERN v w x y z) = mconcat [show v, show w, show x, show y, show z]
   
   
-newtype ARGUMENTS = ARGS (S.Seq EXPRESSION) | INVALID_ARGS TextType (S.Seq Token)
+data ARGUMENTS = ARGS (S.Seq EXPRESSION) | INVALID_ARGS TextType (S.Seq Token)
 instance Show ARGUMENTS where
   show (ARGS exprs) = show exprs
+  show (INVALID_ARGS t tokens) = mconcat [show t, " ", show tokens]
 
 data OPERATOR = EQUAL_EQUAL | BANG_EQUAL | LESS | LESS_EQUAL | GREATER | GREATER_EQUAL
                | PLUS  | MINUS | STAR | SLASH | QUESTION_MARK | COLON | BANG | AND | OR deriving Eq
-               
+
 instance Show OPERATOR where 
   show EQUAL_EQUAL = "=="
   show BANG_EQUAL = "!="
