@@ -27,6 +27,7 @@ createDeclaration tokens
   | isIf = handleIf tokens
   | isWhile = handleWhile tokens
   | isFor = handleFor tokens
+  | isFunction = handleFunction tokens
   | isBlockDec = handleBlock tokens
   | otherwise = handleSimpleDeclaration tokens
   where firstToken = S.lookup 0 tokens
@@ -35,8 +36,9 @@ createDeclaration tokens
         isBlockDec = firstTokenType == Just LEFT_BRACE
         isWhile = firstTokenType == Just WHILE
         isFor = firstTokenType == Just FOR
+        isFunction = firstTokenType == Just FUN
   
--- Cut tokens in parse errors, because it will cause infinite recursion
+
 handleBlock :: S.Seq Token -> (DECLARATION, S.Seq Token)
 handleBlock tokens
   | isClosed = (DEC_STMT (BLOCK_STMT (createDeclarations innerDecTokens S.empty)), right)
@@ -153,10 +155,39 @@ handleFor tokens
         (forDec, forRest) = createDeclaration (S.drop 1 thirdRest)
         forStmt = getStmtFromDec forDec
         (err, rest) = synchronize tokens
-        
 
-        
-        
+
+handleFunction :: S.Seq Token -> (DECLARATION, S.Seq Token)
+handleFunction tokens
+  | not isIden = (PARSE_ERROR "Identifier is missing after 'fun' keyword" err, rest)
+  | not isLeftParen = (PARSE_ERROR "Parenthesis should be after function header" err, rest)
+  | not isRightParen = (PARSE_ERROR "Parenthesis is not closed" err, rest)
+  | otherwise = (DEC_FUNC (FUNC_DEC (fromJust maybeIdenType) params (fromJust stmt)), funRest)
+  where maybeIden = S.lookup 1 tokens
+        maybeIdenType = tokenType <$>  maybeIden
+        isIden = (isIdentifier <$> maybeIdenType) == Just True
+        maybeLeftParen = S.lookup 2 tokens
+        isLeftParen = (tokenType <$> maybeLeftParen) == Just LEFT_PAREN
+        rightParenIndex = S.findIndexL (tokenIsType RIGHT_PAREN) (S.drop 3 tokens)
+        isRightParen = isJust rightParenIndex
+        paramTokens = S.drop 3 (S.takeWhileL (not . tokenIsType RIGHT_PAREN) tokens)
+        params = handleBuildParams paramTokens (PARAMETERS S.empty)
+        stmtRest = (S.drop 1 (S.dropWhileL (not . tokenIsType RIGHT_PAREN) tokens))
+        (dec, funRest) = createDeclaration (S.drop 1 stmtRest)
+        stmt = getStmtFromDec dec
+        (err, rest) = synchronize tokens
+
+handleBuildParams :: S.Seq Token -> PARAMETERS -> PARAMETERS
+handleBuildParams tokens (PARAMETERS idens)
+ | S.null tokens = PARAMETERS idens
+ | S.null idenTokens = INVALID_PARAMS "Empty parameter" tokens
+ | (not . isExpLiteralIdentifier) newIden = INVALID_PARAMS "Parameters can only be identifiers" tokens
+ | otherwise = handleBuildParams rest (PARAMETERS (idens S.|> newIden))
+ where idenTokens = S.takeWhileL (not . tokenIsType COMMA) tokens
+       newIden = createExpression (idenTokens S.|> Token{tokenType=SEMICOLON, line=line $ fromJust $ getLast idenTokens})
+       rest = S.drop (S.length idenTokens+1) tokens
+
+
 getStmtFromDec :: DECLARATION -> Maybe STATEMENT
 getStmtFromDec (DEC_STMT x) = Just x
 getStmtFromDec _ = Nothing

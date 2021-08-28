@@ -11,13 +11,14 @@ newtype PROGRAM = PROG (S.Seq DECLARATION)
 instance Show PROGRAM where
   show (PROG x) = show x
 
-data DECLARATION = DEC_STMT STATEMENT | DEC_VAR VARIABLE_DECLARATION | PARSE_ERROR TextType (S.Seq Token) | SKIP_DEC deriving Eq
+data DECLARATION = DEC_STMT STATEMENT | DEC_VAR VARIABLE_DECLARATION | DEC_FUNC FUNCTION_DECLARATION  | PARSE_ERROR TextType (S.Seq Token) | SKIP_DEC deriving Eq
 
 instance Show DECLARATION where
   show (DEC_STMT x) = show x
   show (DEC_VAR x) = show x
   show (PARSE_ERROR errMsg tokens) = mconcat ["ParseError: ", show errMsg, ". In line: " ,show (line (S.index tokens (S.length tokens-1)))]
   show SKIP_DEC = "skip dec"
+  show (DEC_FUNC x) = show x
 
 type IDENTIFIER = TokenType
 
@@ -26,6 +27,12 @@ instance Show VARIABLE_DECLARATION where
   show (VAR_DEC_DEF iden expr) = mconcat ["var", " ", show iden, " = ", show expr]
   show (VAR_DEC iden) = mconcat ["var", " ", show iden] 
   show (VAR_DEF iden expr _) = mconcat [show iden, " = ", show expr]
+
+
+data FUNCTION_DECLARATION = FUNC_DEC IDENTIFIER PARAMETERS STATEMENT deriving Eq
+instance Show FUNCTION_DECLARATION where
+  show (FUNC_DEC i p s) = mconcat [show i, show p, show s]
+
 
 data STATEMENT = EXPR_STMT EXPRESSION 
                | PRINT_STMT EXPRESSION 
@@ -95,9 +102,10 @@ instance Show TERNARY where
   show (TERN v w x y z) = mconcat [show v, show w, show x, show y, show z]
   
   
-newtype PARAMETERS = PARAMETERS (S.Seq LITERAL) deriving Eq
+data PARAMETERS = PARAMETERS (S.Seq EXPRESSION) | INVALID_PARAMS AST.TextType (S.Seq Token) deriving Eq
 instance Show PARAMETERS where
   show (PARAMETERS params) = show params
+  show (INVALID_PARAMS a t) = mconcat ["Invalid parameters: ", show a, show t]
   
 data ARGUMENTS = ARGS (S.Seq EXPRESSION) | INVALID_ARGS TextType (S.Seq Token) deriving Eq
 instance Show ARGUMENTS where
@@ -147,6 +155,9 @@ isSkipDec :: DECLARATION -> Bool
 isSkipDec (SKIP_DEC) = True
 isSkipDec _ = False
 
+isExpLiteralIdentifier :: EXPRESSION -> Bool
+isExpLiteralIdentifier (EXP_LITERAL (IDENTIFIER _ _)) = True
+isExpLiteralIdentifier _ = False
 
 
 getASTErrorFromStatement :: DECLARATION -> Maybe String
