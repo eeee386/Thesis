@@ -53,6 +53,13 @@ packages:
       sha256: b4fa31474d98869318b9190684eec802b6a282588b2dddfaf7b0dcb87e652132
   original:
     hackage: hashtables-1.2.4.1
+- completed:
+    hackage: clock-0.8.2@sha256:473ffd59765cc67634bdc55b63c699a85addf3a024089073ec2a862881e83e2a,4313
+    pantry-tree:
+      size: 383
+      sha256: 8c259cbab153b142020fcb1bd4ca787e0205b5faef6fa2457d83c5d726147a93
+  original:
+    hackage: clock-0.8.2
 snapshots:
 - completed:
     size: 585603
