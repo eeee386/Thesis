@@ -28,6 +28,7 @@ dependencies:
 - vector
 - containers
 - hashtables
+- clock
 
 library:
   source-dirs: src

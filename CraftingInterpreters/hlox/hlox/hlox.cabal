@@ -13,6 +13,7 @@ author:         Author name here
 maintainer:     example@example.com
 copyright:      2021 Author name here
 license:        BSD3
+license-file:   LICENSE
 build-type:     Simple
 extra-source-files:
     README.md
@@ -42,6 +43,7 @@ library
   build-depends:
       base >=4.7 && <5
     , bytestring
+    , clock
     , containers
     , deepseq
     , hashtables
@@ -60,6 +62,7 @@ executable hlox-exe
   build-depends:
       base >=4.7 && <5
     , bytestring
+    , clock
     , containers
     , deepseq
     , hashtables
@@ -80,6 +83,7 @@ test-suite hlox-test
   build-depends:
       base >=4.7 && <5
     , bytestring
+    , clock
     , containers
     , deepseq
     , hashtables

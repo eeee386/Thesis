@@ -5,7 +5,7 @@ module Environment where
 import qualified Data.HashTable.IO as HT
 import qualified Data.Sequence as S
 import Data.Maybe
-
+import System.Clock
 import EvalTypes
 import AST
 
@@ -18,8 +18,8 @@ createEnv = HT.new
 createAndPrepGlobalEnv :: IO HashTable
 createAndPrepGlobalEnv = do
   globalEnv <- HT.new
-  
-  return globalEnv
+  c <- clock
+  addUpdateIdentifier "clock" (EVAL_NUMBER (fromInteger c)) globalEnv
 
 createGlobalEnvironment :: IO Environments
 createGlobalEnvironment = S.singleton <$> createEnv
@@ -80,3 +80,7 @@ findValueOfIdentifier iden env = do
   let index = S.findIndexR isJust values
   if isJust index then return (S.index values (fromJust index)) else return Nothing
 
+-- Global functions
+clock :: IO Integer
+clock = do
+  toNanoSecs <$> getTime Realtime
