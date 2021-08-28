@@ -12,6 +12,7 @@ import GHC.IO.Handle (hFlush)
 import System.IO (stdout)
 import qualified Data.Sequence as S
 import Parser
+import ParseExpressions
 import Eval
 import AST
 import Data.Maybe
@@ -20,7 +21,7 @@ import Data.Maybe
 run :: T.Text -> IO()
 run text = do
   let tokens = scanTokens text
-  print (parse tokens)
+  print (createCall tokens)
   printScanErrorOrContinue tokens
 
 runLoxFile :: T.Text -> IO ()

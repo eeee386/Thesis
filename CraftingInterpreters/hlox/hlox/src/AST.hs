@@ -3,7 +3,6 @@ module AST where
 import qualified Data.Text as T
 import TokenHelper (Token, line, TokenType)
 import qualified Data.Sequence as S
-import Utils
 import Data.Maybe
 
 type TextType = T.Text

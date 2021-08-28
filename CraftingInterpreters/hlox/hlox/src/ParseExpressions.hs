@@ -69,12 +69,7 @@ createCall tokens
         iden = fromJust maybeIden
         tIden = tokenType iden
         isCall = isIden && (tokenType <$> S.lookup 1 tokens) == Just LEFT_PAREN
-        rightParentIndex = S.findIndexL (tokenIsType RIGHT_PAREN) tokens
-        hasRightParen = isJust rightParentIndex
-        argsTokens = S.drop 2 (S.takeWhileL (tokenIsType RIGHT_PAREN) tokens)
-        rest = S.drop (S.length argsTokens+1) tokens
-        args = buildArgs argsTokens S.empty
-
+        (hasRightParen, rest, args) = functionHelper False tokens
 
 
 createLiteral :: S.Seq Token -> EXPRESSION
@@ -156,22 +151,28 @@ handleTernaryCases getOp1 getOp2 indexOfOp1 indexOfOp2 tokens
 
 chainCall :: S.Seq Token -> CALL -> EXPRESSION
 chainCall tokens (CALL_FUNC iden callArgs)
-  | S.null tokens || not isCall= EXP_CALL (CALL_FUNC iden callArgs)
+  | S.null tokens || isSemicolon = EXP_CALL (CALL_FUNC iden callArgs)
   | not hasRightParen = NON_EXP "Missing right parenthesis from function call" tokens
   | otherwise = chainCall rest (CALL_FUNC iden (callArgs S.|> args))
-  where isCall = (tokenType <$> S.lookup 1 tokens) == Just LEFT_PAREN
-        rightParentIndex = S.findIndexL (tokenIsType RIGHT_PAREN) tokens
+  where isCall = (tokenType <$> S.lookup 0 tokens) == Just LEFT_PAREN
+        isSemicolon = (tokenType <$> S.lookup 0 tokens) == Just SEMICOLON
+        (hasRightParen, rest, args) = functionHelper True tokens
+
+functionHelper :: Bool -> S.Seq Token -> (Bool, S.Seq Token, ARGUMENTS)
+functionHelper isChain tokens = (hasRightParen, rest, args)
+  where rightParentIndex = S.findIndexL (tokenIsType RIGHT_PAREN) tokens
         hasRightParen = isJust rightParentIndex
-        argsTokens = S.drop 2 (S.takeWhileL (tokenIsType RIGHT_PAREN) tokens)
-        rest = S.drop (S.length argsTokens+1) tokens
+        dropNumber = if isChain then 1 else 2
+        argsTokens = S.drop dropNumber (S.takeWhileL (not . tokenIsType RIGHT_PAREN) tokens)
+        rest = S.drop 1 (S.dropWhileL (not . tokenIsType RIGHT_PAREN) tokens)
         args = buildArgs argsTokens S.empty
 
 buildArgs :: S.Seq Token -> S.Seq EXPRESSION -> ARGUMENTS
 buildArgs tokens exprs
- | S.null tokens = ARGS (exprs)
+ | S.null tokens = ARGS exprs
  | S.null exprTokens = INVALID_ARGS "Empty argument" tokens
  | otherwise = buildArgs rest (exprs S.|> newExpr)
- where exprTokens = S.takeWhileL (tokenIsType COMMA) tokens
+ where exprTokens = S.takeWhileL (not . tokenIsType COMMA) tokens
        newExpr = createExpression (exprTokens S.|> Token{tokenType=SEMICOLON, line=line $ fromJust $ getLast exprTokens})
        rest = S.drop (S.length exprTokens+1) tokens
 
