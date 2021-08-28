@@ -11,7 +11,7 @@ newtype PROGRAM = PROG (S.Seq DECLARATION)
 instance Show PROGRAM where
   show (PROG x) = show x
 
-data DECLARATION = DEC_STMT STATEMENT | DEC_VAR VARIABLE_DECLARATION | PARSE_ERROR TextType (S.Seq Token) | SKIP_DEC
+data DECLARATION = DEC_STMT STATEMENT | DEC_VAR VARIABLE_DECLARATION | PARSE_ERROR TextType (S.Seq Token) | SKIP_DEC deriving Eq
 
 instance Show DECLARATION where
   show (DEC_STMT x) = show x
@@ -21,7 +21,7 @@ instance Show DECLARATION where
 
 type IDENTIFIER = TokenType
 
-data VARIABLE_DECLARATION = VAR_DEC_DEF IDENTIFIER EXPRESSION | VAR_DEC IDENTIFIER | VAR_DEF IDENTIFIER EXPRESSION (S.Seq Token)
+data VARIABLE_DECLARATION = VAR_DEC_DEF IDENTIFIER EXPRESSION | VAR_DEC IDENTIFIER | VAR_DEF IDENTIFIER EXPRESSION (S.Seq Token) deriving Eq
 instance Show VARIABLE_DECLARATION where
   show (VAR_DEC_DEF iden expr) = mconcat ["var", " ", show iden, " = ", show expr]
   show (VAR_DEC iden) = mconcat ["var", " ", show iden] 
@@ -34,7 +34,7 @@ data STATEMENT = EXPR_STMT EXPRESSION
                | IF_ELSE_STMT EXPRESSION STATEMENT STATEMENT
                | WHILE_STMT EXPRESSION STATEMENT
                | FOR_STMT DECLARATION EXPRESSION DECLARATION STATEMENT
-               | LOOP EXPRESSION DECLARATION STATEMENT
+               | LOOP EXPRESSION DECLARATION STATEMENT deriving Eq
 
 instance Show STATEMENT where 
   show (EXPR_STMT x) = show x
@@ -53,7 +53,7 @@ data EXPRESSION = EXP_LITERAL LITERAL
                 | EXP_TERNARY TERNARY (S.Seq Token) 
                 | EXP_GROUPING GROUPING
                 | EXP_CALL CALL
-                | NON_EXP String (S.Seq Token)
+                | NON_EXP String (S.Seq Token) deriving Eq
 
 instance Show EXPRESSION where 
   show (EXP_LITERAL x) = show x
@@ -64,7 +64,7 @@ instance Show EXPRESSION where
   show (EXP_TERNARY x _) = show x
   show (EXP_CALL x) = mconcat ["Function: ", show x]
 
-data LITERAL = NUMBER Double | STRING TextType | TRUE | FALSE | NIL | IDENTIFIER TextType (S.Seq Token)
+data LITERAL = NUMBER Double | STRING TextType | TRUE | FALSE | NIL | IDENTIFIER TextType (S.Seq Token) deriving Eq
 instance Show LITERAL where 
   show (NUMBER x) = show x
   show (STRING x) = T.unpack (T.concat [T.pack "\"", x, T.pack "\""])
@@ -74,28 +74,32 @@ instance Show LITERAL where
   show (IDENTIFIER x _) = show x
    
 
-newtype GROUPING = GROUP EXPRESSION
+newtype GROUPING = GROUP EXPRESSION deriving Eq
 instance Show GROUPING where 
   show (GROUP x) = mconcat ["(", show x, ")"]
   
-data CALL = CALL_FUNC EXPRESSION (S.Seq ARGUMENTS)
+data CALL = CALL_FUNC EXPRESSION (S.Seq ARGUMENTS) deriving Eq
 instance Show CALL where
   show (CALL_FUNC lit args) = mconcat [show lit, "(", show args, ")"]
 
-data UNARY = UNARY OPERATOR EXPRESSION
+data UNARY = UNARY OPERATOR EXPRESSION deriving Eq
 instance Show UNARY where 
   show (UNARY op x) = mconcat [show op, show x]
 
-data BINARY = BIN EXPRESSION OPERATOR EXPRESSION
+data BINARY = BIN EXPRESSION OPERATOR EXPRESSION deriving Eq
 instance Show BINARY where 
   show (BIN x y z) = mconcat [show x, show y, show z]
   
-data TERNARY = TERN EXPRESSION OPERATOR EXPRESSION OPERATOR EXPRESSION
+data TERNARY = TERN EXPRESSION OPERATOR EXPRESSION OPERATOR EXPRESSION deriving Eq
 instance Show TERNARY where 
   show (TERN v w x y z) = mconcat [show v, show w, show x, show y, show z]
   
   
-data ARGUMENTS = ARGS (S.Seq EXPRESSION) | INVALID_ARGS TextType (S.Seq Token)
+newtype PARAMETERS = PARAMETERS (S.Seq LITERAL) deriving Eq
+instance Show PARAMETERS where
+  show (PARAMETERS params) = show params
+  
+data ARGUMENTS = ARGS (S.Seq EXPRESSION) | INVALID_ARGS TextType (S.Seq Token) deriving Eq
 instance Show ARGUMENTS where
   show (ARGS exprs) = show exprs
   show (INVALID_ARGS t tokens) = mconcat [show t, " ", show tokens]

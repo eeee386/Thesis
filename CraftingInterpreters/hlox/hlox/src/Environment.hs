@@ -18,6 +18,7 @@ createEnv = HT.new
 createAndPrepGlobalEnv :: IO HashTable
 createAndPrepGlobalEnv = do
   globalEnv <- HT.new
+  --TODO: Check if this is strict
   c <- clock
   addUpdateIdentifier "clock" (EVAL_NUMBER (fromInteger c)) globalEnv
 

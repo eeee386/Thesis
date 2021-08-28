@@ -171,12 +171,11 @@ evalUnary tokens op expr
 
 
 evalFunctions :: EVAL -> S.Seq ARGUMENTS -> EVAL 
-evalFunctions (FUNC_EVAL iden arity) argCalls
-  | S.null argCalls = FUNC_EVAL iden arity
-  | otherwise = evalFunctions (callFunction (FUNC_EVAL iden arity) args) (S.drop 1 argCalls)
+evalFunctions (FUNC_DEC_EVAL iden arity params stmt) argCalls
+  | S.null argCalls = FUNC_DEC_EVAL iden arity params stmt
+  | otherwise = evalFunctions (callFunction (FUNC_DEC_EVAL iden arity params stmt) args) (S.drop 1 argCalls)
   where args = S.index argCalls 0
-
-evalFunctions ev _ = RUNTIME_ERROR (T.concat ["TypeError: ", T.pack (show ev), " is not a function"]) S.empty
+evalFunctions ev _ = ev
 
 
 evalBinary :: S.Seq TH.Token -> EVAL -> OPERATOR -> EVAL -> EVAL
@@ -254,9 +253,10 @@ createEquality l r ch = if l == r then EVAL_BOOL (ch True) else EVAL_BOOL (ch Fa
 
 
 callFunction :: EVAL -> ARGUMENTS -> EVAL
-callFunction (FUNC_EVAL iden arity) (ARGS args)
+callFunction (FUNC_DEC_EVAL iden arity params stmt) (ARGS args)
   | S.length args /= arity = RUNTIME_ERROR (T.pack (mconcat ["Expected ", show arity, " arguments", ", but got ", show argsLength])) S.empty
-  | otherwise = FUNC_EVAL iden arity
+-- Here missing the actual logic of calling a function
+  | otherwise = EVAL_NIL
   where argsLength = S.length args
 
   
