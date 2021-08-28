@@ -155,7 +155,7 @@ evalExpression (EXP_TERNARY (TERN predi _ trueRes _ falseRes) tLines) env = do
   
 evalExpression (EXP_CALL (CALL_FUNC exp args)) env = do
   eval <- evalExpression exp env
-  return (evalFunctions eval args)
+  evalFunctions env eval args
   
 
 evalExpression _ _ = return (RUNTIME_ERROR "Expression cannot be evaluated" (S.fromList []))
@@ -170,10 +170,10 @@ evalUnary tokens op expr
         valTruthy = maybeEvalTruthy expr
 
 
-evalFunctions :: EVAL -> S.Seq ARGUMENTS -> EVAL 
-evalFunctions (FUNC_DEC_EVAL iden arity params stmt) argCalls
+evalFunctions :: Environments -> EVAL -> S.Seq ARGUMENTS -> IO EVAL 
+evalFunctions env (FUNC_DEC_EVAL iden arity params stmt) argCalls
   | S.null argCalls = FUNC_DEC_EVAL iden arity params stmt
-  | otherwise = evalFunctions (callFunction (FUNC_DEC_EVAL iden arity params stmt) args) (S.drop 1 argCalls)
+  | otherwise = evalFunctions env (callFunction env (FUNC_DEC_EVAL iden arity params stmt) args) (S.drop 1 argCalls)
   where args = S.index argCalls 0
 evalFunctions ev _ = ev
 
@@ -252,13 +252,31 @@ createEquality :: (Eq a) => a -> a -> (Bool -> Bool) -> EVAL
 createEquality l r ch = if l == r then EVAL_BOOL (ch True) else EVAL_BOOL (ch False)
 
 
-callFunction :: EVAL -> ARGUMENTS -> EVAL
-callFunction (FUNC_DEC_EVAL iden arity params stmt) (ARGS args)
-  | S.length args /= arity = RUNTIME_ERROR (T.pack (mconcat ["Expected ", show arity, " arguments", ", but got ", show argsLength])) S.empty
--- Here missing the actual logic of calling a function
-  | otherwise = EVAL_NIL
+callFunction :: Environments -> EVAL -> ARGUMENTS ->IO EVAL
+callFunction env (FUNC_DEC_EVAL iden arity params stmt) (ARGS args)
+  | S.length args /= arity = return (RUNTIME_ERROR (T.pack (mconcat ["Expected ", show arity, " arguments", ", but got ", show argsLength])) S.empty)
+  | otherwise = functionCall env iden params (ARGS args) stmt
   where argsLength = S.length args
 
+-- TODO: evalExpression should return with (EVAL, ENV) pair 
+functionCall :: Environments -> AST.TextType -> PARAMETERS -> ARGUMENTS -> STATEMENT -> IO EVAL
+functionCall env iden params args (BLOCK_STMT decs) = do
+  locEnv <- createLocalEnvironment env
+  let savedEnv = saveFunctionArgs env params args
+  (pIO, envIO) <- eval decs SKIP_EVAL savedEnv
+  let newEnvIO = deleteLocalEnvironment <$> envIO
+  return (pIO, newEnvIO)
+
+
+saveFunctionArgs :: Environments -> PARAMETERS -> ARGUMENTS -> IO Environments
+saveFunctionArgs env (PARAMETERS params) (ARGS args)
+ | S.null params = return env
+ | otherwise = do
+     let (EXP_LITERAL (IDENTIFIER p b)) = S.index params 0
+     let a = S.index args 0
+     (evalA) <- evalExpression a env
+     (newEnv) <- addIdentifierToEnvironment p evalA env
+     saveFunctionArgs newEnv (PARAMETERS (S.drop 1 params)) (ARGS (S.drop 1 args))
   
 createDecFromStatement :: STATEMENT -> DECLARATION
 createDecFromStatement (EXPR_STMT x) = DEC_STMT (EXPR_STMT x)

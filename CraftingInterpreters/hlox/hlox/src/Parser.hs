@@ -56,7 +56,7 @@ handleSimpleDeclaration tokens
         isTerminated = isJust index
         (expr, rest) = if isTerminated then S.splitAt (fromJust index+1) tokens else synchronize tokens
         
-buildSimpleDecFromTokens :: S.Seq Token -> DECLARATION         
+buildSimpleDecFromTokens :: S.Seq Token -> DECLARATION
 buildSimpleDecFromTokens expr
   | isAssignment || isVar = handleAssignmentOrDecDef isVar findAssignment expr firstTokenType
   | isPrint = DEC_STMT (PRINT_STMT (createExpression (S.drop 1 expr)))
@@ -88,7 +88,7 @@ handleAssignmentOrDecDef isVar findAssignment expr firstTokenType
           | isRedef = firstTokenType
           | isDec = secondTokenType
           | otherwise = Nothing
-          
+
 handleLValue :: Maybe TokenType -> Maybe TokenType
 handleLValue (Just (TokenHelper.IDENTIFIER x)) = Just (TokenHelper.IDENTIFIER changed)
   where changed = id x
