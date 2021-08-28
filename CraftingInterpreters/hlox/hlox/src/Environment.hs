@@ -15,6 +15,12 @@ type Environments = S.Seq HashTable
 createEnv :: IO HashTable
 createEnv = HT.new
 
+createAndPrepGlobalEnv :: IO HashTable
+createAndPrepGlobalEnv = do
+  globalEnv <- HT.new
+  
+  return globalEnv
+
 createGlobalEnvironment :: IO Environments
 createGlobalEnvironment = S.singleton <$> createEnv
 

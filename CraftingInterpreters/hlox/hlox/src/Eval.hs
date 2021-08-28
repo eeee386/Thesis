@@ -10,6 +10,8 @@ import qualified TokenHelper as TH
 import EvalTypes
 import Environment
   
+-- TODO: Break and continue, if we have time  
+
 evalProgram :: PROGRAM -> IO ()
 evalProgram (PROG x) = do 
   eval x SKIP_EVAL createGlobalEnvironment
@@ -150,6 +152,11 @@ evalExpression (EXP_TERNARY (TERN predi _ trueRes _ falseRes) tLines) env = do
   evalFalseRes <- evalExpression falseRes env
   evalPred <- evalExpression predi env 
   return (evalTernary tLines evalPred evalTrueRes evalFalseRes)
+  
+evalExpression (EXP_CALL (CALL_FUNC exp args)) env = do
+  eval <- evalExpression exp env
+  return (evalFunctions eval args)
+  
 
 evalExpression _ _ = return (RUNTIME_ERROR "Expression cannot be evaluated" (S.fromList []))
 
@@ -161,8 +168,16 @@ evalUnary tokens op expr
   | otherwise = RUNTIME_ERROR "Operand must be a number" tokens
   where valNum = maybeEvalNumber expr
         valTruthy = maybeEvalTruthy expr
-  
-  
+
+
+evalFunctions :: EVAL -> S.Seq ARGUMENTS -> EVAL 
+evalFunctions (FUNC_EVAL iden arity) argCalls
+  | S.null argCalls = FUNC_EVAL iden arity
+  | otherwise = evalFunctions (callFunction (FUNC_EVAL iden arity) args) (S.drop 1 argCalls)
+  where args = S.index argCalls 0
+
+evalFunctions ev _ = RUNTIME_ERROR (T.concat ["TypeError: ", T.pack (show ev), " is not a function"]) S.empty
+
 
 evalBinary :: S.Seq TH.Token -> EVAL -> OPERATOR -> EVAL -> EVAL
 evalBinary tokens evalLeft op evalRight
@@ -237,6 +252,14 @@ createAnd l r = if maybeEvalTruthy l == Just False then l else r
 createEquality :: (Eq a) => a -> a -> (Bool -> Bool) -> EVAL
 createEquality l r ch = if l == r then EVAL_BOOL (ch True) else EVAL_BOOL (ch False)
 
+
+callFunction :: EVAL -> ARGUMENTS -> EVAL
+callFunction (FUNC_EVAL iden arity) (ARGS args)
+  | S.length args /= arity = RUNTIME_ERROR (T.pack (mconcat ["Expected ", show arity, " arguments", ", but got ", show argsLength])) S.empty
+  | otherwise = FUNC_EVAL iden arity
+  where argsLength = S.length args
+
+  
 createDecFromStatement :: STATEMENT -> DECLARATION
 createDecFromStatement (EXPR_STMT x) = DEC_STMT (EXPR_STMT x)
 createDecFromStatement (PRINT_STMT x) = DEC_STMT (PRINT_STMT x)

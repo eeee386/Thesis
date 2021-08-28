@@ -152,6 +152,7 @@ handleTernaryCases getOp1 getOp2 indexOfOp1 indexOfOp2 tokens
 chainCall :: S.Seq Token -> CALL -> EXPRESSION
 chainCall tokens (CALL_FUNC iden callArgs)
   | S.null tokens || isSemicolon = EXP_CALL (CALL_FUNC iden callArgs)
+  | not isCall = NON_EXP "Invalid character in call" tokens
   | not hasRightParen = NON_EXP "Missing right parenthesis from function call" tokens
   | otherwise = chainCall rest (CALL_FUNC iden (callArgs S.|> args))
   where isCall = (tokenType <$> S.lookup 0 tokens) == Just LEFT_PAREN
@@ -167,6 +168,7 @@ functionHelper isChain tokens = (hasRightParen, rest, args)
         rest = S.drop 1 (S.dropWhileL (not . tokenIsType RIGHT_PAREN) tokens)
         args = buildArgs argsTokens S.empty
 
+-- Should create a PARSE_WARNING type, when arguments are more than 255
 buildArgs :: S.Seq Token -> S.Seq EXPRESSION -> ARGUMENTS
 buildArgs tokens exprs
  | S.null tokens = ARGS exprs
