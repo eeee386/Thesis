@@ -13,7 +13,9 @@ data EVAL = EVAL_NUMBER Double
           | RUNTIME_ERROR AST.TextType (S.Seq TH.Token) 
           | SKIP_EVAL 
           | DEC_EVAL AST.TextType EVAL
-          | FUNC_DEC_EVAL AST.TextType Arity AST.PARAMETERS AST.STATEMENT deriving Eq
+          | FUNC_DEC_EVAL AST.TextType Arity AST.PARAMETERS AST.STATEMENT
+          | RETURN_EVAL EVAL
+          deriving Eq
 
 
 instance Show EVAL where
@@ -35,3 +37,10 @@ getLineError tokens = if firstLine /= secondLine then mconcat [". Between lines:
 isRuntimeError :: EVAL -> Bool
 isRuntimeError (RUNTIME_ERROR _ _) = True
 isRuntimeError _ = False
+
+isReturn :: EVAL -> Bool
+isReturn (RETURN_EVAL x) = True
+isReturn _ = False
+
+getValueFromReturn :: EVAL -> EVAL
+getValueFromReturn (RETURN_EVAL x) = x

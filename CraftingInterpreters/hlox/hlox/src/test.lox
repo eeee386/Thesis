@@ -1,1 +1,1 @@
-var a = "global a";var b = "global b";var c = "global c";{var a = "outer a";var b = "outer b";{var a = "inner a";print a;print b;print c;}print a;print b;print c;}print a;print b;print c;
+var a = clock(); for (var i = 0; i < 1000000; i = i+1) {i;} var b = clock(); print b-a;

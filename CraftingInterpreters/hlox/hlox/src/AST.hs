@@ -18,7 +18,7 @@ instance Show DECLARATION where
   show (DEC_VAR x) = show x
   show (PARSE_ERROR errMsg tokens) = mconcat ["ParseError: ", show errMsg, ". In line: " ,show (line (S.index tokens (S.length tokens-1)))]
   show SKIP_DEC = "skip dec"
-  show (DEC_FUNC x) = show x
+  show (DEC_FUNC x) = "function: " ++ show x
 
 type IDENTIFIER = TokenType
 
@@ -31,7 +31,7 @@ instance Show VARIABLE_DECLARATION where
 
 data FUNCTION_DECLARATION = FUNC_DEC IDENTIFIER PARAMETERS STATEMENT deriving Eq
 instance Show FUNCTION_DECLARATION where
-  show (FUNC_DEC i p s) = mconcat [show i, show p, show s]
+  show (FUNC_DEC i p s) = mconcat ["function name: ", show i,"params: " , show p, "statements: ", show s]
 
 
 data STATEMENT = EXPR_STMT EXPRESSION 
@@ -41,7 +41,8 @@ data STATEMENT = EXPR_STMT EXPRESSION
                | IF_ELSE_STMT EXPRESSION STATEMENT STATEMENT
                | WHILE_STMT EXPRESSION STATEMENT
                | FOR_STMT DECLARATION EXPRESSION DECLARATION STATEMENT
-               | LOOP EXPRESSION DECLARATION STATEMENT deriving Eq
+               | LOOP EXPRESSION DECLARATION STATEMENT
+               | RETURN_NIL | RETURN EXPRESSION deriving Eq
 
 instance Show STATEMENT where 
   show (EXPR_STMT x) = show x
@@ -52,6 +53,8 @@ instance Show STATEMENT where
   show (WHILE_STMT expr stmt) = mconcat ["while (", show expr, ")", show stmt]
   show (FOR_STMT dec expr1 expr2 stmt) = mconcat ["for(", show dec, ";", show expr1, ";", show expr2, ")", show stmt]
   show (LOOP expr1 expr2 stmt) = mconcat ["loop ", show expr1, " ", show expr2, " ", show stmt]
+  show RETURN_NIL = "return nil"
+  show (RETURN x) = "return " ++ show x
 
 -- Tokens only needed in operator expression because there are some, that cannot be evaluated, and we want to show why
 data EXPRESSION = EXP_LITERAL LITERAL 
@@ -176,3 +179,13 @@ findASTError (EXP_UNARY (UNARY _ x) _) = findASTError x
 findASTError (EXP_BINARY (BIN left _ right) _) = (++) <$> findASTError left <*> findASTError right
 findASTError (EXP_TERNARY (TERN _ _ trueRes _ falseRes) _) = (++) <$> findASTError trueRes <*> findASTError falseRes
 findASTError _ = Nothing
+
+createDecFromStatement :: STATEMENT -> DECLARATION
+createDecFromStatement (EXPR_STMT x) = DEC_STMT (EXPR_STMT x)
+createDecFromStatement (PRINT_STMT x) = DEC_STMT (PRINT_STMT x)
+createDecFromStatement (BLOCK_STMT xs) = DEC_STMT (BLOCK_STMT xs)
+createDecFromStatement (IF_STMT ex st) = DEC_STMT (IF_STMT ex st)
+createDecFromStatement (IF_ELSE_STMT ex st1 st2) = DEC_STMT (IF_ELSE_STMT ex st1 st2)
+createDecFromStatement (WHILE_STMT ex st) = DEC_STMT (WHILE_STMT ex st)
+createDecFromStatement (FOR_STMT vDec ex iDec st) = DEC_STMT (FOR_STMT vDec ex iDec st)
+createDecFromStatement (LOOP ex dec st) = DEC_STMT (LOOP ex dec st)

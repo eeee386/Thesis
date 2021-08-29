@@ -18,8 +18,8 @@ createEnv = HT.new
 createAndPrepGlobalEnv :: IO HashTable
 createAndPrepGlobalEnv = do
   globalEnv <- HT.new
-  --TODO: Check if this is strict
   c <- clock
+  -- TODO: Fix global functions
   addUpdateIdentifier "clock" (FUNC_DEC_EVAL
                                "clock"
                                0
@@ -27,7 +27,7 @@ createAndPrepGlobalEnv = do
                                (BLOCK_STMT $ S.singleton $ DEC_STMT $ EXPR_STMT $ EXP_LITERAL $ NUMBER $ fromInteger c)) globalEnv
 
 createGlobalEnvironment :: IO Environments
-createGlobalEnvironment = S.singleton <$> createEnv
+createGlobalEnvironment = S.singleton <$> createAndPrepGlobalEnv
 
 createLocalEnvironment :: Environments -> IO Environments
 createLocalEnvironment env = do

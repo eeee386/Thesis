@@ -21,7 +21,7 @@ import Data.Maybe
 run :: T.Text -> IO()
 run text = do
   let tokens = scanTokens text
-  print (createCall tokens)
+  print (parse tokens)
   printScanErrorOrContinue tokens
 
 runLoxFile :: T.Text -> IO ()

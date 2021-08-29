@@ -28,6 +28,7 @@ createDeclaration tokens
   | isWhile = handleWhile tokens
   | isFor = handleFor tokens
   | isFunction = handleFunction tokens
+  | isReturn = handleReturn tokens
   | isBlockDec = handleBlock tokens
   | otherwise = handleSimpleDeclaration tokens
   where firstToken = S.lookup 0 tokens
@@ -37,6 +38,7 @@ createDeclaration tokens
         isWhile = firstTokenType == Just WHILE
         isFor = firstTokenType == Just FOR
         isFunction = firstTokenType == Just FUN
+        isReturn = firstTokenType == Just TokenHelper.RETURN
   
 
 handleBlock :: S.Seq Token -> (DECLARATION, S.Seq Token)
@@ -172,8 +174,8 @@ handleFunction tokens
         isRightParen = isJust rightParenIndex
         paramTokens = S.drop 3 (S.takeWhileL (not . tokenIsType RIGHT_PAREN) tokens)
         params = handleBuildParams paramTokens (PARAMETERS S.empty)
-        stmtRest = (S.drop 1 (S.dropWhileL (not . tokenIsType RIGHT_PAREN) tokens))
-        (dec, funRest) = createDeclaration (S.drop 1 stmtRest)
+        stmtRest = S.drop 1 (S.dropWhileL (not . tokenIsType RIGHT_PAREN) tokens)
+        (dec, funRest) = createDeclaration stmtRest
         stmt = getStmtFromDec dec
         (err, rest) = synchronize tokens
 
@@ -184,8 +186,15 @@ handleBuildParams tokens (PARAMETERS idens)
  | (not . isExpLiteralIdentifier) newIden = INVALID_PARAMS "Parameters can only be identifiers" tokens
  | otherwise = handleBuildParams rest (PARAMETERS (idens S.|> newIden))
  where idenTokens = S.takeWhileL (not . tokenIsType COMMA) tokens
-       newIden = createExpression (idenTokens S.|> Token{tokenType=SEMICOLON, line=line $ fromJust $ getLast idenTokens})
+       newIden = createExpression idenTokens
        rest = S.drop (S.length idenTokens+1) tokens
+
+
+handleReturn :: S.Seq Token -> (DECLARATION, S.Seq Token)
+handleReturn tokens
+  | S.null exprTokens = (DEC_STMT RETURN_NIL, S.drop 2 tokens)
+  | otherwise = (DEC_STMT (AST.RETURN (createExpression exprTokens)),S.drop 2 $ S.drop (S.length exprTokens+1) tokens)
+  where exprTokens = S.drop 1 (S.takeWhileL (not . tokenIsType SEMICOLON) tokens)
 
 
 getStmtFromDec :: DECLARATION -> Maybe STATEMENT
@@ -194,6 +203,6 @@ getStmtFromDec _ = Nothing
 
 synchronize :: S.Seq Token -> (S.Seq Token, S.Seq Token)
 synchronize tokens = if isJust maybeIndex then S.splitAt (fromJust maybeIndex) tokens else (tokens, S.empty)
-  where syncFunc = S.findIndexL (\x -> tokenType x `elem` [CLASS, FUN, VAR, FOR, IF, WHILE, PRINT, RETURN])
+  where syncFunc = S.findIndexL (\x -> tokenType x `elem` [CLASS, FUN, VAR, FOR, IF, WHILE, PRINT, TokenHelper.RETURN])
         startIndex = syncFunc tokens
         maybeIndex = if startIndex == Just 0 then syncFunc (S.drop 1 tokens) else startIndex
