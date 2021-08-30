@@ -9,6 +9,7 @@ import qualified Data.Sequence as S
 import qualified TokenHelper as TH
 import EvalTypes
 import Environment
+import NativeFunctions
 
 -- TODO: Break and continue, if we have time
 
@@ -291,8 +292,8 @@ callFunction env (FUNC_DEC_EVAL iden arity params stmt) (ARGS args)
   where argsLength = S.length args
 
 
-functionCall :: Environments -> AST.TextType -> PARAMETERS -> ARGUMENTS -> STATEMENT -> IO (EVAL, Environments)
-functionCall env iden params args (BLOCK_STMT decs) = do
+functionCall :: Environments -> AST.TextType -> PARAMETERS -> ARGUMENTS -> FUNCTION_STATEMENT -> IO (EVAL, Environments)
+functionCall env iden params args (FUNC_STMT (BLOCK_STMT decs)) = do
   locEnv <- createLocalEnvironment env
   let savedEnv = saveFunctionArgs locEnv params args
   (pIO, locEnvIO) <- eval decs SKIP_EVAL savedEnv True
@@ -301,6 +302,10 @@ functionCall env iden params args (BLOCK_STMT decs) = do
   returnEval <- pIO
   let evalValue = getValueFromReturn returnEval
   return (evalValue, newEnv)
+functionCall env iden params args (NATIVE_FUNC_STMT f) = do
+  eval <- callNativeFunction f args
+  return (eval, env)
+
 
 saveFunctionArgs :: Environments -> PARAMETERS -> ARGUMENTS -> IO Environments
 saveFunctionArgs env (PARAMETERS params) (ARGS args)
@@ -312,4 +317,8 @@ saveFunctionArgs env (PARAMETERS params) (ARGS args)
      newEnv <- addIdentifierToEnvironment p evalA evalEnv
      saveFunctionArgs newEnv (PARAMETERS (S.drop 1 params)) (ARGS (S.drop 1 args))
 
+callNativeFunction :: NATIVE_FUNCTION_TYPES -> ARGUMENTS -> IO EVAL
+callNativeFunction (CLOCK x) params = do
+  val <- (x id)
+  return (EVAL_NUMBER (fromInteger val))
 

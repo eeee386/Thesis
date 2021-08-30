@@ -14,3 +14,7 @@
   - I think we should talk about how the Environments work (sequence, and the last element is the innermost scope that we are in)
   
 - One gripe with Haskell: An even more fine-tuned type handling would be better, maybe I am not using the language the right way
+- I had a problem with parameterized types, and I could not create a good solution for a polymorphic type for functions (as I had to add everywhere that polymorphic type as type parameter) -> created a type for every native function
+
+- Interesting stuff to talk about:
+  - how loops are implemented, how functions are implemented

@@ -4,6 +4,7 @@ import qualified Data.Text as T
 import TokenHelper (Token, line, TokenType)
 import qualified Data.Sequence as S
 import Data.Maybe
+import NativeFunctions
 
 type TextType = T.Text
 
@@ -29,7 +30,12 @@ instance Show VARIABLE_DECLARATION where
   show (VAR_DEF iden expr _) = mconcat [show iden, " = ", show expr]
 
 
-data FUNCTION_DECLARATION = FUNC_DEC IDENTIFIER PARAMETERS STATEMENT deriving Eq
+data FUNCTION_STATEMENT = FUNC_STMT STATEMENT | NATIVE_FUNC_STMT NATIVE_FUNCTION_TYPES deriving Eq
+instance Show FUNCTION_STATEMENT where
+  show (FUNC_STMT x) = show x
+  show (NATIVE_FUNC_STMT x) = show x
+
+data FUNCTION_DECLARATION = FUNC_DEC IDENTIFIER PARAMETERS FUNCTION_STATEMENT deriving Eq
 instance Show FUNCTION_DECLARATION where
   show (FUNC_DEC i p s) = mconcat ["function name: ", show i,"params: " , show p, "statements: ", show s]
 
@@ -189,3 +195,14 @@ createDecFromStatement (IF_ELSE_STMT ex st1 st2) = DEC_STMT (IF_ELSE_STMT ex st1
 createDecFromStatement (WHILE_STMT ex st) = DEC_STMT (WHILE_STMT ex st)
 createDecFromStatement (FOR_STMT vDec ex iDec st) = DEC_STMT (FOR_STMT vDec ex iDec st)
 createDecFromStatement (LOOP ex dec st) = DEC_STMT (LOOP ex dec st)
+
+
+isNativeFunction :: FUNCTION_STATEMENT -> Bool
+isNativeFunction (NATIVE_FUNC_STMT _) = True
+isNativeFunction _ = False
+
+getStatementFromFunctionStatement :: FUNCTION_STATEMENT -> STATEMENT
+getStatementFromFunctionStatement (FUNC_STMT x) = x
+
+getNativeFunctionFromFunctionStatement :: FUNCTION_STATEMENT -> NATIVE_FUNCTION_TYPES
+getNativeFunctionFromFunctionStatement (NATIVE_FUNC_STMT x) = x

@@ -164,7 +164,7 @@ handleFunction tokens
   | not isIden = (PARSE_ERROR "Identifier is missing after 'fun' keyword" err, rest)
   | not isLeftParen = (PARSE_ERROR "Parenthesis should be after function header" err, rest)
   | not isRightParen = (PARSE_ERROR "Parenthesis is not closed" err, rest)
-  | otherwise = (DEC_FUNC (FUNC_DEC (fromJust maybeIdenType) params (fromJust stmt)), funRest)
+  | otherwise = (DEC_FUNC (FUNC_DEC (fromJust maybeIdenType) params (FUNC_STMT (fromJust stmt))), funRest)
   where maybeIden = S.lookup 1 tokens
         maybeIdenType = tokenType <$>  maybeIden
         isIden = (isIdentifier <$> maybeIdenType) == Just True

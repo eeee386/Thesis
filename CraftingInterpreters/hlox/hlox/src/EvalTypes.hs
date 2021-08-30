@@ -13,7 +13,7 @@ data EVAL = EVAL_NUMBER Double
           | RUNTIME_ERROR AST.TextType (S.Seq TH.Token) 
           | SKIP_EVAL 
           | DEC_EVAL AST.TextType EVAL
-          | FUNC_DEC_EVAL AST.TextType Arity AST.PARAMETERS AST.STATEMENT
+          | FUNC_DEC_EVAL AST.TextType Arity AST.PARAMETERS FUNCTION_STATEMENT
           | RETURN_EVAL EVAL
           deriving Eq
 

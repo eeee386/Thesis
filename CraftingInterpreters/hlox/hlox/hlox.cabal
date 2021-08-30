@@ -30,6 +30,7 @@ library
       Error
       Eval
       EvalTypes
+      NativeFunctions
       ParseExpressions
       Parser
       Runners

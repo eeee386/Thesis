@@ -5,9 +5,9 @@ module Environment where
 import qualified Data.HashTable.IO as HT
 import qualified Data.Sequence as S
 import Data.Maybe
-import System.Clock
 import EvalTypes
 import AST
+import NativeFunctions
 
 type HashTable = HT.BasicHashTable AST.TextType EVAL
 type Environments = S.Seq HashTable
@@ -18,13 +18,12 @@ createEnv = HT.new
 createAndPrepGlobalEnv :: IO HashTable
 createAndPrepGlobalEnv = do
   globalEnv <- HT.new
-  c <- clock
   -- TODO: Fix global functions
   addUpdateIdentifier "clock" (FUNC_DEC_EVAL
                                "clock"
                                0
                                (PARAMETERS S.empty)
-                               (BLOCK_STMT $ S.singleton $ DEC_STMT $ EXPR_STMT $ EXP_LITERAL $ NUMBER $ fromInteger c)) globalEnv
+                               (NATIVE_FUNC_STMT (CLOCK clock))) globalEnv
 
 createGlobalEnvironment :: IO Environments
 createGlobalEnvironment = S.singleton <$> createAndPrepGlobalEnv
@@ -85,7 +84,3 @@ findValueOfIdentifier iden env = do
   let index = S.findIndexR isJust values
   if isJust index then return (S.index values (fromJust index)) else return Nothing
 
--- Global functions
-clock :: IO Integer
-clock = do
-  toNanoSecs <$> getTime Realtime
