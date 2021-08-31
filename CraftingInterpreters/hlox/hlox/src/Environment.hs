@@ -84,3 +84,40 @@ findValueOfIdentifier iden env = do
   let index = S.findIndexR isJust values
   if isJust index then return (S.index values (fromJust index)) else return Nothing
 
+data META = META {
+  env :: Environments
+  , isInFunction :: Bool
+  , isInLoop :: Bool
+                 } deriving Show
+
+
+createGlobalMeta :: IO META
+createGlobalMeta = do
+  e <- createGlobalEnvironment
+  return META {env=e, isInFunction=False, isInLoop=True}
+
+
+updateMetaWithLocalEnv :: META -> IO META
+updateMetaWithLocalEnv meta = do
+  locEnv <- createLocalEnvironment (env meta)
+  return meta {env=locEnv}
+
+deleteLocalEnvFromMeta :: META -> META
+deleteLocalEnvFromMeta meta = meta {env=deleteLocalEnvironment (env meta)}
+
+
+addIdentifierToMetaEnv :: AST.TextType -> EVAL -> META -> IO META
+addIdentifierToMetaEnv iden value meta = do
+  let oldEnv = env meta
+  newEnv <- addIdentifierToEnvironment iden value oldEnv
+  return meta {env=newEnv}
+
+updateIdentifierToMetaEnv ::  AST.TextType -> EVAL -> META -> IO (META, Bool)
+updateIdentifierToMetaEnv iden value meta = do
+  let oldEnv = env meta
+  (newEnv, flag) <- updateIdentifierToEnvironment iden value oldEnv
+  return (meta {env=newEnv},flag)
+
+findValueInMetaEnv ::  AST.TextType -> META -> IO (Maybe EVAL)
+findValueInMetaEnv iden meta = do
+  findValueOfIdentifier iden (env meta)

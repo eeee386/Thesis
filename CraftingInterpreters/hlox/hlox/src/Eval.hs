@@ -15,179 +15,185 @@ import NativeFunctions
 
 evalProgram :: PROGRAM -> IO ()
 evalProgram (PROG x) = do
-  eval x SKIP_EVAL createGlobalEnvironment False
+  eval x SKIP_EVAL createGlobalMeta
   return ()
 
 
 
-evalBlock :: S.Seq DECLARATION -> Environments -> IO (IO EVAL, IO Environments)
-evalBlock x env = do
-  (pIO, envIO) <- eval x SKIP_EVAL (createLocalEnvironment env) False
-  let newEnvIO = deleteLocalEnvironment <$> envIO
+evalBlock :: S.Seq DECLARATION -> META -> IO (IO EVAL, IO META)
+evalBlock x meta = do
+  (pIO, envIO) <- eval x SKIP_EVAL (updateMetaWithLocalEnv meta)
+  let newEnvIO = deleteLocalEnvFromMeta <$> envIO
   return (pIO, newEnvIO)
 
 
 
-eval :: S.Seq DECLARATION -> EVAL -> IO Environments -> Bool  -> IO (IO EVAL, IO Environments)
-eval decs prev env shouldCheckReturn = do
+eval :: S.Seq DECLARATION -> EVAL -> IO META -> IO (IO EVAL, IO META)
+eval decs prev meta = do
+  nonIOMeta <- meta
   if S.null decs then do
-    if shouldCheckReturn
-      then do return (return (RETURN_EVAL EVAL_NIL), env)
-      else do return (return prev, env)
+    if isInFunction nonIOMeta
+      then do return (return (RETURN_EVAL EVAL_NIL), meta)
+      else do return (return prev, meta)
   else do
-    (ev, newEnv) <- evalDeclaration (S.index decs 0) env
-    if shouldCheckReturn && isReturn ev
-      then do return(return ev, env)
+    (ev, newMeta) <- evalDeclaration (S.index decs 0) meta
+    --print ev
+    --print newMeta
+    if isInFunction newMeta && isReturn ev
+      then do return(return ev, meta)
       else do
        if isRuntimeError ev
          then do
            print ev
-           return (return ev, env)
+           return (return ev, meta)
           else do
-            eval (S.drop 1 decs) ev (return newEnv) shouldCheckReturn
+            eval (S.drop 1 decs) ev (return newMeta)
 
 
 
-evalDeclaration :: DECLARATION -> IO Environments -> IO (EVAL, Environments)
-evalDeclaration (DEC_STMT (PRINT_STMT x)) env = do
-  locEnv <- env
-  (expr, newEnv) <- evalExpression x locEnv
+evalDeclaration :: DECLARATION -> IO META -> IO (EVAL, META)
+evalDeclaration (DEC_STMT (PRINT_STMT x)) meta = do
+  locMeta <- meta
+  (expr, newMeta) <- evalExpression x locMeta
   print expr
-  return (expr, locEnv)
-evalDeclaration (DEC_STMT (EXPR_STMT x)) env = do
-  locEnv <- env
-  evalExpression x locEnv
-evalDeclaration (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) expr)) env = do
-  locEnv <- env
-  (locExpr, newEnv) <- evalExpression expr locEnv
-  handleVarDeclarationAndDefinition iden locExpr newEnv
-evalDeclaration (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden))) env = do
-  locEnv <- env
-  handleVarDeclaration iden locEnv
-evalDeclaration (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens)) env = do
-  locEnv <- env
-  (locExpr, newEnv) <- evalExpression expr locEnv
-  handleVarDefinition iden locExpr newEnv tokens
-evalDeclaration (DEC_STMT (BLOCK_STMT x)) env = do
-  locEnv <- env
-  (evIO, newEnvIO) <- evalBlock x locEnv
-  newEnv <- newEnvIO
+  return (expr, locMeta)
+evalDeclaration (DEC_STMT (EXPR_STMT x)) meta = do
+  locMeta <- meta
+  evalExpression x locMeta
+evalDeclaration (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) expr)) meta = do
+  locMeta <- meta
+  (locExpr, newMeta) <- evalExpression expr locMeta
+  handleVarDeclarationAndDefinition iden locExpr newMeta
+evalDeclaration (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden))) meta = do
+  locMeta <- meta
+  handleVarDeclaration iden locMeta
+evalDeclaration (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens)) meta = do
+  locMeta <- meta
+  (locExpr, newMeta) <- evalExpression expr locMeta
+  handleVarDefinition iden locExpr newMeta tokens
+evalDeclaration (DEC_STMT (BLOCK_STMT x)) meta = do
+  locMeta <- meta
+  (evIO, newMetaIO) <- evalBlock x locMeta
+  newMeta <- newMetaIO
   ev <- evIO
-  return (ev, newEnv)
-evalDeclaration (DEC_STMT (IF_STMT expr stmt)) env = do
-  locEnv <- env
-  (exprVal, newEnv) <- evalExpression expr locEnv
-  if maybeEvalTruthy exprVal == Just True then evalDeclaration (createDecFromStatement stmt) (return newEnv) else return (SKIP_EVAL, newEnv)
-evalDeclaration (DEC_STMT (IF_ELSE_STMT expr stmt1 stmt2)) env = do
-  locEnv <- env
-  (exprVal,newEnv)  <- evalExpression expr locEnv
+  return (ev, newMeta)
+evalDeclaration (DEC_STMT (IF_STMT expr stmt)) meta = do
+  locMeta <- meta
+  (exprVal, newMeta) <- evalExpression expr locMeta
+  print exprVal
+  print (maybeEvalTruthy exprVal)
+  print stmt
+  if maybeEvalTruthy exprVal == Just True then evalDeclaration (createDecFromStatement stmt) (return newMeta) else return (SKIP_EVAL, newMeta)
+evalDeclaration (DEC_STMT (IF_ELSE_STMT expr stmt1 stmt2)) meta = do
+  locMeta <- meta
+  (exprVal,newMeta)  <- evalExpression expr locMeta
   if
     maybeEvalTruthy exprVal == Just True
-  then evalDeclaration (createDecFromStatement stmt1) (return newEnv)
-  else evalDeclaration (createDecFromStatement stmt2) (return newEnv)
+  then evalDeclaration (createDecFromStatement stmt1) (return newMeta)
+  else evalDeclaration (createDecFromStatement stmt2) (return newMeta)
 
-evalDeclaration (DEC_STMT (WHILE_STMT expr stmt)) env = do
-  evalDeclaration (DEC_STMT (LOOP expr SKIP_DEC stmt)) env
+evalDeclaration (DEC_STMT (WHILE_STMT expr stmt)) meta = do
+  evalDeclaration (DEC_STMT (LOOP expr SKIP_DEC stmt)) meta
 
-evalDeclaration (DEC_STMT (FOR_STMT varDec expr incDec stmt)) env = do
-  nonIOEnv <- env
-  let locEnvIO =  createLocalEnvironment nonIOEnv
-  (ev, decEnv) <- evalDeclaration varDec locEnvIO
+evalDeclaration (DEC_STMT (FOR_STMT varDec expr incDec stmt)) meta = do
+  nonIOMeta <- meta
+  let locMetaIO =  updateMetaWithLocalEnv nonIOMeta
+  (ev, decMeta) <- evalDeclaration varDec locMetaIO
   if isRuntimeError ev then do
-    return (ev, nonIOEnv)
+    return (ev, nonIOMeta)
   else do
-    (checkEval, checkEnv) <- evalExpression expr decEnv
-    if isRuntimeError checkEval then do return (checkEval, checkEnv) else do
-      (newEv, newEnv) <- evalDeclaration (createDecFromStatement stmt) (return decEnv)
-      if isRuntimeError newEv then do return (newEv, newEnv) else do
-        evalDeclaration (DEC_STMT (LOOP expr incDec stmt)) (return newEnv)
+    (checkEval, checkMeta) <- evalExpression expr decMeta
+    if isRuntimeError checkEval then do return (checkEval, checkMeta) else do
+      (newEv, newMeta) <- evalDeclaration (createDecFromStatement stmt) (return decMeta{isInLoop=True})
+      if returnFromLoop newEv newMeta  then do return (newEv, newMeta) else do
+        evalDeclaration (DEC_STMT (LOOP expr incDec stmt)) (return newMeta)
 
-evalDeclaration (DEC_STMT (LOOP expr dec stmt)) env = do
-  firstEnv <- env
-  (ev, secondEnv) <- if (not . isSkipDec) dec then evalDeclaration dec (return firstEnv) else return (SKIP_EVAL, firstEnv)
-  if isRuntimeError ev then do return (ev, secondEnv) else do
-    (checkEval, checkEnv) <- evalExpression expr secondEnv
-    if isRuntimeError checkEval then do return (checkEval, checkEnv) else do
+evalDeclaration (DEC_STMT (LOOP expr dec stmt)) meta = do
+  firstMeta <- meta
+  (ev, secondMeta) <- if (not . isSkipDec) dec then evalDeclaration dec (return firstMeta) else return (SKIP_EVAL, firstMeta)
+  if isRuntimeError ev then do return (ev, secondMeta) else do
+    (checkEval, checkMeta) <- evalExpression expr secondMeta
+    if isRuntimeError checkEval then do return (checkEval, checkMeta) else do
       if maybeEvalTruthy checkEval == Just True then do
-        (newEv, newEnv) <- evalDeclaration (createDecFromStatement stmt) (return secondEnv)
-        if isRuntimeError newEv then do return (newEv, newEnv) else do
-          evalDeclaration (DEC_STMT (LOOP expr dec stmt)) (return newEnv)
-      else return (SKIP_EVAL, secondEnv)
+        (newEv, newMeta) <- evalDeclaration (createDecFromStatement stmt) (return secondMeta{isInLoop=True})
+        if returnFromLoop newEv newMeta then do return (newEv, newMeta) else do
+          evalDeclaration (DEC_STMT (LOOP expr dec stmt)) (return newMeta{isInLoop=False})
+      else return (SKIP_EVAL, secondMeta)
 
-evalDeclaration (DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) (PARAMETERS params) stmt)) env = do
-  locEnv <- env
+evalDeclaration (DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) (PARAMETERS params) stmt)) meta = do
+  locMeta <- meta
   let eval = FUNC_DEC_EVAL iden (S.length params) (PARAMETERS params) stmt
-  newEnv <- addIdentifierToEnvironment iden eval locEnv
-  return (eval, newEnv)
+  newMeta <- addIdentifierToMetaEnv iden eval locMeta
+  return (eval, newMeta)
 
-evalDeclaration (DEC_STMT (RETURN expr)) env = do
-  locEnv <- env
-  (ev, newEnv) <- evalExpression expr locEnv
-  return (ev, newEnv)
+evalDeclaration (DEC_STMT (RETURN expr)) meta = do
+  locMeta <- meta
+  (ev, newMeta) <- evalExpression expr locMeta
+  print "this is called"
+  print ev
+  return (ev, newMeta)
 
-evalDeclaration (DEC_STMT RETURN_NIL) env = do
-  locEnv <- env
-  return (EVAL_NIL, locEnv)
+evalDeclaration (DEC_STMT RETURN_NIL) meta = do
+  locMeta <- meta
+  return (EVAL_NIL, locMeta)
 
-evalDeclaration x env = do
-  locEnv <- env
+evalDeclaration x meta = do
+  locMeta <- meta
   print x
-  return (RUNTIME_ERROR "Unknown error occured" S.empty, locEnv)
+  return (RUNTIME_ERROR "Unknown error occured" S.empty, locMeta)
 
 
 -- Think about redefinement
-handleVarDeclaration :: TextType -> Environments -> IO (EVAL, Environments)
-handleVarDeclaration iden env = do
-  newEnv <- addIdentifierToEnvironment iden EVAL_NIL env
-  return (DEC_EVAL iden EVAL_NIL, newEnv)
+handleVarDeclaration :: TextType -> META -> IO (EVAL, META)
+handleVarDeclaration iden meta = do
+  newMeta <- addIdentifierToMetaEnv iden EVAL_NIL meta
+  return (DEC_EVAL iden EVAL_NIL, newMeta)
 
-handleVarDeclarationAndDefinition :: TextType -> EVAL -> Environments -> IO (EVAL, Environments)
-handleVarDeclarationAndDefinition iden val env = do
-  newEnv <- addIdentifierToEnvironment iden val env
-  return (DEC_EVAL iden val, newEnv)
+handleVarDeclarationAndDefinition :: TextType -> EVAL -> META -> IO (EVAL, META)
+handleVarDeclarationAndDefinition iden val meta = do
+  newMeta <- addIdentifierToMetaEnv iden val meta
+  return (DEC_EVAL iden val, newMeta)
 
-handleVarDefinition :: TextType -> EVAL -> Environments -> S.Seq TH.Token -> IO (EVAL, Environments)
-handleVarDefinition iden val env tokens = do
-  (newEnv, isSuccess) <- updateIdentifierToEnvironment iden val env
-  if isSuccess then return (DEC_EVAL iden val, newEnv) else return (RUNTIME_ERROR "Identifier is not defined" tokens, env)
-
-
+handleVarDefinition :: TextType -> EVAL -> META -> S.Seq TH.Token -> IO (EVAL, META)
+handleVarDefinition iden val meta tokens = do
+  (newMeta, isSuccess) <- updateIdentifierToMetaEnv iden val meta
+  if isSuccess then return (DEC_EVAL iden val, newMeta) else return (RUNTIME_ERROR "Identifier is not defined" tokens, meta)
 
 
 
-evalExpression :: EXPRESSION -> Environments -> IO (EVAL, Environments)
-evalExpression (EXP_LITERAL (NUMBER x)) env = return (EVAL_NUMBER x, env)
-evalExpression (EXP_LITERAL (STRING x)) env = return (EVAL_STRING x, env)
-evalExpression (EXP_LITERAL FALSE) env = return (EVAL_BOOL False, env)
-evalExpression (EXP_LITERAL TRUE) env = return (EVAL_BOOL True, env)
-evalExpression (EXP_LITERAL NIL) env = return (EVAL_NIL, env)
-evalExpression (EXP_LITERAL (IDENTIFIER x tokens)) env = do
-  val <- findValueOfIdentifier x env
-  if isJust val then return (fromJust val, env) else return (RUNTIME_ERROR "Identifier is not defined" tokens, env)
 
-evalExpression (EXP_GROUPING (GROUP x)) env = evalExpression x env
 
-evalExpression (EXP_UNARY (UNARY op x) tokens) env = do
-  (expr, newEnv) <- evalExpression x env
-  return (evalUnary tokens op expr, newEnv)
+evalExpression :: EXPRESSION -> META -> IO (EVAL, META)
+evalExpression (EXP_LITERAL (NUMBER x)) meta = return (EVAL_NUMBER x, meta)
+evalExpression (EXP_LITERAL (STRING x)) meta = return (EVAL_STRING x, meta)
+evalExpression (EXP_LITERAL FALSE) meta = return (EVAL_BOOL False, meta)
+evalExpression (EXP_LITERAL TRUE) meta = return (EVAL_BOOL True, meta)
+evalExpression (EXP_LITERAL NIL) meta = return (EVAL_NIL, meta)
+evalExpression (EXP_LITERAL (IDENTIFIER x tokens)) meta = do
+  val <- findValueInMetaEnv x meta
+  if isJust val then return (fromJust val, meta) else return (RUNTIME_ERROR "Identifier is not defined" tokens, meta)
 
-evalExpression (EXP_BINARY (BIN left op right) bLines) env = do
-  (evaledLeft, leftEnv) <- evalExpression left env
-  (evaledRight, rightEnv) <- evalExpression right leftEnv
-  return (evalBinary bLines evaledLeft op evaledRight, rightEnv)
+evalExpression (EXP_GROUPING (GROUP x)) meta = evalExpression x meta
 
-evalExpression (EXP_TERNARY (TERN predi _ trueRes _ falseRes) tLines) env = do
-  (evalPred, newEnv) <- evalExpression predi env
+evalExpression (EXP_UNARY (UNARY op x) tokens) meta = do
+  (expr, newMeta) <- evalExpression x meta
+  return (evalUnary tokens op expr, newMeta)
+
+evalExpression (EXP_BINARY (BIN left op right) bLines) meta = do
+  (evaledLeft, leftMeta) <- evalExpression left meta
+  (evaledRight, rightMeta) <- evalExpression right leftMeta
+  return (evalBinary bLines evaledLeft op evaledRight, rightMeta)
+
+evalExpression (EXP_TERNARY (TERN predi _ trueRes _ falseRes) tLines) meta = do
+  (evalPred, newMeta) <- evalExpression predi meta
   let evalTrueVal = evalTernary tLines evalPred trueRes falseRes
-  evalTrueVal newEnv
+  evalTrueVal newMeta
 
-evalExpression (EXP_CALL (CALL_FUNC exp args)) env = do
-  (eval, newEnv) <- evalExpression exp env
-  evalFunctions newEnv eval args
+evalExpression (EXP_CALL (CALL_FUNC exp args)) meta = do
+  (eval, newMeta) <- evalExpression exp meta
+  evalFunctions newMeta eval args
 
-evalExpression _ env = return (RUNTIME_ERROR "Expression cannot be evaluated" (S.fromList []), env)
-
-
+evalExpression _ meta = return (RUNTIME_ERROR "Expression cannot be evaluated" (S.fromList []), meta)
 
 
 
@@ -200,14 +206,14 @@ evalUnary tokens op expr
         valTruthy = maybeEvalTruthy expr
 
 
-evalFunctions :: Environments -> EVAL -> S.Seq ARGUMENTS -> IO (EVAL, Environments)
-evalFunctions env (FUNC_DEC_EVAL iden arity params stmt) argCalls
-  | S.null argCalls = return (FUNC_DEC_EVAL iden arity params stmt, env)
+evalFunctions :: META -> EVAL -> S.Seq ARGUMENTS -> IO (EVAL, META)
+evalFunctions meta (FUNC_DEC_EVAL iden arity params stmt) argCalls
+  | S.null argCalls = return (FUNC_DEC_EVAL iden arity params stmt, meta)
   | otherwise = do
-      (eval, newEnv) <- callFunction env (FUNC_DEC_EVAL iden arity params stmt) (S.index argCalls 0) 
-      evalFunctions newEnv eval (S.drop 1 argCalls)
+      (eval, newMeta) <- callFunction meta (FUNC_DEC_EVAL iden arity params stmt) (S.index argCalls 0)
+      evalFunctions newMeta eval (S.drop 1 argCalls)
   where args = S.index argCalls 0
-evalFunctions env ev _ = return (ev, env)
+evalFunctions meta ev _ = return (ev, meta)
 
 
 evalBinary :: S.Seq TH.Token -> EVAL -> OPERATOR -> EVAL -> EVAL
@@ -238,13 +244,13 @@ evalBinary tokens evalLeft op evalRight
          | otherwise = RUNTIME_ERROR "Operands must be two numbers or two strings" tokens
 
 
-evalTernary :: S.Seq TH.Token -> EVAL -> EXPRESSION -> EXPRESSION -> (Environments -> IO(EVAL, Environments))
+evalTernary :: S.Seq TH.Token -> EVAL -> EXPRESSION -> EXPRESSION -> (META -> IO(EVAL, META))
 evalTernary tokens predi trueRes falseRes
   | preppedPred == Just True = evalExpression trueRes
   | preppedPred == Just False = evalExpression falseRes
   | otherwise = buildRuntimeError
   where preppedPred = maybeEvalTruthy predi
-        buildRuntimeError env = return (RUNTIME_ERROR "Ternary operator failed" tokens, env)
+        buildRuntimeError meta = return (RUNTIME_ERROR "Ternary operator failed" tokens, meta)
 
 -- Helpers
 maybeEvalNumber :: EVAL -> Maybe Double
@@ -285,40 +291,41 @@ createEquality l r ch = if l == r then EVAL_BOOL (ch True) else EVAL_BOOL (ch Fa
 
 
 
-callFunction :: Environments -> EVAL -> ARGUMENTS ->IO (EVAL, Environments)
-callFunction env (FUNC_DEC_EVAL iden arity params stmt) (ARGS args)
-  | S.length args /= arity = return (RUNTIME_ERROR (T.pack (mconcat ["Expected ", show arity, " arguments", ", but got ", show argsLength])) S.empty, env)
-  | otherwise = functionCall env iden params (ARGS args) stmt
+callFunction :: META -> EVAL -> ARGUMENTS ->IO (EVAL, META)
+callFunction meta (FUNC_DEC_EVAL iden arity params stmt) (ARGS args)
+  | S.length args /= arity = return (RUNTIME_ERROR (T.pack (mconcat ["Expected ", show arity, " arguments", ", but got ", show argsLength])) S.empty, meta)
+  | otherwise = functionCall meta iden params (ARGS args) stmt
   where argsLength = S.length args
 
 
-functionCall :: Environments -> AST.TextType -> PARAMETERS -> ARGUMENTS -> FUNCTION_STATEMENT -> IO (EVAL, Environments)
-functionCall env iden params args (FUNC_STMT (BLOCK_STMT decs)) = do
-  locEnv <- createLocalEnvironment env
-  let savedEnv = saveFunctionArgs locEnv params args
-  (pIO, locEnvIO) <- eval decs SKIP_EVAL savedEnv True
-  locEnv <- locEnvIO
-  let newEnv = deleteLocalEnvironment locEnv
+functionCall :: META -> AST.TextType -> PARAMETERS -> ARGUMENTS -> FUNCTION_STATEMENT -> IO (EVAL, META)
+functionCall meta iden params args (FUNC_STMT (BLOCK_STMT decs)) = do
+  locMeta <- updateMetaWithLocalEnv meta
+  savedMeta <- saveFunctionArgs locMeta params args
+  (pIO, locMetaIO) <- eval decs SKIP_EVAL (return savedMeta{isInFunction=True, isInLoop=False})
+  locMeta <- locMetaIO
+  let newMeta = deleteLocalEnvFromMeta locMeta
   returnEval <- pIO
   let evalValue = getValueFromReturn returnEval
-  return (evalValue, newEnv)
-functionCall env iden params args (NATIVE_FUNC_STMT f) = do
+  return (evalValue, newMeta{isInFunction=(isInFunction meta), isInLoop=(isInLoop meta)})
+functionCall meta iden params args (NATIVE_FUNC_STMT f) = do
   eval <- callNativeFunction f args
-  return (eval, env)
+  return (eval, meta)
 
 
-saveFunctionArgs :: Environments -> PARAMETERS -> ARGUMENTS -> IO Environments
-saveFunctionArgs env (PARAMETERS params) (ARGS args)
- | S.null params = return env
+saveFunctionArgs :: META -> PARAMETERS -> ARGUMENTS -> IO META
+saveFunctionArgs meta (PARAMETERS params) (ARGS args)
+ | S.null params = return meta
  | otherwise = do
      let (EXP_LITERAL (IDENTIFIER p b)) = S.index params 0
      let a = S.index args 0
-     (evalA, evalEnv) <- evalExpression a env
-     newEnv <- addIdentifierToEnvironment p evalA evalEnv
-     saveFunctionArgs newEnv (PARAMETERS (S.drop 1 params)) (ARGS (S.drop 1 args))
+     (evalA, evalMeta) <- evalExpression a meta
+     newMeta <- addIdentifierToMetaEnv p evalA evalMeta
+     saveFunctionArgs newMeta (PARAMETERS (S.drop 1 params)) (ARGS (S.drop 1 args))
 
 callNativeFunction :: NATIVE_FUNCTION_TYPES -> ARGUMENTS -> IO EVAL
 callNativeFunction (CLOCK x) params = do
   val <- (x id)
   return (EVAL_NUMBER (fromInteger val))
 
+returnFromLoop newEv newMeta = isRuntimeError newEv || (isInFunction newMeta && isReturn newEv)

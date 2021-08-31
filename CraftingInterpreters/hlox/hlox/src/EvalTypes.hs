@@ -27,6 +27,7 @@ instance Show EVAL where
   show (DEC_EVAL x y) = mconcat [show x, " = ",show y]
   show SKIP_EVAL = "skip"
   show (FUNC_DEC_EVAL iden arity params stmt) = mconcat ["Function ", show iden, ", arity: ", show arity, ", params: ", show params, ", statement: ", show stmt]
+  show (RETURN_EVAL x) = "return: " ++ show x
   
 getLineError :: S.Seq TH.Token -> String
 getLineError tokens = if firstLine /= secondLine then mconcat [". Between lines: ", show firstLine, "-", show secondLine] else mconcat [". In line: ", show firstLine]
