@@ -32,19 +32,14 @@ eval :: S.Seq DECLARATION -> EVAL -> IO META -> IO (IO EVAL, IO META)
 eval decs prev meta = do
   nonIOMeta <- meta
   if S.null decs then do
-    if isInFunction nonIOMeta
-      then do return (return (RETURN_EVAL EVAL_NIL), meta)
-      else do return (return prev, meta)
+    return (return prev, meta)
   else do
     (ev, newMeta) <- evalDeclaration (S.index decs 0) meta
-    --print ev
-    --print newMeta
     if isInFunction newMeta && isReturn ev
       then do return(return ev, meta)
       else do
        if isRuntimeError ev
          then do
-           print ev
            return (return ev, meta)
           else do
             eval (S.drop 1 decs) ev (return newMeta)
@@ -80,9 +75,6 @@ evalDeclaration (DEC_STMT (BLOCK_STMT x)) meta = do
 evalDeclaration (DEC_STMT (IF_STMT expr stmt)) meta = do
   locMeta <- meta
   (exprVal, newMeta) <- evalExpression expr locMeta
-  print exprVal
-  print (maybeEvalTruthy exprVal)
-  print stmt
   if maybeEvalTruthy exprVal == Just True then evalDeclaration (createDecFromStatement stmt) (return newMeta) else return (SKIP_EVAL, newMeta)
 evalDeclaration (DEC_STMT (IF_ELSE_STMT expr stmt1 stmt2)) meta = do
   locMeta <- meta
@@ -129,9 +121,7 @@ evalDeclaration (DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) (PARAMETERS params) stm
 evalDeclaration (DEC_STMT (RETURN expr)) meta = do
   locMeta <- meta
   (ev, newMeta) <- evalExpression expr locMeta
-  print "this is called"
-  print ev
-  return (ev, newMeta)
+  return (RETURN_EVAL ev, newMeta)
 
 evalDeclaration (DEC_STMT RETURN_NIL) meta = do
   locMeta <- meta

@@ -175,7 +175,7 @@ buildArgs tokens exprs
  | S.null exprTokens = INVALID_ARGS "Empty argument" tokens
  | otherwise = buildArgs rest (exprs S.|> newExpr)
  where exprTokens = S.takeWhileL (not . tokenIsType COMMA) tokens
-       newExpr = createExpression (exprTokens S.|> Token{tokenType=SEMICOLON, line=line $ fromJust $ getLast exprTokens})
+       newExpr = createExpression exprTokens
        rest = S.drop (S.length exprTokens+1) tokens
 
 isIdentifier :: TokenType -> Bool

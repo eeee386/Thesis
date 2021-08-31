@@ -45,3 +45,4 @@ isReturn _ = False
 
 getValueFromReturn :: EVAL -> EVAL
 getValueFromReturn (RETURN_EVAL x) = x
+getValueFromReturn _ = EVAL_NIL
