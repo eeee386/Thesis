@@ -195,6 +195,8 @@ createDecFromStatement (IF_ELSE_STMT ex st1 st2) = DEC_STMT (IF_ELSE_STMT ex st1
 createDecFromStatement (WHILE_STMT ex st) = DEC_STMT (WHILE_STMT ex st)
 createDecFromStatement (FOR_STMT vDec ex iDec st) = DEC_STMT (FOR_STMT vDec ex iDec st)
 createDecFromStatement (LOOP ex dec st) = DEC_STMT (LOOP ex dec st)
+createDecFromStatement RETURN_NIL = DEC_STMT RETURN_NIL
+createDecFromStatement (RETURN x) = DEC_STMT (RETURN x)
 
 
 isNativeFunction :: FUNCTION_STATEMENT -> Bool
