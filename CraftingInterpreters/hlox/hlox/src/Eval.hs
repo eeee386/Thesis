@@ -45,7 +45,7 @@ eval decs prev meta = do
             eval (S.drop 1 decs) ev (return newMeta)
 
 
-
+-- Evaluate Declaration
 evalDeclaration :: DECLARATION -> IO META -> IO (EVAL, META)
 evalDeclaration (DEC_STMT (PRINT_STMT x)) meta = do
   locMeta <- meta
@@ -132,7 +132,7 @@ evalDeclaration x meta = do
   print x
   return (RUNTIME_ERROR "Unknown error occured" S.empty, locMeta)
 
-
+-- Evaluate variable declaration and/or definition
 -- Think about redefinement
 handleVarDeclaration :: TextType -> META -> IO (EVAL, META)
 handleVarDeclaration iden meta = do
@@ -152,7 +152,7 @@ handleVarDefinition iden val meta tokens = do
 
 
 
-
+-- Evaluate expression
 evalExpression :: EXPRESSION -> META -> IO (EVAL, META)
 evalExpression (EXP_LITERAL (NUMBER x)) meta = return (EVAL_NUMBER x, meta)
 evalExpression (EXP_LITERAL (STRING x)) meta = return (EVAL_STRING x, meta)
@@ -170,8 +170,13 @@ evalExpression (EXP_UNARY (UNARY op x) tokens) meta = do
   return (evalUnary tokens op expr, newMeta)
 
 evalExpression (EXP_BINARY (BIN left op right) bLines) meta = do
+  print "is this called"
+  print left
   (evaledLeft, leftMeta) <- evalExpression left meta
   (evaledRight, rightMeta) <- evalExpression right leftMeta
+  print "fails here"
+  print evaledLeft
+  print evaledRight
   return (evalBinary bLines evaledLeft op evaledRight, rightMeta)
 
 evalExpression (EXP_TERNARY (TERN predi _ trueRes _ falseRes) tLines) meta = do
@@ -186,7 +191,7 @@ evalExpression (EXP_CALL (CALL_FUNC exp args)) meta = do
 evalExpression _ meta = return (RUNTIME_ERROR "Expression cannot be evaluated" (S.fromList []), meta)
 
 
-
+-- evalExpression helpers
 evalUnary :: S.Seq TH.Token -> OPERATOR -> EVAL -> EVAL
 evalUnary tokens op expr
   | op == AST.MINUS && isJust valNum = EVAL_NUMBER (-(fromJust valNum))
@@ -242,7 +247,7 @@ evalTernary tokens predi trueRes falseRes
   where preppedPred = maybeEvalTruthy predi
         buildRuntimeError meta = return (RUNTIME_ERROR "Ternary operator failed" tokens, meta)
 
--- Helpers
+-- Helpers for operations
 maybeEvalNumber :: EVAL -> Maybe Double
 maybeEvalNumber (EVAL_NUMBER x) = Just x
 maybeEvalNumber _ = Nothing
@@ -280,7 +285,7 @@ createEquality :: (Eq a) => a -> a -> (Bool -> Bool) -> EVAL
 createEquality l r ch = if l == r then EVAL_BOOL (ch True) else EVAL_BOOL (ch False)
 
 
-
+-- Helpers for functions
 callFunction :: META -> EVAL -> ARGUMENTS ->IO (EVAL, META)
 callFunction meta (FUNC_DEC_EVAL iden arity params stmt) (ARGS args)
   | S.length args /= arity = return (RUNTIME_ERROR (T.pack (mconcat ["Expected ", show arity, " arguments", ", but got ", show argsLength])) S.empty, meta)

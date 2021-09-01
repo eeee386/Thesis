@@ -73,11 +73,8 @@ createCall tokens
 
 
 createLiteral :: S.Seq Token -> EXPRESSION
-createLiteral tokens
-  | isMoreTokens = NON_EXP "Surplus Tokens" tokens
-  | otherwise = checkLiteralToken token tokens
-  where isMoreTokens = checkSurplus (S.drop 1 tokens)
-        token = tokenType (S.index tokens 0)
+createLiteral tokens = checkLiteralToken token tokens
+  where token = tokenType (S.index tokens 0)
 
 checkLiteralToken :: TokenType -> S.Seq Token -> EXPRESSION
 checkLiteralToken (TokenHelper.STRING a) _ = EXP_LITERAL (AST.STRING a)
@@ -187,8 +184,3 @@ isIdentifierToken t = isIdentifier (tokenType t)
 
 createASTIdentifier ::S.Seq Token ->  TokenType -> EXPRESSION
 createASTIdentifier tokens (TokenHelper.IDENTIFIER a) = EXP_LITERAL (AST.IDENTIFIER a tokens)
-
-checkSurplus :: S.Seq Token -> Bool
-checkSurplus tokens = not (empty || terminated)
-  where empty = S.null tokens
-        terminated = (tokenType <$> S.lookup 0 tokens) == Just SEMICOLON

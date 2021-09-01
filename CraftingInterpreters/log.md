@@ -18,3 +18,10 @@
 
 - Interesting stuff to talk about:
   - how loops are implemented, how functions are implemented
+  
+  
+- The structure seems weird. Haskell projects to look at for ideas:
+  - Aura
+  - xmobar
+  - xmonad
+  - Elm
