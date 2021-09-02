@@ -58,8 +58,7 @@ createUnary tokens
           | tType == Just TokenHelper.BANG = AST.BANG
           | tType == Just TokenHelper.MINUS = AST.MINUS
 
-
-createCall :: S.Seq Token -> EXPRESSION
+{-createCall :: S.Seq Token -> EXPRESSION
 createCall tokens
   | not isIden || (isIden && not isCall) = createLiteral tokens
   | not hasRightParen = NON_EXP "Missing right parenthesis from function call" tokens
@@ -70,6 +69,20 @@ createCall tokens
         tIden = tokenType iden
         isCall = isIden && (tokenType <$> S.lookup 1 tokens) == Just LEFT_PAREN
         (hasRightParen, rest, args) = functionHelper False tokens
+-}
+
+createCall :: S.Seq Token -> EXPRESSION
+createCall tokens
+  | not isFunctionCall = createLiteral tokens
+  | otherwise = chainCall rest (CALL_FUNC (createASTIdentifier tokens iden) (S.singleton args))
+  where maybeIden = S.lookup 0 tokens
+        isIden = (isIdentifierToken <$> maybeIden) == Just True
+        iden = fromJust (tokenType <$> maybeIden)
+        isFunctionCall = isIden && (tokenType <$> S.lookup 1 tokens) == Just LEFT_PAREN
+        hasRightParen = isJust (S.findIndexL (tokenIsType RIGHT_PAREN) tokens)
+        exprTokens = S.drop 2 (S.takeWhileL (not . tokenIsType RIGHT_PAREN) tokens)
+        args = buildArgs exprTokens S.empty
+        rest = S.drop 1 (S.dropWhileL (not . tokenIsType RIGHT_PAREN) tokens)
 
 
 createLiteral :: S.Seq Token -> EXPRESSION
@@ -150,7 +163,7 @@ chainCall :: S.Seq Token -> CALL -> EXPRESSION
 chainCall tokens (CALL_FUNC iden callArgs)
   | S.null tokens || isSemicolon = EXP_CALL (CALL_FUNC iden callArgs)
   | not isCall = NON_EXP "Invalid character in call" tokens
-  | not hasRightParen = NON_EXP "Missing right parenthesis from function call" tokens
+  | not hasRightParen = NON_EXP "Missing right parenthesis from chain function call" tokens
   | otherwise = chainCall rest (CALL_FUNC iden (callArgs S.|> args))
   where isCall = (tokenType <$> S.lookup 0 tokens) == Just LEFT_PAREN
         isSemicolon = (tokenType <$> S.lookup 0 tokens) == Just SEMICOLON
@@ -184,3 +197,4 @@ isIdentifierToken t = isIdentifier (tokenType t)
 
 createASTIdentifier ::S.Seq Token ->  TokenType -> EXPRESSION
 createASTIdentifier tokens (TokenHelper.IDENTIFIER a) = EXP_LITERAL (AST.IDENTIFIER a tokens)
+

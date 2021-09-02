@@ -16,6 +16,7 @@ import ParseExpressions
 import Eval
 import AST
 import Data.Maybe
+import Utils
 
 
 run :: T.Text -> IO()

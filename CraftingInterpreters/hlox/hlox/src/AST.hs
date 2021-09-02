@@ -175,6 +175,7 @@ getASTErrorFromStatement (DEC_STMT (PRINT_STMT x)) = findASTError x
 getASTErrorFromStatement (DEC_VAR (VAR_DEC_DEF _ x)) = findASTError x
 getASTErrorFromStatement (DEC_VAR (VAR_DEF _ x _)) = findASTError x
 getASTErrorFromStatement (DEC_STMT (BLOCK_STMT x)) = S.lookup 0 $ fmap fromJust $ S.filter isJust $ fmap getASTErrorFromStatement x
+getASTErrorFromStatement (DEC_FUNC (FUNC_DEC _ _ (FUNC_STMT x))) = getASTErrorFromStatement (DEC_STMT x)
 getASTErrorFromStatement _ = Nothing
 
 

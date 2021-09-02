@@ -170,13 +170,8 @@ evalExpression (EXP_UNARY (UNARY op x) tokens) meta = do
   return (evalUnary tokens op expr, newMeta)
 
 evalExpression (EXP_BINARY (BIN left op right) bLines) meta = do
-  print "is this called"
-  print left
   (evaledLeft, leftMeta) <- evalExpression left meta
   (evaledRight, rightMeta) <- evalExpression right leftMeta
-  print "fails here"
-  print evaledLeft
-  print evaledRight
   return (evalBinary bLines evaledLeft op evaledRight, rightMeta)
 
 evalExpression (EXP_TERNARY (TERN predi _ trueRes _ falseRes) tLines) meta = do
