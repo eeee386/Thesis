@@ -9,47 +9,56 @@ import Utils
 import Data.Maybe
 
 createExpression :: S.Seq Token -> EXPRESSION
-createExpression = createTernary
+createExpression = fst . createTernary
 
 -- Other cases could be covered, such one of the operators missing
 -- Could be problematic if we had used question marks and colons as other operands
-createTernary :: S.Seq Token -> EXPRESSION
-createTernary tokens = handleTernaryCases getOp1 getOp2 indexOfOp1 indexOfOp2 tokens
-  where 
-    indexOfOp1 = S.findIndexL (tokenIsType TokenHelper.QUESTION_MARK) tokens
-    indexOfOp2 = S.findIndexL (tokenIsType TokenHelper.COLON) tokens
-    getOp1 indx 
-      | tokenType (S.index tokens indx) == TokenHelper.QUESTION_MARK = AST.QUESTION_MARK
-    getOp2 indx 
-      | tokenType (S.index tokens indx) == TokenHelper.COLON = AST.COLON
+
+createTernary :: S.Seq Token -> (EXPRESSION, S.Seq Token)
+createTernary tokens
+  | S.null firstRest || S.null secondRest || isQM || isC  = (NON_EXP "Not a valid ternary operator" tokens, tokens)
+  | otherwise = ((EXP_TERNARY (TERN firstExpr op1 secondExpr op2 thirdExpr) tokens), tokens)
+  where (firstExpr, firstRest) = createLogic tokens
+        maybeOp1 = S.lookup 0 firstRest
+        isQM = (tokenIsType TokenHelper.QUESTION_MARK  <$> maybeOp1) == Just True
+        op1 = getOp (fromJust maybeOp1)
+        (secondExpr, secondRest) = createLogic firstRest
+        maybeOp2 = S.lookup 0 secondRest
+        isC = (tokenIsType TokenHelper.COLON <$> maybeOp2) == Just True
+        op2 = getOp (fromJust maybeOp2)
+        (thirdExpr, thirdRest) = createLogic secondRest
+        getOp token
+          | tokenType token == TokenHelper.QUESTION_MARK = AST.QUESTION_MARK 
+          | tokenType token == TokenHelper.COLON = AST.COLON
 
 
-createLogic :: S.Seq Token -> EXPRESSION
+
+createLogic :: S.Seq Token -> (EXPRESSION, S.Seq Token)
 createLogic = createBinaryExpressions (M.fromList [(TokenHelper.AND, AST.AND), 
                                                    (TokenHelper.OR, AST.OR)]) createLogic createEquality
 
-createEquality :: S.Seq Token -> EXPRESSION
+createEquality :: S.Seq Token -> (EXPRESSION, S.Seq Token)
 createEquality = createBinaryExpressions (M.fromList [(TokenHelper.EQUAL_EQUAL, AST.EQUAL_EQUAL), 
                                                       (TokenHelper.BANG_EQUAL, AST.BANG_EQUAL)]) createEquality createComparison
 
-createComparison :: S.Seq Token -> EXPRESSION
+createComparison :: S.Seq Token -> (EXPRESSION, S.Seq Token)
 createComparison = createBinaryExpressions (M.fromList [(TokenHelper.LESS, AST.LESS),
                                                         (TokenHelper.LESS_EQUAL, AST.LESS_EQUAL),
                                                         (TokenHelper.GREATER, AST.GREATER),
                                                         (TokenHelper.GREATER_EQUAL, AST.GREATER_EQUAL)]) createComparison createTerm
 
-createTerm :: S.Seq Token -> EXPRESSION
+createTerm :: S.Seq Token -> (EXPRESSION, S.Seq Token)
 createTerm = createBinaryExpressions (M.fromList [(TokenHelper.PLUS, AST.PLUS), 
                                                   (TokenHelper.MINUS, AST.MINUS)]) createTerm createFactor
 
-createFactor :: S.Seq Token -> EXPRESSION
+createFactor :: S.Seq Token -> (EXPRESSION, S.Seq Token)
 createFactor = createBinaryExpressions (M.fromList [(TokenHelper.SLASH, AST.SLASH), 
                                                     (TokenHelper.STAR, AST.STAR)]) createFactor createUnary
 
 
-createUnary :: S.Seq Token -> EXPRESSION
+createUnary :: S.Seq Token -> (EXPRESSION, S.Seq Token)
 createUnary tokens
-  | isUnary = EXP_UNARY (UNARY getOp (createUnary (S.drop 1 tokens))) tokens
+  | isUnary = (EXP_UNARY (UNARY getOp (createUnary (S.drop 1 tokens))) tokens)
   | otherwise = createCall tokens
   where token = S.lookup 0 tokens
         tType = tokenType <$> token
@@ -58,7 +67,8 @@ createUnary tokens
           | tType == Just TokenHelper.BANG = AST.BANG
           | tType == Just TokenHelper.MINUS = AST.MINUS
 
-{-createCall :: S.Seq Token -> EXPRESSION
+
+createCall :: S.Seq Token -> EXPRESSION
 createCall tokens
   | not isIden || (isIden && not isCall) = createLiteral tokens
   | not hasRightParen = NON_EXP "Missing right parenthesis from function call" tokens
@@ -69,20 +79,6 @@ createCall tokens
         tIden = tokenType iden
         isCall = isIden && (tokenType <$> S.lookup 1 tokens) == Just LEFT_PAREN
         (hasRightParen, rest, args) = functionHelper False tokens
--}
-
-createCall :: S.Seq Token -> EXPRESSION
-createCall tokens
-  | not isFunctionCall = createLiteral tokens
-  | otherwise = chainCall rest (CALL_FUNC (createASTIdentifier tokens iden) (S.singleton args))
-  where maybeIden = S.lookup 0 tokens
-        isIden = (isIdentifierToken <$> maybeIden) == Just True
-        iden = fromJust (tokenType <$> maybeIden)
-        isFunctionCall = isIden && (tokenType <$> S.lookup 1 tokens) == Just LEFT_PAREN
-        hasRightParen = isJust (S.findIndexL (tokenIsType RIGHT_PAREN) tokens)
-        exprTokens = S.drop 2 (S.takeWhileL (not . tokenIsType RIGHT_PAREN) tokens)
-        args = buildArgs exprTokens S.empty
-        rest = S.drop 1 (S.dropWhileL (not . tokenIsType RIGHT_PAREN) tokens)
 
 
 createLiteral :: S.Seq Token -> EXPRESSION
@@ -116,48 +112,17 @@ getIsAnyEOF :: Maybe Int -> Bool
 getIsAnyEOF (Just _) = True
 getIsAnyEOF Nothing = False
 
-createBinaryExpressions :: M.Map TokenType OPERATOR -> (S.Seq Token -> EXPRESSION) -> (S.Seq Token -> EXPRESSION) -> S.Seq Token -> EXPRESSION
-createBinaryExpressions tokenExpMap thisPrec nextPrec tokens = handleBinaryCases
-  where
-    indexOfOp = S.findIndexL (\x -> tokenType x `elem` M.keys tokenExpMap) tokens
-    bin = prepBinary getOp (fromJust indexOfOp) tokens thisPrec nextPrec
-    getOp indx = tokenExpMap M.! token
-      where token = tokenType (S.index tokens indx)
-    handleBinaryCases
-      | isJust indexOfOp && indexOfOp > Just 0 = EXP_BINARY bin tokens
-      | indexOfOp > Just (S.length tokens - 2) = NON_EXP "Missing operands from right side" tokens
-      | otherwise = nextPrec tokens
 
-prepBinary :: (Int -> OPERATOR) -> Int -> S.Seq Token -> (S.Seq Token -> EXPRESSION) -> (S.Seq Token -> EXPRESSION) -> BINARY
-prepBinary getOperation idx tokens thisPrec nextPrec = AST.BIN (nextPrec left) op (thisPrec right)
-   where split = splitTokens idx
-         left = fst split
-         right = S.drop 1 (snd split)
-         op = getOperation idx
-         splitTokens indx = S.splitAt indx tokens
-
-prepTernary :: (Int -> OPERATOR) -> (Int -> OPERATOR) -> Int -> Int -> S.Seq Token -> (S.Seq Token -> EXPRESSION) -> TERNARY
-prepTernary getOp1 getOp2 idx1 idx2 tokens nextPrec = AST.TERN (nextPrec left) op1 (nextPrec middle) op2 (nextPrec right)
-  where splitTokens indx tList = S.splitAt indx tList
-        split1 = splitTokens idx1 tokens
-        left = fst split1
-        rest = S.drop 1 (snd split1)
-        split2 = splitTokens (idx2-idx1-1) rest
-        middle = fst split2
-        right = S.drop 1 (snd split2)
-        op1 = getOp1 idx1
-        op2 = getOp2 idx2
-
-
-handleTernaryCases :: (Int -> OPERATOR) -> (Int -> OPERATOR) -> Maybe Int -> Maybe Int -> S.Seq Token -> EXPRESSION
-handleTernaryCases getOp1 getOp2 indexOfOp1 indexOfOp2 tokens
-  | bothIsJust && properPlacement = EXP_TERNARY tern tokens
-  | xorIsJust || (bothIsJust && not properPlacement) = NON_EXP "Not a valid ternary operator" tokens
-  | otherwise = createLogic tokens
-  where tern = prepTernary getOp1 getOp2 (fromJust indexOfOp1) (fromJust indexOfOp2) tokens createLogic
-        bothIsJust = isJust indexOfOp1 && isJust indexOfOp2
-        xorIsJust = isJust indexOfOp1 /= isJust indexOfOp2
-        properPlacement = ((-) <$> indexOfOp2 <*> indexOfOp1) > Just 1 && indexOfOp2 < Just (S.length tokens - 2)
+-- Not sure about synchronize
+createBinaryExpressions :: M.Map TokenType OPERATOR -> (S.Seq Token -> (EXPRESSION, S.Seq Token)) -> (S.Seq Token -> (EXPRESSION, S.Seq Token)) -> S.Seq Token -> (EXPRESSION, S.Seq Token)
+createBinaryExpressions tokenExpMap thisPrec nextPrec tokens
+  | S.null firstRest = (firstExpr, firstRest)
+  | isJust maybeOp =((EXP_BINARY (BIN firstExpr op secondExpr) tokens), secondRest)
+  | otherwise = ((NON_EXP "Not a valid expression" tokens), snd (synchronize tokens))
+  where (firstExpr, firstRest) = nextPrec tokens
+        maybeOp = M.lookup (tokenType $ S.index firstRest 0) tokenExpMap
+        op = fromJust maybeOp
+        (secondExpr, secondRest) = thisPrec tokens
 
 chainCall :: S.Seq Token -> CALL -> EXPRESSION
 chainCall tokens (CALL_FUNC iden callArgs)
@@ -198,3 +163,11 @@ isIdentifierToken t = isIdentifier (tokenType t)
 createASTIdentifier ::S.Seq Token ->  TokenType -> EXPRESSION
 createASTIdentifier tokens (TokenHelper.IDENTIFIER a) = EXP_LITERAL (AST.IDENTIFIER a tokens)
 
+getMaybeOpFromMap :: S.Seq Token ->  M.Map TokenType OPERATOR -> Maybe OPERATOR
+getMaybeOpFromMap firstRest  = M.lookup (tokenType $ S.index firstRest 0)
+
+synchronize :: S.Seq Token -> (S.Seq Token, S.Seq Token)
+synchronize tokens = if isJust maybeIndex then S.splitAt (fromJust maybeIndex) tokens else (tokens, S.empty)
+  where syncFunc = S.findIndexL (\x -> tokenType x `elem` [CLASS, FUN, VAR, FOR, IF, WHILE, PRINT, TokenHelper.RETURN])
+        startIndex = syncFunc tokens
+        maybeIndex = if startIndex == Just 0 then syncFunc (S.drop 1 tokens) else startIndex
