@@ -116,8 +116,8 @@ handleIf tokens
         (elseDec, moreRestToCheck) = createDeclaration (S.drop 1 restToCheck)
         elseStmt = getStmtFromDec elseDec
         (err, rest) = synchronize tokens
-        
-        
+
+
 handleWhile :: S.Seq Token -> (DECLARATION, S.Seq Token)
 handleWhile tokens
   | not isLeftParen = (PARSE_ERROR "Parenthesis should be after while" err, rest)
@@ -134,7 +134,7 @@ handleWhile tokens
         (whileDec, restToCheck) = createDeclaration nextTokens
         whileStmt = getStmtFromDec whileDec
         (err, rest) = synchronize tokens
-        
+
 handleFor :: S.Seq Token -> (DECLARATION, S.Seq Token)
 handleFor tokens
   | not isLeftParen = (PARSE_ERROR "Parenthesis should be after for" err, rest)
