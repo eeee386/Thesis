@@ -200,9 +200,3 @@ handleReturn tokens
 getStmtFromDec :: DECLARATION -> Maybe STATEMENT
 getStmtFromDec (DEC_STMT x) = Just x
 getStmtFromDec _ = Nothing
-
-synchronize :: S.Seq Token -> (S.Seq Token, S.Seq Token)
-synchronize tokens = if isJust maybeIndex then S.splitAt (fromJust maybeIndex) tokens else (tokens, S.empty)
-  where syncFunc = S.findIndexL (\x -> tokenType x `elem` [CLASS, FUN, VAR, FOR, IF, WHILE, PRINT, TokenHelper.RETURN])
-        startIndex = syncFunc tokens
-        maybeIndex = if startIndex == Just 0 then syncFunc (S.drop 1 tokens) else startIndex
