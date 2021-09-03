@@ -128,8 +128,7 @@ createBinaryExpressions tokenExpMap thisPrec nextPrec tokens
 
 chainCall :: S.Seq Token -> CALL -> (EXPRESSION, S.Seq Token)
 chainCall tokens (CALL_FUNC iden callArgs)
-  | S.null tokens || isSemicolon = (EXP_CALL (CALL_FUNC iden callArgs), rest)
-  | not isCall = (NON_EXP "Invalid character in call" tokens, tokens)
+  | S.null tokens || isSemicolon || not isCall = (EXP_CALL (CALL_FUNC iden callArgs), tokens)
   | not hasRightParen = (NON_EXP "Missing right parenthesis from chain function call" tokens, tokens)
   | otherwise = chainCall rest (CALL_FUNC iden (callArgs S.|> args))
   where isCall = (tokenType <$> S.lookup 0 tokens) == Just LEFT_PAREN
