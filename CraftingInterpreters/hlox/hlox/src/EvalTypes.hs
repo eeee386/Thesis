@@ -3,17 +3,29 @@ module EvalTypes where
 import AST
 import qualified Data.Sequence as S
 import qualified TokenHelper as TH
+import qualified Data.HashTable.IO as HT
+
+
+type HashTable = HT.BasicHashTable AST.TextType EVAL
+type Environments = S.Seq HashTable
+
+-- this is only newtype to have equality instance for EVAL
+newtype CLOSURE = CLOSURE Environments
+instance Eq CLOSURE where
+  (==) x y = False
 
 type Arity = Int
+type Name = AST.TextType
+type ErrorMessage = AST.TextType
 
 data EVAL = EVAL_NUMBER Double 
           | EVAL_STRING AST.TextType 
           | EVAL_BOOL Bool 
           | EVAL_NIL 
-          | RUNTIME_ERROR AST.TextType (S.Seq TH.Token) 
+          | RUNTIME_ERROR ErrorMessage (S.Seq TH.Token) 
           | SKIP_EVAL 
-          | DEC_EVAL AST.TextType EVAL
-          | FUNC_DEC_EVAL AST.TextType Arity AST.PARAMETERS FUNCTION_STATEMENT
+          | DEC_EVAL Name EVAL
+          | FUNC_DEC_EVAL Name Arity AST.PARAMETERS FUNCTION_STATEMENT CLOSURE
           | RETURN_EVAL EVAL
           deriving Eq
 
@@ -26,7 +38,7 @@ instance Show EVAL where
   show (RUNTIME_ERROR x neLines) = mconcat ["RuntimeError: ", show x, getLineError neLines]
   show (DEC_EVAL x y) = mconcat [show x, " = ",show y]
   show SKIP_EVAL = "skip"
-  show (FUNC_DEC_EVAL iden arity params stmt) = mconcat ["Function ", show iden, ", arity: ", show arity, ", params: ", show params, ", statement: ", show stmt]
+  show (FUNC_DEC_EVAL iden arity params stmt _) = mconcat ["Function ", show iden, ", arity: ", show arity, ", params: ", show params, ", statement: ", show stmt]
   show (RETURN_EVAL x) = "return: " ++ show x
   
 getLineError :: S.Seq TH.Token -> String

@@ -9,9 +9,6 @@ import EvalTypes
 import AST
 import NativeFunctions
 
-type HashTable = HT.BasicHashTable AST.TextType EVAL
-type Environments = S.Seq HashTable
-
 createEnv :: IO HashTable
 createEnv = HT.new
 
@@ -23,7 +20,7 @@ createAndPrepGlobalEnv = do
                                "clock"
                                0
                                (PARAMETERS S.empty)
-                               (NATIVE_FUNC_STMT (CLOCK clock))) globalEnv
+                               (NATIVE_FUNC_STMT (CLOCK clock)) (CLOSURE S.empty)) globalEnv
 
 createGlobalEnvironment :: IO Environments
 createGlobalEnvironment = S.singleton <$> createAndPrepGlobalEnv
@@ -84,6 +81,14 @@ findValueOfIdentifier iden env = do
   let index = S.findIndexR isJust values
   if isJust index then return (S.index values (fromJust index)) else return Nothing
 
+
+-- Add sequence of closure function (names), 
+-- the length of that will decide how much to add to the function declaration closure prop
+-- when declared. (From the current env which already has the functions )
+
+-- I think we should delete the env when we finish the function call,
+-- and the declared inner function's closure prop should save it into its closure prop.
+-- And whenever we call the closured function it will add its closure to the current environment 
 data META = META {
   env :: Environments
   , isInFunction :: Bool
@@ -121,3 +126,11 @@ updateIdentifierToMetaEnv iden value meta = do
 findValueInMetaEnv ::  AST.TextType -> META -> IO (Maybe EVAL)
 findValueInMetaEnv iden meta = do
   findValueOfIdentifier iden (env meta)
+
+
+updateMetaWithClosure :: META -> CLOSURE -> META
+updateMetaWithClosure meta (CLOSURE clos) = meta{env=((env meta) S.>< clos)}
+
+breakClosureFromMeta :: META -> Int -> (META, CLOSURE)
+breakClosureFromMeta meta numberOfClosure = (meta{env=newEnv}, CLOSURE closEnv)
+  where (newEnv, closEnv) = S.splitAt (S.length (env meta) - numberOfClosure) (env meta)

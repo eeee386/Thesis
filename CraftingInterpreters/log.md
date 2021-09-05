@@ -5,19 +5,26 @@
   - Lists and String (which are character lists) are one-way linked lists which could have serious performance issues, changing to Sequence and Text
     - Talk about Sequences and finger trees
     - Why not Vectors (mutability)
-    - Why did I use strict instead of lazy -> again perfonrmace issues (list concatenation, backwards traversal, indexing... etc)
+    - Why did I use strict instead of lazy -> again performace issues (list concatenation, backwards traversal, indexing... etc)
 - Parser Types and Recursive Descent Parser
 - Error Handling
 - States (variables,scopes...) in a stateless side-effectless programming languages (will see how it turns out)
   - State monad hashtable, for environments.
   - Talk about monads (and functors, applicatives)
   - I think we should talk about how the Environments work (sequence, and the last element is the innermost scope that we are in)
+  - Closure implementation
   
 - One gripe with Haskell: An even more fine-tuned type handling would be better, maybe I am not using the language the right way
 - I had a problem with parameterized types, and I could not create a good solution for a polymorphic type for functions (as I had to add everywhere that polymorphic type as type parameter) -> created a type for every native function
 
+### Interesting problems 
+#### The clock implementation
+  - so the problem was that it saves the value only when it is used but because it is a zero param function -> it is a value, so when used it wil save the value and return anytime it is called again.
+  - solution: make it a function that waits for an (Integer -> Integer) function, so when called it is a function
+and will return a new value if you call it. But you have to call it with an (Integer -> Integer) function such as "id"
+
 - Interesting stuff to talk about:
-  - how loops are implemented, how functions are implemented
+  - how conditionals, functions, blocks, environments are implemented
   
   
 - The structure seems weird. Haskell projects to look at for ideas:
