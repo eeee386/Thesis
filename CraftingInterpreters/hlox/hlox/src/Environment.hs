@@ -88,7 +88,10 @@ findValueOfIdentifier iden env = do
 
 -- I think we should delete the env when we finish the function call,
 -- and the declared inner function's closure prop should save it into its closure prop.
--- And whenever we call the closured function it will add its closure to the current environment 
+-- And whenever we call the closured function it will add its closure to the current environment
+
+-- When we call a function we are already in closure of, then we only add those closures,
+-- that is before that function's first appearance in the sequence
 data META = META {
   env :: Environments
   , isInFunction :: Bool
