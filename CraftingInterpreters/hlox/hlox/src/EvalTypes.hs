@@ -16,6 +16,7 @@ instance Eq CLOSURE where
 
 type Arity = Int
 type Name = AST.TextType
+type ClosureNames = S.Seq Name
 type ErrorMessage = AST.TextType
 
 data EVAL = EVAL_NUMBER Double 
@@ -25,7 +26,7 @@ data EVAL = EVAL_NUMBER Double
           | RUNTIME_ERROR ErrorMessage (S.Seq TH.Token) 
           | SKIP_EVAL 
           | DEC_EVAL Name EVAL
-          | FUNC_DEC_EVAL Name Arity AST.PARAMETERS FUNCTION_STATEMENT CLOSURE
+          | FUNC_DEC_EVAL Name Arity AST.PARAMETERS FUNCTION_STATEMENT CLOSURE ClosureNames
           | RETURN_EVAL EVAL
           deriving Eq
 
@@ -38,7 +39,7 @@ instance Show EVAL where
   show (RUNTIME_ERROR x neLines) = mconcat ["RuntimeError: ", show x, getLineError neLines]
   show (DEC_EVAL x y) = mconcat [show x, " = ",show y]
   show SKIP_EVAL = "skip"
-  show (FUNC_DEC_EVAL iden arity params stmt _) = mconcat ["Function ", show iden, ", arity: ", show arity, ", params: ", show params, ", statement: ", show stmt]
+  show (FUNC_DEC_EVAL iden arity params stmt _ _) = mconcat ["Function ", show iden, ", arity: ", show arity, ", params: ", show params, ", statement: ", show stmt]
   show (RETURN_EVAL x) = "return: " ++ show x
   
 getLineError :: S.Seq TH.Token -> String

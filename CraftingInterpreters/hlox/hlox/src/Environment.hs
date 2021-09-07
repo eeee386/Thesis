@@ -20,7 +20,7 @@ createAndPrepGlobalEnv = do
                                "clock"
                                0
                                (PARAMETERS S.empty)
-                               (NATIVE_FUNC_STMT (CLOCK clock)) (CLOSURE S.empty)) globalEnv
+                               (NATIVE_FUNC_STMT (CLOCK clock)) (CLOSURE S.empty) S.empty) globalEnv
 
 createGlobalEnvironment :: IO Environments
 createGlobalEnvironment = S.singleton <$> createAndPrepGlobalEnv
@@ -92,17 +92,19 @@ findValueOfIdentifier iden env = do
 
 -- When we call a function we are already in closure of, then we only add those closures,
 -- that is before that function's first appearance in the sequence
+-- WE add a name sequence to keep a track of those functions
 data META = META {
   env :: Environments
   , isInFunction :: Bool
   , isInLoop :: Bool
+  , closureNames :: S.Seq AST.TextType
                  } deriving Show
 
 
 createGlobalMeta :: IO META
 createGlobalMeta = do
   e <- createGlobalEnvironment
-  return META {env=e, isInFunction=False, isInLoop=True}
+  return META {env=e, isInFunction=False, isInLoop=True, closureNames=S.empty}
 
 
 updateMetaWithLocalEnv :: META -> IO META
@@ -131,9 +133,16 @@ findValueInMetaEnv iden meta = do
   findValueOfIdentifier iden (env meta)
 
 
-updateMetaWithClosure :: META -> CLOSURE -> META
-updateMetaWithClosure meta (CLOSURE clos) = meta{env=((env meta) S.>< clos)}
+updateMetaWithClosure :: META -> CLOSURE -> ClosureNames -> META
+updateMetaWithClosure meta (CLOSURE clos) closNames = meta{env=((env meta) S.>< clos), closureNames=(closureNames meta S.>< closNames)}
 
-breakClosureFromMeta :: META -> Int -> (META, CLOSURE)
-breakClosureFromMeta meta numberOfClosure = (meta{env=newEnv}, CLOSURE closEnv)
-  where (newEnv, closEnv) = S.splitAt (S.length (env meta) - numberOfClosure) (env meta)
+breakClosureFromMeta :: META -> ClosureNames -> META
+breakClosureFromMeta meta closNames = (meta{env=newEnv, closureNames=newClosNames})
+  where (newEnv, _) = S.splitAt (S.length (env meta) - (S.length closNames)) (env meta)
+        (newClosNames, _) = S.splitAt (S.length (closureNames meta) - (S.length closNames)) (closureNames meta)
+
+getClosureFromMeta :: META  -> CLOSURE
+getClosureFromMeta meta = CLOSURE (S.drop (S.length (env meta) - (S.length (closureNames meta))) (env meta))
+
+addFunctionNameToMeta :: META -> AST.TextType -> META
+addFunctionNameToMeta meta name = meta{closureNames=(closureNames meta S.|> name)}
