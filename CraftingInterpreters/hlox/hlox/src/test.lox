@@ -9,7 +9,7 @@ fun count(n) {for (var i = 0; i < 5; i = i+1){ print i;}} count(1);
 var a = 0; while(a < 5) {if(a == 3) print a; a=a+1; }
 
 // fix "if without block, it does not see return after first return"
-fun fib(n) {if (n <= 1) {return n;} return fib(n-2) + fib(n-1);} for (var i = 0; i < 20; i = i + 1) {print fib(i);}
+fun fib(n) {if (n <= 1) {return n}; return fib(n-2) + fib(n-1);} for (var i = 0; i < 20; i = i + 1) {print fib(i);}
 
 fun addOne(n){print n; if (n == 5) return n; return addOne(n+1);} addOne(1);
 
