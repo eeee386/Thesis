@@ -2,6 +2,7 @@ module Utils where
 
 import qualified Data.Sequence as S
 import TokenHelper
+import Data.Maybe
 
 getLast :: S.Seq a -> Maybe a
 getLast s = S.lookup (S.length s -1) s
@@ -29,16 +30,18 @@ findMatchingBraceIndex = findMatching LEFT_BRACE RIGHT_BRACE 0 0
 
 
 -- Stack
-type Stack = []
+type Stack = S.Seq
 
 createStack :: Stack a
-createStack = []
+createStack = S.empty
 
 popStack :: Stack a -> (a, Stack a)
-popStack (x:xs) = (x,xs)
+popStack s = (fromJust top, bottom)
+  where (bottom, up) = S.splitAt (S.length s-1) s
+        top = S.lookup 0 up
 
 pushStack :: Stack a -> a -> Stack a
-pushStack stack x = x:stack
+pushStack stack x = stack S.|> x
 
 peekStack :: Stack a -> a
-peekStack (x:xs) = x
+peekStack stack = S.index stack (S.length stack-1)

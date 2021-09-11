@@ -15,7 +15,7 @@ import NativeFunctions
 
 evalProgram :: PROGRAM -> IO ()
 evalProgram (PROG x) = do
-  eval x SKIP_EVAL createGlobalMeta
+  eval x SKIP_EVAL (createGlobalMeta (PROG x))
   return ()
 
 
@@ -114,7 +114,7 @@ evalDeclaration (DEC_STMT (LOOP expr dec stmt)) meta = do
 
 evalDeclaration (DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) (PARAMETERS params) stmt)) meta = do
   locMeta <- meta
-  let eval = FUNC_DEC_EVAL iden (S.length params) (PARAMETERS params) stmt (getClosureFromMeta locMeta) (closureNames locMeta)
+  let eval = FUNC_DEC_EVAL iden (S.length params) (PARAMETERS params) stmt
   newMeta <- addIdentifierToMetaEnv iden eval locMeta
   return (eval, newMeta)
 
@@ -197,10 +197,10 @@ evalUnary tokens op expr
 
 
 evalFunctions :: META -> EVAL -> S.Seq ARGUMENTS -> IO (EVAL, META)
-evalFunctions meta (FUNC_DEC_EVAL iden arity params stmt clos closNames) argCalls
-  | S.null argCalls = return (FUNC_DEC_EVAL iden arity params stmt clos closNames, meta)
+evalFunctions meta (FUNC_DEC_EVAL iden arity params stmt) argCalls
+  | S.null argCalls = return (FUNC_DEC_EVAL iden arity params stmt, meta)
   | otherwise = do
-      (eval, newMeta) <- callFunction meta (FUNC_DEC_EVAL iden arity params stmt clos closNames) (S.index argCalls 0)
+      (eval, newMeta) <- callFunction meta (FUNC_DEC_EVAL iden arity params stmt) (S.index argCalls 0)
       evalFunctions newMeta eval (S.drop 1 argCalls)
   where args = S.index argCalls 0
 evalFunctions meta ev _ = return (ev, meta)
@@ -282,26 +282,23 @@ createEquality l r ch = if l == r then EVAL_BOOL (ch True) else EVAL_BOOL (ch Fa
 
 -- Helpers for functions
 callFunction :: META -> EVAL -> ARGUMENTS ->IO (EVAL, META)
-callFunction meta (FUNC_DEC_EVAL iden arity params stmt closure closureNames) (ARGS args)
+callFunction meta (FUNC_DEC_EVAL iden arity params stmt) (ARGS args)
   | S.length args /= arity = return (RUNTIME_ERROR (T.pack (mconcat ["Expected ", show arity, " arguments", ", but got ", show argsLength])) S.empty, meta)
-  | otherwise = functionCall meta (FUNC_DEC_EVAL iden arity params stmt closure closureNames) (ARGS args)
+  | otherwise = functionCall meta (FUNC_DEC_EVAL iden arity params stmt) (ARGS args)
   where argsLength = S.length args
 
 
 functionCall :: META -> EVAL -> ARGUMENTS -> IO (EVAL, META)
-functionCall meta (FUNC_DEC_EVAL iden _ params (FUNC_STMT (BLOCK_STMT decs)) closure closureNames) arguments = do
-  let metaWithClos = updateMetaWithClosure meta closure closureNames
-  withLocalMeta <- updateMetaWithLocalEnv metaWithClos
-  let nameAddedMeta = addFunctionNameToMeta withLocalMeta iden
-  toEvalMeta <- saveFunctionArgs nameAddedMeta params arguments
+functionCall meta (FUNC_DEC_EVAL iden _ params (FUNC_STMT (BLOCK_STMT decs))) arguments = do
+  withLocalMeta <- updateMetaWithLocalEnv meta
+  toEvalMeta <- saveFunctionArgs withLocalMeta params arguments
   (pIO, afterMetaIO) <- eval decs SKIP_EVAL (return toEvalMeta{isInFunction=True, isInLoop=False})
   afterMeta <- afterMetaIO
   let deleteLocMeta = deleteLocalEnvFromMeta afterMeta
-  let deleteClosMeta = breakClosureFromMeta deleteLocMeta closureNames
   returnEval <- pIO
   let evalValue = getValueFromReturn returnEval
-  return (evalValue, deleteClosMeta{isInFunction=(isInFunction meta), isInLoop=(isInLoop meta)})
-functionCall meta (FUNC_DEC_EVAL iden _ params (NATIVE_FUNC_STMT f) _ _) arguments = do
+  return (evalValue, deleteLocMeta{isInFunction=isInFunction meta, isInLoop=isInLoop meta})
+functionCall meta (FUNC_DEC_EVAL iden _ params (NATIVE_FUNC_STMT f)) arguments = do
   eval <- callNativeFunction f arguments
   return (eval, meta)
 

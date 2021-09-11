@@ -5,16 +5,25 @@ import Utils
 import qualified Data.Text as T
 import qualified Data.Sequence as S
 import AST
+import qualified TokenHelper as TH
+import Data.Maybe
 
-
+-- ResolveMap
 type ResolveMap = HT.BasicHashTable T.Text Bool
 
-createMap :: IO ResolveMap
-createMap = HT.new
+createResolveMap :: IO ResolveMap
+createResolveMap = HT.new
 
-addUpdateToMap :: ResolveMap -> T.Text -> Bool -> IO ResolveMap
-addUpdateToMap rMap key val  = HT.insert rMap  key val
+addUpdateToResolveMap :: ResolveMap -> T.Text -> Bool -> IO ResolveMap
+addUpdateToResolveMap rMap key val  = do
+  HT.insert rMap key val
+  return rMap
 
+findInResolveMap :: AST.TextType -> ResolveMap ->IO (Maybe Bool)
+findInResolveMap iden vals = HT.lookup vals iden
+  
+
+-- Stack ResolveMap
 createScope :: Stack ResolveMap
 createScope = createStack
 
@@ -31,33 +40,17 @@ popScope = endScope
 peekScope :: Stack ResolveMap -> ResolveMap
 peekScope = peekStack
 
-resolveMulti :: Stack ResolveMap -> S.Seq DECLARATION -> IO (Stack ResolveMap)
-resolveMulti s decs
-  | S.null decs = return s
-  | otherwise = resolve s dec
-  where dec = S.index decs 0
+-- Depth Map
+type DepthMap = HT.BasicHashTable T.Text Int
 
-resolve ::Stack ResolveMap -> DECLARATION -> IO (Stack ResolveMap)
-resolve scopes (DEC_STMT (BLOCK_STMT decs)) = do
-  rMap <- createMap
-  let startScopes = beginScope scopes rMap
-  resScopes <- resolveMulti startScopes decs
-  let endScopes = endScope resScopes
-  return (snd endScopes)
-resolve scopes (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) expr)) = do
-  if
-    null scopes
-  then do
-   return scopes
-  else do
---declare
-    let (scope,scopes) = popScope scopes
-    addedScope <- addUpdateToMap scope iden False
--- here resolve expr
--- define
-    updatedScope <- addUpdateToMap addedToScope iden True
-    return (pushScope scopes updatedScope
+createDepthMap :: IO DepthMap
+createDepthMap = HT.new
 
+addUpdateToDepthMap :: DepthMap -> T.Text -> Int -> IO DepthMap
+addUpdateToDepthMap rMap key val = do
+  HT.insert rMap key val
+  return rMap
 
+findInDepthMap :: T.Text -> DepthMap -> IO (Maybe Int)
+findInDepthMap expr vals = HT.lookup vals expr
 
-resolveExpression :: Stack ResolveMap -> EXPRESSION -> IO (Stack ResolveMap)

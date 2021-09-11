@@ -8,6 +8,8 @@ import Data.Maybe
 import EvalTypes
 import AST
 import NativeFunctions
+import ResolverTypes
+import Resolver
 
 createEnv :: IO HashTable
 createEnv = HT.new
@@ -20,7 +22,7 @@ createAndPrepGlobalEnv = do
                                "clock"
                                0
                                (PARAMETERS S.empty)
-                               (NATIVE_FUNC_STMT (CLOCK clock)) (CLOSURE S.empty) S.empty) globalEnv
+                               (NATIVE_FUNC_STMT (CLOCK clock))) globalEnv
 
 createGlobalEnvironment :: IO Environments
 createGlobalEnvironment = S.singleton <$> createAndPrepGlobalEnv
@@ -75,36 +77,28 @@ updateIdentifierToEnvironment iden value env = do
   else
     return (env, False) 
 
-findValueOfIdentifier :: AST.TextType -> Environments -> IO (Maybe EVAL)
-findValueOfIdentifier iden env = do
-  values <- mapM (getValueOfIdentifier iden) env
-  let index = S.findIndexR isJust values
-  if isJust index then return (S.index values (fromJust index)) else return Nothing
+findValueOfIdentifier :: AST.TextType -> Environments -> Int -> IO (Maybe EVAL)
+findValueOfIdentifier iden env index = do
+  let maybeEnvToLookIn = S.lookup index env
+  if isJust maybeEnvToLookIn then do
+    getValueOfIdentifier iden (fromJust maybeEnvToLookIn)
+  else do
+    return Nothing
 
 
--- Add sequence of closure function (names), 
--- the length of that will decide how much to add to the function declaration closure prop
--- when declared. (From the current env which already has the functions )
-
--- I think we should delete the env when we finish the function call,
--- and the declared inner function's closure prop should save it into its closure prop.
--- And whenever we call the closured function it will add its closure to the current environment
-
--- When we call a function we are already in closure of, then we only add those closures,
--- that is before that function's first appearance in the sequence
--- WE add a name sequence to keep a track of those functions
 data META = META {
   env :: Environments
   , isInFunction :: Bool
   , isInLoop :: Bool
-  , closureNames :: S.Seq AST.TextType
+  , depthMap :: DepthMap
                  } deriving Show
 
 
-createGlobalMeta :: IO META
-createGlobalMeta = do
+createGlobalMeta :: PROGRAM -> IO META
+createGlobalMeta prog = do
   e <- createGlobalEnvironment
-  return META {env=e, isInFunction=False, isInLoop=True, closureNames=S.empty}
+  dMap <- resolveProgram prog
+  return META {env=e, isInFunction=False, isInLoop=True, depthMap=dMap }
 
 
 updateMetaWithLocalEnv :: META -> IO META
@@ -114,7 +108,6 @@ updateMetaWithLocalEnv meta = do
 
 deleteLocalEnvFromMeta :: META -> META
 deleteLocalEnvFromMeta meta = meta {env=deleteLocalEnvironment (env meta)}
-
 
 addIdentifierToMetaEnv :: AST.TextType -> EVAL -> META -> IO META
 addIdentifierToMetaEnv iden value meta = do
@@ -130,19 +123,9 @@ updateIdentifierToMetaEnv iden value meta = do
 
 findValueInMetaEnv ::  AST.TextType -> META -> IO (Maybe EVAL)
 findValueInMetaEnv iden meta = do
-  findValueOfIdentifier iden (env meta)
+  depth <- findInDepthMap iden (depthMap meta)
+  if isJust depth then do
+    findValueOfIdentifier iden (env meta) (fromJust depth)
+  else do
+    findValueOfIdentifier iden (env meta) 0
 
-
-updateMetaWithClosure :: META -> CLOSURE -> ClosureNames -> META
-updateMetaWithClosure meta (CLOSURE clos) closNames = meta{env=((env meta) S.>< clos), closureNames=(closureNames meta S.>< closNames)}
-
-breakClosureFromMeta :: META -> ClosureNames -> META
-breakClosureFromMeta meta closNames = (meta{env=newEnv, closureNames=newClosNames})
-  where (newEnv, _) = S.splitAt (S.length (env meta) - (S.length closNames)) (env meta)
-        (newClosNames, _) = S.splitAt (S.length (closureNames meta) - (S.length closNames)) (closureNames meta)
-
-getClosureFromMeta :: META  -> CLOSURE
-getClosureFromMeta meta = CLOSURE (S.drop (S.length (env meta) - (S.length (closureNames meta))) (env meta))
-
-addFunctionNameToMeta :: META -> AST.TextType -> META
-addFunctionNameToMeta meta name = meta{closureNames=(closureNames meta S.|> name)}
