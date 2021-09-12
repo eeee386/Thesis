@@ -97,7 +97,7 @@ data META = META {
 createGlobalMeta ::  DepthMap -> IO META
 createGlobalMeta dMap = do
   e <- createGlobalEnvironment
-  return META {env=e, isInFunction=False, isInLoop=True, depthMap=dMap }
+  return META {env=e, isInFunction=False, isInLoop=True, Environment.depthMap=dMap }
 
 
 updateMetaWithLocalEnv :: META -> IO META
@@ -122,11 +122,9 @@ updateIdentifierToMetaEnv iden value meta = do
 
 findValueInMetaEnv ::  AST.TextType -> META -> IO (Maybe EVAL)
 findValueInMetaEnv iden meta = do
-  depth <- findInDepthMap iden (depthMap meta)
+  depth <- findInDepthMap iden (Environment.depthMap meta)
   if isJust depth then do
-    print depth
-    print (S.length (env meta))
     findValueOfIdentifier iden (env meta) (fromJust depth)
   else do
-    findValueOfIdentifier iden (env meta) 0
+    return Nothing
 

@@ -74,7 +74,7 @@ printScanErrorOrContinue tokens = if null scanError then printResolveErrorOrCont
 printResolveErrorOrContinue :: AST.PROGRAM -> IO()
 printResolveErrorOrContinue prog = do
   resolved <- resolveProgram prog
-  printEvalOrContinue prog resolved
+  printEvalOrContinue prog (depthMap resolved)
 
 printEvalOrContinue :: AST.PROGRAM -> DepthMap  -> IO ()
 printEvalOrContinue (PROG statements) dMap = handleCases
