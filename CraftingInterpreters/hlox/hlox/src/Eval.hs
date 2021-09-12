@@ -10,12 +10,13 @@ import qualified TokenHelper as TH
 import EvalTypes
 import Environment
 import NativeFunctions
+import ResolverTypes
 
 -- TODO: Break and continue, if we have time
 
-evalProgram :: PROGRAM -> IO ()
-evalProgram (PROG x) = do
-  eval x SKIP_EVAL (createGlobalMeta (PROG x))
+evalProgram :: PROGRAM -> DepthMap -> IO ()
+evalProgram (PROG x) dMap = do
+  eval x SKIP_EVAL (createGlobalMeta dMap)
   return ()
 
 

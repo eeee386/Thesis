@@ -14,8 +14,18 @@ type ResolveMap = HT.BasicHashTable T.Text Bool
 createResolveMap :: IO ResolveMap
 createResolveMap = HT.new
 
-addUpdateToResolveMap :: ResolveMap -> T.Text -> Bool -> IO ResolveMap
-addUpdateToResolveMap rMap key val  = do
+addToResolveMap :: ResolveMap -> T.Text -> Bool -> IO ResolveMap
+addToResolveMap rMap key val  = do
+  foundVal <- findInResolveMap key rMap
+  if isJust foundVal then do
+    print "Variable already defined in scope"
+    return rMap
+  else do  
+    HT.insert rMap key val
+    return rMap
+
+updateInResolveMap :: ResolveMap -> T.Text -> Bool -> IO ResolveMap
+updateInResolveMap rMap key val = do
   HT.insert rMap key val
   return rMap
 
@@ -52,5 +62,7 @@ addUpdateToDepthMap rMap key val = do
   return rMap
 
 findInDepthMap :: T.Text -> DepthMap -> IO (Maybe Int)
-findInDepthMap expr vals = HT.lookup vals expr
+findInDepthMap iden vals = do
+  val <- HT.lookup vals iden
+  return val
 

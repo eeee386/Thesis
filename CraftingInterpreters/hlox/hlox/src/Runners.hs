@@ -17,6 +17,8 @@ import Eval
 import AST
 import Data.Maybe
 import Utils
+import ResolverTypes
+import Resolver
 
 
 run :: T.Text -> IO()
@@ -64,16 +66,22 @@ readFromRepl = putStr "Lox> "
      >> getLine
 
 printScanErrorOrContinue :: S.Seq Token -> IO ()
-printScanErrorOrContinue tokens = if null scanError then printEvalOrContinue parsed else print scanError
+printScanErrorOrContinue tokens = if null scanError then printResolveErrorOrContinue parsed else print scanError
   where scanError = S.filter (isNotToken . tokenType) tokens
         parsed = parse tokens
 
-printEvalOrContinue :: AST.PROGRAM -> IO ()
-printEvalOrContinue (PROG statements) = handleCases
+-- TODO: Handle Resolve Errors
+printResolveErrorOrContinue :: AST.PROGRAM -> IO()
+printResolveErrorOrContinue prog = do
+  resolved <- resolveProgram prog
+  printEvalOrContinue prog resolved
+
+printEvalOrContinue :: AST.PROGRAM -> DepthMap  -> IO ()
+printEvalOrContinue (PROG statements) dMap = handleCases
   where parseError = findParseError statements S.empty
         astError = S.filter isJust (fmap getASTErrorFromStatement statements)
         handleCases
           | (not . null) parseError = print (mconcat ["ParserError: ", show parseError])
           | (not . null) astError = print (mconcat ["ParserError: ", show astError])
-          | otherwise = evalProgram (PROG statements)
-printEvalOrContinue parseError = print parseError
+          | otherwise = evalProgram (PROG statements) dMap
+printEvalOrContinue parseError _ = print parseError

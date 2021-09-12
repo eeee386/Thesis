@@ -25,14 +25,13 @@ resolveDeclarations scopes depthMap decs
 
 declare :: Stack ResolveMap -> T.Text -> IO (ResolveMap, Stack ResolveMap)
 declare scopes iden = do
-    print (S.length scopes)
     let (scope,tailScopes) = popScope scopes
-    newScope <- addUpdateToResolveMap scope iden False
+    newScope <- addToResolveMap scope iden False
     return (newScope, tailScopes)
 
 define :: Stack ResolveMap -> ResolveMap -> T.Text -> IO (Stack ResolveMap)
 define tailScopes addedToScope iden = do
-    updatedScope <- addUpdateToResolveMap addedToScope iden True
+    updatedScope <- updateInResolveMap addedToScope iden True
     return (pushScope tailScopes updatedScope)
 
 declareAndDefine :: Stack ResolveMap -> T.Text -> IO (Stack ResolveMap)
@@ -58,7 +57,7 @@ resolve scopes depthMap (DEC_STMT (BLOCK_STMT decs)) = do
   let endScopes = endScope resScopes
   return (snd endScopes, newDepthMap)
 
-resolve scopes depthMap (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) _)) = do
+resolve scopes depthMap (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) expr)) = do
   if
     null scopes
   then do
@@ -67,32 +66,42 @@ resolve scopes depthMap (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) _)) = do
 --declare
     (addedToScope, tailScopes) <- declare scopes iden
 -- here resolve expr
--- TODO: Handle error in Either type
-    maybeInResolveMap <- findInResolveMap iden addedToScope
-    if maybeInResolveMap == Just False then do
-      print "Can't read local variable in its own initializer."
-      return (scopes, depthMap)
-    else do
-      (localResolved, newDepthMap) <- resolveLocal scopes depthMap iden 0
+-- TODO: Add a third tag into result: S.Seq ResolverError to hold errors
+    (exprScopes) <- resolveExpression (S.singleton addedToScope) expr
+    newDepthMap <- resolveLocal exprScopes depthMap iden 0
 -- define
-      newScopes <- define tailScopes addedToScope iden
-      return (newScopes, newDepthMap)
+    newScopes <- define tailScopes addedToScope iden
+    return (newScopes, newDepthMap)
+
+resolve scopes depthMap (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden))) = do
+  if
+    null scopes
+  then do
+   return (scopes, depthMap)
+  else do
+    newScopes <- declareAndDefine scopes iden
+    return (newScopes, depthMap)
 
 resolve scopes depthMap (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens)) = do
-  exprScope <- resolveExpression scopes expr
-  resolveLocal scopes depthMap iden 0
+  exprScopes <- resolveExpression scopes expr
+  newDepthMap <- resolveLocal scopes depthMap iden 0
+  return (exprScopes, depthMap)
 
 resolve scopes depthMap (DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) (PARAMETERS params) (FUNC_STMT (BLOCK_STMT decs)))) = do
   updatedScope <- declareAndDefine scopes iden
 
   rMap <- createResolveMap
   let startScopes = beginScope updatedScope rMap
-  paramUpdatedScopes <- resolveParams scopes (PARAMETERS params)
-  (resScopes,newDepthMap)  <- resolveMulti startScopes depthMap decs
+  (paramUpdatedScopes, paramUpdatedDepthMap) <- resolveParams scopes depthMap (PARAMETERS params)
+  (resScopes,newDepthMap)  <- resolveMulti startScopes paramUpdatedDepthMap decs
   let endScopes = endScope resScopes
   return (snd endScopes, newDepthMap)
 
 resolve scopes depthMap (DEC_STMT (EXPR_STMT x)) = do
+  newScopes <- resolveExpression scopes x
+  return (newScopes, depthMap)
+
+resolve scopes depthMap (DEC_STMT (PRINT_STMT x)) = do
   newScopes <- resolveExpression scopes x
   return (newScopes, depthMap)
 
@@ -105,32 +114,47 @@ resolve scopes depthMap (DEC_STMT (IF_ELSE_STMT expr stmt1 stmt2)) = do
   (newScopes, newDepthMap) <- resolve firstScopes depthMap (createDecFromStatement stmt1)
   resolve newScopes newDepthMap (createDecFromStatement stmt2)
 
+resolve scopes depthMap (DEC_STMT (WHILE_STMT expr stmt)) = do
+  firstScopes <- resolveExpression scopes expr
+  resolve firstScopes depthMap (createDecFromStatement stmt)
+
+resolve scopes depthMap (DEC_STMT (FOR_STMT varDec expr incDec stmt)) = do
+  rMap <- createResolveMap
+  let startScopes = beginScope scopes rMap
+  (varScopes, varDepthMap) <- resolve startScopes depthMap varDec
+  exprScopes <- resolveExpression varScopes expr
+  (incScopes, incDepthMap) <- resolve exprScopes varDepthMap incDec
+  (resScopes, newDepthMap) <- resolve startScopes depthMap (createDecFromStatement stmt)
+  let endScopes = endScope resScopes
+  return (snd endScopes, newDepthMap)
+
+
 resolve scopes depthMap (DEC_STMT (RETURN expr)) = do
   newScopes <- resolveExpression scopes expr
   return (newScopes, depthMap)
 
 resolve scopes depthMap _ = return (scopes, depthMap)
 
-resolveLocal :: Stack ResolveMap -> DepthMap -> T.Text -> Int -> IO (Stack ResolveMap, DepthMap)
+resolveLocal :: Stack ResolveMap -> DepthMap -> T.Text -> Int -> IO DepthMap
 resolveLocal scopes depthMap iden depth
-  | depth > S.length scopes-1 = return (scopes, depthMap)
+  | depth > S.length scopes-1 = return (depthMap)
   | otherwise = do
     let scopeToLook = S.index scopes depth
     maybeInResolveMap <- findInResolveMap iden scopeToLook
     if isJust maybeInResolveMap then do
-      newDepthMap <- resolveDepth depthMap iden (depth+1)
-      return (scopes, newDepthMap)
+      resolveDepth depthMap iden (depth+1)
     else do
       resolveLocal scopes depthMap iden (depth+1)
 
 
-resolveParams :: Stack ResolveMap -> PARAMETERS -> IO (Stack ResolveMap)
-resolveParams scopes (PARAMETERS params)
-  | S.null params = return scopes
+resolveParams :: Stack ResolveMap -> DepthMap -> PARAMETERS -> IO (Stack ResolveMap, DepthMap)
+resolveParams scopes depthMap (PARAMETERS params)
+  | S.null params = return (scopes, depthMap)
   | otherwise = do
     let (EXP_LITERAL (IDENTIFIER paramName b)) = S.index params 0
+    newDepthMap <- resolveLocal scopes depthMap paramName 0
     newScopes <- declareAndDefine scopes paramName
-    resolveParams newScopes (PARAMETERS (S.drop 1 params))
+    resolveParams newScopes newDepthMap (PARAMETERS (S.drop 1 params))
 
 
 resolveDepth :: DepthMap -> T.Text -> Int -> IO DepthMap
@@ -147,6 +171,7 @@ resolveArguments scopes argumentlist
   | S.null argumentlist = return scopes
   | otherwise = do
       let (ARGS args) = S.index argumentlist 0
+      print args
       newScopes <- resolveExpressionMulti scopes args
       resolveArguments newScopes (S.drop 1 argumentlist)
 
@@ -159,9 +184,18 @@ resolveExpression scopes (EXP_TERNARY (TERN expr1 op1 expr2 op2 expr3) _) = do
 resolveExpression scopes (EXP_BINARY (BIN left op right) bLines) = do
   newScopes <- resolveExpression scopes left
   resolveExpression newScopes right
-resolveExpression scopes  (EXP_CALL (CALL_FUNC expr arguments)) = do
+resolveExpression scopes (EXP_CALL (CALL_FUNC expr arguments)) = do
   newScopes <- resolveExpression scopes expr
   resolveArguments newScopes arguments
 resolveExpression scopes (EXP_GROUPING (GROUP x)) = resolveExpression scopes x
 resolveExpression scopes (EXP_UNARY (UNARY op x) tokens) = resolveExpression scopes x
-resolveExpression scopes (EXP_LITERAL _) = return scopes
+resolveExpression scopes (EXP_LITERAL (IDENTIFIER iden tokens))
+  | S.null scopes = return scopes
+  | otherwise = do
+    maybeInResolveMap <- findInResolveMap iden (peekScope scopes)
+    if maybeInResolveMap == Just False then do
+      print "Can't read local variable in its own initializer."
+      return scopes
+    else do
+      return scopes
+resolveExpression scopes _ = return scopes

@@ -94,10 +94,9 @@ data META = META {
                  } deriving Show
 
 
-createGlobalMeta :: PROGRAM -> IO META
-createGlobalMeta prog = do
+createGlobalMeta ::  DepthMap -> IO META
+createGlobalMeta dMap = do
   e <- createGlobalEnvironment
-  dMap <- resolveProgram prog
   return META {env=e, isInFunction=False, isInLoop=True, depthMap=dMap }
 
 
