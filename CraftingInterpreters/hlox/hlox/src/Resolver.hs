@@ -83,17 +83,17 @@ resolve scopes depthMap (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden))) = do
     return (newScopes, depthMap)
 
 resolve scopes depthMap (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens)) = do
-  exprScopes <- resolveExpression scopes expr
+  exprScope <- resolveExpression scopes expr
   newDepthMap <- resolveLocal scopes depthMap iden 0
-  return (exprScopes, depthMap)
+  return (scopes, newDepthMap)
 
 resolve scopes depthMap (DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) (PARAMETERS params) (FUNC_STMT (BLOCK_STMT decs)))) = do
   updatedScope <- declareAndDefine scopes iden
 
   rMap <- createResolveMap
   let startScopes = beginScope updatedScope rMap
-  (paramUpdatedScopes, paramUpdatedDepthMap) <- resolveParams scopes depthMap (PARAMETERS params)
-  (resScopes,newDepthMap)  <- resolveMulti startScopes paramUpdatedDepthMap decs
+  paramUpdatedScopes <- resolveParams scopes (PARAMETERS params)
+  (resScopes,newDepthMap)  <- resolveMulti startScopes depthMap decs
   let endScopes = endScope resScopes
   return (snd endScopes, newDepthMap)
 
@@ -147,14 +147,14 @@ resolveLocal scopes depthMap iden depth
       resolveLocal scopes depthMap iden (depth+1)
 
 
-resolveParams :: Stack ResolveMap -> DepthMap -> PARAMETERS -> IO (Stack ResolveMap, DepthMap)
-resolveParams scopes depthMap (PARAMETERS params)
-  | S.null params = return (scopes, depthMap)
+resolveParams :: Stack ResolveMap -> PARAMETERS -> IO (Stack ResolveMap)
+resolveParams scopes (PARAMETERS params)
+  | S.null params = return scopes
   | otherwise = do
     let (EXP_LITERAL (IDENTIFIER paramName b)) = S.index params 0
-    newDepthMap <- resolveLocal scopes depthMap paramName 0
+    print paramName
     newScopes <- declareAndDefine scopes paramName
-    resolveParams newScopes newDepthMap (PARAMETERS (S.drop 1 params))
+    resolveParams newScopes (PARAMETERS (S.drop 1 params))
 
 
 resolveDepth :: DepthMap -> T.Text -> Int -> IO DepthMap
