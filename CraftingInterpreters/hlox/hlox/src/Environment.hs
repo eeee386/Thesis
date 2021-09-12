@@ -124,6 +124,8 @@ findValueInMetaEnv ::  AST.TextType -> META -> IO (Maybe EVAL)
 findValueInMetaEnv iden meta = do
   depth <- findInDepthMap iden (depthMap meta)
   if isJust depth then do
+    print depth
+    print (S.length (env meta))
     findValueOfIdentifier iden (env meta) (fromJust depth)
   else do
     findValueOfIdentifier iden (env meta) 0
