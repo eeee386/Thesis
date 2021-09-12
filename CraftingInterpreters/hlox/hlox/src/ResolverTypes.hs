@@ -97,5 +97,8 @@ checkIfVarAlreadyAdded meta iden = do
 incDepth :: ResolverMeta -> ResolverMeta
 incDepth meta = meta{depth=(depth meta+1)}
 
+decDepth :: ResolverMeta -> ResolverMeta
+decDepth meta = meta{depth=(depth meta-1)}
+
 cleanVarMeta :: ResolverMeta -> ResolverMeta
 cleanVarMeta meta = meta{varIden=Nothing}

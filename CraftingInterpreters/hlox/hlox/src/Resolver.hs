@@ -33,8 +33,8 @@ resolveMulti meta decs
 
 resolve :: ResolverMeta -> DECLARATION -> IO ResolverMeta
 resolve meta (DEC_STMT (BLOCK_STMT decs)) = do
-  newMeta <- resolveMulti meta decs
-  return newMeta
+  newMeta <- resolveMulti (incDepth meta) decs
+  return (decDepth newMeta)
 
 resolve meta (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) expr)) = do
    res <- checkIfVarAlreadyAdded meta iden
@@ -59,7 +59,7 @@ resolve meta (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens)) = return meta
 resolve meta (DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) (PARAMETERS params) (FUNC_STMT (BLOCK_STMT decs)))) = do
   paramMeta <- resolveParams (incDepth meta) (PARAMETERS params)
   newMeta <- resolveMulti paramMeta decs
-  return newMeta
+  return (decDepth newMeta)
 
 resolve meta (DEC_STMT (EXPR_STMT x)) = do
   resolveExpression meta x
@@ -77,8 +77,8 @@ resolve meta (DEC_STMT (WHILE_STMT expr stmt)) = do
 
 resolve meta (DEC_STMT (FOR_STMT varDec expr incDec stmt)) = do
   let metaToUse = incDepth meta
-  varDepthMap <- resolve metaToUse varDec
-  resolve metaToUse (createDecFromStatement stmt)
+  varMeta <- resolve metaToUse varDec
+  resolve (decDepth varMeta) (createDecFromStatement stmt)
 
 
 resolve meta (DEC_STMT (RETURN expr)) = do
@@ -94,8 +94,13 @@ resolveParams meta (PARAMETERS params)
   | otherwise = do
     let param = S.index params 0
     let (EXP_LITERAL (IDENTIFIER paramName b)) = param
-    newMeta <- updateMapInMeta meta paramName
-    resolveParams (cleanVarMeta newMeta) (PARAMETERS (S.drop 1 params))
+    res <- checkIfVarAlreadyAdded meta paramName
+    if res then do
+      print "Variable already added in scope"
+      return meta
+    else do
+     newMeta <- updateMapInMeta meta paramName
+     resolveParams (cleanVarMeta newMeta) (PARAMETERS (S.drop 1 params))
 
 
 resolveExpressionMulti :: ResolverMeta -> S.Seq EXPRESSION -> IO ()
