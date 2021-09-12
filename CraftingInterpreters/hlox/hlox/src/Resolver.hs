@@ -82,7 +82,7 @@ resolveParams meta (PARAMETERS params)
   | otherwise = do
     let param = S.index params 0
     let (EXP_LITERAL (IDENTIFIER paramName b)) = param
-    newMeta <- updateMapInMeta (incDepth meta) paramName
+    newMeta <- updateMapInMeta meta paramName
     resolveExpression newMeta param
     resolveParams newMeta (PARAMETERS (S.drop 1 params))
 
