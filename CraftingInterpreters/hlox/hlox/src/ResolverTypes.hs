@@ -89,5 +89,13 @@ checkIfResolverError meta iden
     maybeDepth  <- findInDepthMap iden (depthMap meta)
     return (maybeDepth == Just (depth meta))
 
+checkIfVarAlreadyAdded :: ResolverMeta -> T.Text -> IO Bool
+checkIfVarAlreadyAdded meta iden = do
+  maybeDepth <- findInDepthMap iden (depthMap meta)
+  return (isJust maybeDepth)
+  
 incDepth :: ResolverMeta -> ResolverMeta
 incDepth meta = meta{depth=(depth meta+1)}
+
+cleanVarMeta :: ResolverMeta -> ResolverMeta
+cleanVarMeta meta = meta{varIden=Nothing}

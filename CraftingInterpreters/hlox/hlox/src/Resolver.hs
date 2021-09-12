@@ -37,17 +37,28 @@ resolve meta (DEC_STMT (BLOCK_STMT decs)) = do
   return newMeta
 
 resolve meta (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) expr)) = do
-   newMeta  <-updateMapInMeta meta iden
-   resolveExpression newMeta expr
-   return newMeta
+   res <- checkIfVarAlreadyAdded meta iden
+   if res then do
+     print "Variable already added in scope"
+     return meta
+   else do
+     newMeta <- updateMapInMeta meta iden
+     resolveExpression newMeta expr
+     return (cleanVarMeta newMeta)
 
-resolve meta (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden))) = updateMapInMeta meta iden
+resolve meta (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden))) = do
+   res <- checkIfVarAlreadyAdded meta iden
+   if res then do
+     print "Variable already added in scope"
+     return meta
+   else do
+     updateMapInMeta meta iden
 
 resolve meta (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens)) = return meta
 
 resolve meta (DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) (PARAMETERS params) (FUNC_STMT (BLOCK_STMT decs)))) = do
-  paramUpdatedScopes <- resolveParams meta (PARAMETERS params)
-  newMeta <- resolveMulti (incDepth meta) decs
+  paramMeta <- resolveParams (incDepth meta) (PARAMETERS params)
+  newMeta <- resolveMulti paramMeta decs
   return newMeta
 
 resolve meta (DEC_STMT (EXPR_STMT x)) = do
@@ -76,6 +87,7 @@ resolve meta (DEC_STMT (RETURN expr)) = do
 
 resolve depthMap _  = return depthMap
 
+-- TODO: handle multiple params with the same name
 resolveParams :: ResolverMeta -> PARAMETERS -> IO ResolverMeta
 resolveParams meta (PARAMETERS params)
   | S.null params = return meta
@@ -83,8 +95,7 @@ resolveParams meta (PARAMETERS params)
     let param = S.index params 0
     let (EXP_LITERAL (IDENTIFIER paramName b)) = param
     newMeta <- updateMapInMeta meta paramName
-    resolveExpression newMeta param
-    resolveParams newMeta (PARAMETERS (S.drop 1 params))
+    resolveParams (cleanVarMeta newMeta) (PARAMETERS (S.drop 1 params))
 
 
 resolveExpressionMulti :: ResolverMeta -> S.Seq EXPRESSION -> IO ()
