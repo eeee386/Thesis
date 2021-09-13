@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module ResolverTypes where
 
 import qualified Data.HashTable.IO as HT
@@ -7,48 +9,6 @@ import qualified Data.Sequence as S
 import AST
 import qualified TokenHelper as TH
 import Data.Maybe
-
--- ResolveMap
-type ResolveMap = HT.BasicHashTable T.Text Bool
-
-createResolveMap :: IO ResolveMap
-createResolveMap = HT.new
-
-addToResolveMap :: ResolveMap -> T.Text -> Bool -> IO ResolveMap
-addToResolveMap rMap key val  = do
-  foundVal <- findInResolveMap key rMap
-  if isJust foundVal then do
-    print "Variable already defined in scope"
-    return rMap
-  else do  
-    HT.insert rMap key val
-    return rMap
-
-updateInResolveMap :: ResolveMap -> T.Text -> Bool -> IO ResolveMap
-updateInResolveMap rMap key val = do
-  HT.insert rMap key val
-  return rMap
-
-findInResolveMap :: AST.TextType -> ResolveMap ->IO (Maybe Bool)
-findInResolveMap iden vals = HT.lookup vals iden
-  
-
--- Stack ResolveMap
-createScope :: Stack ResolveMap
-createScope = createStack
-
-beginScope :: Stack ResolveMap -> ResolveMap -> Stack ResolveMap
-beginScope = pushStack
-
-pushScope = beginScope
-
-endScope :: Stack ResolveMap -> (ResolveMap, Stack ResolveMap)
-endScope = popStack
-
-popScope = endScope
-
-peekScope :: Stack ResolveMap -> ResolveMap
-peekScope = peekStack
 
 -- Depth Map
 type DepthMap = HT.BasicHashTable T.Text Int
@@ -66,15 +26,22 @@ findInDepthMap iden vals = do
   val <- HT.lookup vals iden
   return val
 
+-- ResolverError
+data ResolverError = RESOLVER_ERROR T.Text (S.Seq TH.Token) deriving Show
+
+
+
+-- ResolverMeta
 data ResolverMeta = ResolverMeta {
   depth :: Int
   , varIden :: Maybe T.Text
   , depthMap :: DepthMap
+  , rErrors :: S.Seq ResolverError
   } deriving (Show)
 
 createResolverMeta = do
   dMap <- createDepthMap
-  return ResolverMeta {depth=0, varIden=Nothing, depthMap=dMap}
+  return ResolverMeta {depth=0, varIden=Nothing, depthMap=dMap, rErrors=S.empty}
 
 updateMapInMeta :: ResolverMeta -> T.Text -> IO ResolverMeta
 updateMapInMeta meta iden = do
@@ -94,11 +61,21 @@ checkIfVarAlreadyAdded meta iden = do
   maybeDepth <- findInDepthMap iden (depthMap meta)
   return (isJust maybeDepth)
   
-incDepth :: ResolverMeta -> ResolverMeta
-incDepth meta = meta{depth=(depth meta+1)}
+incDepth :: ResolverMeta -> IO ResolverMeta
+incDepth meta = return meta{depth=(depth meta+1)}
 
-decDepth :: ResolverMeta -> ResolverMeta
-decDepth meta = meta{depth=(depth meta-1)}
+decDepth :: ResolverMeta -> IO ResolverMeta
+decDepth meta = return meta{depth=(depth meta-1)}
 
-cleanVarMeta :: ResolverMeta -> ResolverMeta
-cleanVarMeta meta = meta{varIden=Nothing}
+cleanVarMeta :: ResolverMeta -> IO ResolverMeta
+cleanVarMeta meta = return meta{varIden=Nothing}
+
+addError :: ResolverError -> ResolverMeta -> IO ResolverMeta
+addError error meta = return meta{rErrors=(rErrors meta S.|> error)}
+
+checkHandleIfAlreadyAdded :: (ResolverMeta -> T.Text -> IO ResolverMeta) -> T.Text -> ResolverMeta -> IO ResolverMeta
+checkHandleIfAlreadyAdded f iden meta  = do
+   res <- checkIfVarAlreadyAdded meta iden
+   if res then do
+     addError (RESOLVER_ERROR "Variable already added in scope" S.empty) meta
+   else f meta iden

@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Resolver where
 
 
@@ -10,126 +12,77 @@ import qualified TokenHelper as TH
 import Data.Maybe
 
 resolveProgram :: PROGRAM -> IO ResolverMeta
-resolveProgram (PROG x) = do
-  meta <- createResolverMeta
-  newDepthMap <- resolveDeclarations meta x
-  return newDepthMap
+resolveProgram (PROG x) = createResolverMeta >>= resolveDeclarations x
 
-resolveDeclarations :: ResolverMeta -> S.Seq DECLARATION -> IO ResolverMeta
-resolveDeclarations meta decs
+resolveDeclarations ::  S.Seq DECLARATION ->  ResolverMeta -> IO ResolverMeta
+resolveDeclarations decs meta
   | S.null decs = return meta
-  | otherwise = do
-      newMeta <- resolve meta (S.index decs 0)
-      resolveDeclarations newMeta (S.drop 1 decs)
+  | otherwise = resolve (S.index decs 0) meta >>= resolveDeclarations (S.drop 1 decs)
 
-resolveMulti :: ResolverMeta -> S.Seq DECLARATION -> IO ResolverMeta
-resolveMulti meta decs
+resolveMulti ::  S.Seq DECLARATION -> ResolverMeta -> IO ResolverMeta
+resolveMulti decs meta
   | S.null decs = return meta
-  | otherwise = do
-      newMeta <- resolve meta dec
-      resolveMulti newMeta (S.drop 1 decs)
+  | otherwise =  resolve dec meta >>= resolveMulti (S.drop 1 decs)
   where dec = S.index decs 0
 
 
-resolve :: ResolverMeta -> DECLARATION -> IO ResolverMeta
-resolve meta (DEC_STMT (BLOCK_STMT decs)) = do
-  newMeta <- resolveMulti (incDepth meta) decs
-  return (decDepth newMeta)
+resolve ::  DECLARATION -> ResolverMeta -> IO ResolverMeta
+resolve (DEC_STMT (BLOCK_STMT decs)) meta = incDepth meta >>= resolveMulti decs >>= decDepth
 
-resolve meta (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) expr)) = do
-   res <- checkIfVarAlreadyAdded meta iden
-   if res then do
-     print "Variable already added in scope"
-     return meta
-   else do
-     newMeta <- updateMapInMeta meta iden
-     resolveExpression newMeta expr
-     return (cleanVarMeta newMeta)
+resolve (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) expr)) meta = checkHandleIfAlreadyAdded handleDecDef iden meta
+  where handleDecDef meta iden = updateMapInMeta meta iden >>= resolveExpression expr >>= cleanVarMeta
 
-resolve meta (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden))) = do
-   res <- checkIfVarAlreadyAdded meta iden
-   if res then do
-     print "Variable already added in scope"
-     return meta
-   else do
-     updateMapInMeta meta iden
+resolve (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden))) meta = checkHandleIfAlreadyAdded updateMapInMeta iden meta
 
-resolve meta (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens)) = return meta
+resolve (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens)) meta = return meta
 
-resolve meta (DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) (PARAMETERS params) (FUNC_STMT (BLOCK_STMT decs)))) = do
-  paramMeta <- resolveParams (incDepth meta) (PARAMETERS params)
-  newMeta <- resolveMulti paramMeta decs
-  return (decDepth newMeta)
+resolve  (DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) (PARAMETERS params) (FUNC_STMT (BLOCK_STMT decs)))) meta =
+  incDepth meta >>= resolveParams (PARAMETERS params) >>= resolveMulti decs >>= decDepth
 
-resolve meta (DEC_STMT (EXPR_STMT x)) = do
-  resolveExpression meta x
-  return meta
+resolve (DEC_STMT (EXPR_STMT x)) meta = resolveExpression x meta
 
-resolve meta (DEC_STMT (IF_STMT expr stmt)) = do
-  resolve meta (createDecFromStatement stmt)
+resolve (DEC_STMT (IF_STMT expr stmt)) meta = resolve (createDecFromStatement stmt) meta
 
-resolve meta (DEC_STMT (IF_ELSE_STMT expr stmt1 stmt2)) = do
-  newMeta <- resolve meta (createDecFromStatement stmt1)
-  resolve newMeta (createDecFromStatement stmt2)
+resolve (DEC_STMT (IF_ELSE_STMT expr stmt1 stmt2)) meta = resolve (createDecFromStatement stmt1) meta >>= resolve (createDecFromStatement stmt2)
+ 
+resolve (DEC_STMT (WHILE_STMT expr stmt)) meta = resolve (createDecFromStatement stmt) meta
 
-resolve meta (DEC_STMT (WHILE_STMT expr stmt)) = do
-  resolve meta (createDecFromStatement stmt)
+resolve (DEC_STMT (FOR_STMT varDec expr incDec stmt)) meta = incDepth meta >>= resolve varDec >>= decDepth >>= resolve (createDecFromStatement stmt)
 
-resolve meta (DEC_STMT (FOR_STMT varDec expr incDec stmt)) = do
-  let metaToUse = incDepth meta
-  varMeta <- resolve metaToUse varDec
-  resolve (decDepth varMeta) (createDecFromStatement stmt)
-
-
-resolve meta (DEC_STMT (RETURN expr)) = do
+resolve (DEC_STMT (RETURN expr)) meta = do
   -- add functionality
   return meta
 
-resolve depthMap _  = return depthMap
+resolve _ meta  = return meta
+
 
 -- TODO: handle multiple params with the same name
-resolveParams :: ResolverMeta -> PARAMETERS -> IO ResolverMeta
-resolveParams meta (PARAMETERS params)
+resolveParams :: PARAMETERS -> ResolverMeta -> IO ResolverMeta
+resolveParams (PARAMETERS params) meta
   | S.null params = return meta
-  | otherwise = do
-    let param = S.index params 0
-    let (EXP_LITERAL (IDENTIFIER paramName b)) = param
-    res <- checkIfVarAlreadyAdded meta paramName
-    if res then do
-      print "Variable already added in scope"
-      return meta
-    else do
-     newMeta <- updateMapInMeta meta paramName
-     resolveParams (cleanVarMeta newMeta) (PARAMETERS (S.drop 1 params))
+  | otherwise = checkHandleIfAlreadyAdded (callResolveParams params) paramName meta
+  where param = S.index params 0
+        (EXP_LITERAL (IDENTIFIER paramName b)) = param
+        callResolveParams params meta paramName = updateMapInMeta meta paramName >>= cleanVarMeta >>= resolveParams (PARAMETERS (S.drop 1 params))
 
 
-resolveExpressionMulti :: ResolverMeta -> S.Seq EXPRESSION -> IO ()
-resolveExpressionMulti meta exprs
-  | S.null exprs = return ()
-  | otherwise = do
-      resolveExpression meta (S.index exprs 0)
-      resolveExpressionMulti meta (S.drop 1 exprs)
+resolveExpressionMulti ::  S.Seq EXPRESSION -> ResolverMeta -> IO ResolverMeta
+resolveExpressionMulti exprs meta
+  | S.null exprs = return meta
+  | otherwise = resolveExpression (S.index exprs 0) meta >>= resolveExpressionMulti (S.drop 1 exprs)
 
 
-resolveExpression :: ResolverMeta ->  EXPRESSION -> IO ()
-resolveExpression meta (EXP_TERNARY (TERN expr1 op1 expr2 op2 expr3) _) = do
-  resolveExpression meta expr1
-  resolveExpression meta expr2
-  resolveExpression meta expr3
-resolveExpression meta (EXP_BINARY (BIN left op right) bLines) = do
-  resolveExpression meta left
-  resolveExpression meta right
-resolveExpression meta (EXP_CALL (CALL_FUNC expr arguments)) = do
-  resolveExpression meta expr
-resolveExpression meta (EXP_GROUPING (GROUP x)) = resolveExpression meta x
-resolveExpression meta (EXP_UNARY (UNARY op x) tokens) = resolveExpression meta x
-resolveExpression meta (EXP_LITERAL (IDENTIFIER iden tokens))= do
-  print "this is called"
-  print meta
+resolveExpression :: EXPRESSION ->  ResolverMeta -> IO ResolverMeta
+resolveExpression (EXP_TERNARY (TERN expr1 op1 expr2 op2 expr3) _) meta = resolveExpression expr1 meta >>= resolveExpression expr2 >>= resolveExpression expr3
+resolveExpression (EXP_BINARY (BIN left op right) bLines) meta = resolveExpression left meta >>= resolveExpression right
+resolveExpression (EXP_CALL (CALL_FUNC expr arguments)) meta = resolveExpression expr meta
+resolveExpression (EXP_GROUPING (GROUP x)) meta = resolveExpression x meta
+resolveExpression (EXP_UNARY (UNARY op x) tokens) meta = resolveExpression x meta
+resolveExpression (EXP_LITERAL (IDENTIFIER iden tokens)) meta = do
   res <- checkIfResolverError meta iden
   if res then do
-    print "Can't read local variable in its own initializer."
+    addError (RESOLVER_ERROR "Can't read local variable in its own initializer." tokens) meta
   else do
-    return ()
+    return meta
+resolveExpression _ meta = return meta
 
-resolveExpression _ _ = return ()

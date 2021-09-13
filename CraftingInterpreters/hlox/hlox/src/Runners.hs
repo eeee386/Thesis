@@ -74,10 +74,14 @@ printScanErrorOrContinue tokens = if null scanError then printResolveErrorOrCont
 printResolveErrorOrContinue :: AST.PROGRAM -> IO()
 printResolveErrorOrContinue prog = do
   resolved <- resolveProgram prog
-  printEvalOrContinue prog (depthMap resolved)
+  let errors = rErrors resolved
+  if not (S.null errors) then do
+    print errors
+  else do
+    printEvalErrorOrContinue prog (depthMap resolved)
 
-printEvalOrContinue :: AST.PROGRAM -> DepthMap  -> IO ()
-printEvalOrContinue (PROG statements) dMap = handleCases
+printEvalErrorOrContinue :: AST.PROGRAM -> DepthMap  -> IO ()
+printEvalErrorOrContinue (PROG statements) dMap = handleCases
   where parseError = findParseError statements S.empty
         astError = S.filter isJust (fmap getASTErrorFromStatement statements)
         handleCases
