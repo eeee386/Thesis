@@ -292,6 +292,7 @@ callFunction meta (FUNC_DEC_EVAL iden arity params stmt) (ARGS args)
 functionCall :: META -> EVAL -> ARGUMENTS -> IO (EVAL, META)
 functionCall meta (FUNC_DEC_EVAL iden _ params (FUNC_STMT (BLOCK_STMT decs))) arguments = do
   withLocalMeta <- updateMetaWithLocalEnv meta
+  print arguments
   toEvalMeta <- saveFunctionArgs withLocalMeta params arguments
   (pIO, afterMetaIO) <- eval decs SKIP_EVAL (return toEvalMeta{isInFunction=True, isInLoop=False})
   afterMeta <- afterMetaIO

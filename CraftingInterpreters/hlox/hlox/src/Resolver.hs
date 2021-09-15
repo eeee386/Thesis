@@ -11,6 +11,13 @@ import qualified  Data.Text as T
 import qualified TokenHelper as TH
 import Data.Maybe
 
+-- Create a sequence of sequence (add the index value in the block (which will be an id) in the parser so that both resolver and eval could read it, and an index value for vars in the block)
+-- In Eval functions should save the environment (closure)
+-- And eval will look up the block by its id, and the value by its index
+
+-- This throws an error this should be fixed:  {var a = 5;}{var a = 4;}
+-- Another bug:  var a = 5; {var a = 4;} print a;
+
 resolveProgram :: PROGRAM -> IO ResolverMeta
 resolveProgram (PROG x) = createResolverMeta >>= resolveDeclarations x
 
@@ -37,7 +44,8 @@ resolve (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden))) meta = checkHandleIfAlreadyAdde
 resolve (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens)) meta = return meta
 
 resolve  (DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) (PARAMETERS params) (FUNC_STMT (BLOCK_STMT decs)))) meta =
-  incDepth meta >>= resolveParams (PARAMETERS params) >>= resolveMulti decs >>= decDepth
+  updateMapInMeta meta iden >>= incDepth >>= updateFunctionType FUNCTION >>= resolveParams (PARAMETERS params) >>= resolveMulti decs >>= updateFunctionType oldFuncType  >>= decDepth
+  where oldFuncType = funcType meta
 
 resolve (DEC_STMT (EXPR_STMT x)) meta = resolveExpression x meta
 
@@ -48,15 +56,17 @@ resolve (DEC_STMT (IF_ELSE_STMT expr stmt1 stmt2)) meta = resolve (createDecFrom
 resolve (DEC_STMT (WHILE_STMT expr stmt)) meta = resolve (createDecFromStatement stmt) meta
 
 resolve (DEC_STMT (FOR_STMT varDec expr incDec stmt)) meta = incDepth meta >>= resolve varDec >>= decDepth >>= resolve (createDecFromStatement stmt)
-
+--TODO: Add Tokens!
 resolve (DEC_STMT (RETURN expr)) meta = do
-  -- add functionality
-  return meta
+  if
+    funcType meta == NONE
+  then do
+    addError (RESOLVER_ERROR "Cannot call return outside a function or a method" S.empty) meta
+  else do return meta
 
 resolve _ meta  = return meta
 
 
--- TODO: handle multiple params with the same name
 resolveParams :: PARAMETERS -> ResolverMeta -> IO ResolverMeta
 resolveParams (PARAMETERS params) meta
   | S.null params = return meta

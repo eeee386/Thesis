@@ -29,7 +29,8 @@ findInDepthMap iden vals = do
 -- ResolverError
 data ResolverError = RESOLVER_ERROR T.Text (S.Seq TH.Token) deriving Show
 
-
+-- Function Types
+data FunctionTypes = NONE | FUNCTION | METHOD deriving (Show, Eq)
 
 -- ResolverMeta
 data ResolverMeta = ResolverMeta {
@@ -37,11 +38,12 @@ data ResolverMeta = ResolverMeta {
   , varIden :: Maybe T.Text
   , depthMap :: DepthMap
   , rErrors :: S.Seq ResolverError
+  , funcType :: FunctionTypes
   } deriving (Show)
 
 createResolverMeta = do
   dMap <- createDepthMap
-  return ResolverMeta {depth=0, varIden=Nothing, depthMap=dMap, rErrors=S.empty}
+  return ResolverMeta {depth=0, varIden=Nothing, depthMap=dMap, rErrors=S.empty, funcType=NONE}
 
 updateMapInMeta :: ResolverMeta -> T.Text -> IO ResolverMeta
 updateMapInMeta meta iden = do
@@ -58,8 +60,9 @@ checkIfResolverError meta iden
 
 checkIfVarAlreadyAdded :: ResolverMeta -> T.Text -> IO Bool
 checkIfVarAlreadyAdded meta iden = do
+  let scopeDepth = depth meta
   maybeDepth <- findInDepthMap iden (depthMap meta)
-  return (isJust maybeDepth)
+  return (maybeDepth == Just scopeDepth)
   
 incDepth :: ResolverMeta -> IO ResolverMeta
 incDepth meta = return meta{depth=(depth meta+1)}
@@ -72,6 +75,10 @@ cleanVarMeta meta = return meta{varIden=Nothing}
 
 addError :: ResolverError -> ResolverMeta -> IO ResolverMeta
 addError error meta = return meta{rErrors=(rErrors meta S.|> error)}
+
+updateFunctionType :: FunctionTypes -> ResolverMeta -> IO ResolverMeta
+updateFunctionType fType meta = return meta{funcType=fType}
+
 
 checkHandleIfAlreadyAdded :: (ResolverMeta -> T.Text -> IO ResolverMeta) -> T.Text -> ResolverMeta -> IO ResolverMeta
 checkHandleIfAlreadyAdded f iden meta  = do

@@ -39,7 +39,7 @@ createDeclaration tokens
         isFor = firstTokenType == Just FOR
         isFunction = firstTokenType == Just FUN
         isReturn = firstTokenType == Just TokenHelper.RETURN
-  
+
 
 handleBlock :: S.Seq Token -> (DECLARATION, S.Seq Token)
 handleBlock tokens
@@ -51,13 +51,13 @@ handleBlock tokens
         innerDecTokens = S.drop 1 (S.take (fromJust index) left)
 
 handleSimpleDeclaration :: S.Seq Token -> (DECLARATION, S.Seq Token)
-handleSimpleDeclaration tokens 
+handleSimpleDeclaration tokens
   | isNothing index = (PARSE_ERROR "Statement is not terminated" expr, rest)
   | otherwise = (buildSimpleDecFromTokens expr, rest)
   where index = S.findIndexL (tokenIsType SEMICOLON) tokens
         isTerminated = isJust index
         (expr, rest) = if isTerminated then S.splitAt (fromJust index+1) tokens else synchronize tokens
-        
+
 buildSimpleDecFromTokens :: S.Seq Token -> DECLARATION
 buildSimpleDecFromTokens expr
   | isAssignment || isVar = handleAssignmentOrDecDef isVar findAssignment expr firstTokenType

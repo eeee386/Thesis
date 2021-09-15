@@ -9,11 +9,6 @@ import qualified Data.HashTable.IO as HT
 type HashTable = HT.BasicHashTable AST.TextType EVAL
 type Environments = S.Seq HashTable
 
--- this is only newtype to have equality instance for EVAL
-newtype CLOSURE = CLOSURE Environments
-instance Eq CLOSURE where
-  (==) x y = False
-
 type Arity = Int
 type Name = AST.TextType
 type ClosureNames = S.Seq Name
