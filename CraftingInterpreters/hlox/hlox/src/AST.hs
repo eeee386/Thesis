@@ -7,6 +7,7 @@ import Data.Maybe
 import NativeFunctions
 
 type TextType = T.Text
+data ID = Id Int | NOT_READY deriving (Eq, Show)
 
 newtype PROGRAM = PROG (S.Seq DECLARATION)
 instance Show PROGRAM where
@@ -23,11 +24,11 @@ instance Show DECLARATION where
 
 type IDENTIFIER = TokenType
 
-data VARIABLE_DECLARATION = VAR_DEC_DEF IDENTIFIER EXPRESSION | VAR_DEC IDENTIFIER | VAR_DEF IDENTIFIER EXPRESSION (S.Seq Token) deriving Eq
+data VARIABLE_DECLARATION = VAR_DEC_DEF IDENTIFIER EXPRESSION (S.Seq Token) ID | VAR_DEC IDENTIFIER (S.Seq Token) ID | VAR_DEF IDENTIFIER EXPRESSION (S.Seq Token) ID deriving Eq
 instance Show VARIABLE_DECLARATION where
-  show (VAR_DEC_DEF iden expr) = mconcat ["var", " ", show iden, " = ", show expr]
-  show (VAR_DEC iden) = mconcat ["var", " ", show iden] 
-  show (VAR_DEF iden expr _) = mconcat [show iden, " = ", show expr]
+  show (VAR_DEC_DEF iden expr _ _) = mconcat ["var", " ", show iden, " = ", show expr]
+  show (VAR_DEC iden _ _) = mconcat ["var", " ", show iden] 
+  show (VAR_DEF iden expr _ _) = mconcat [show iden, " = ", show expr]
 
 
 data FUNCTION_STATEMENT = FUNC_STMT STATEMENT | NATIVE_FUNC_STMT NATIVE_FUNCTION_TYPES deriving Eq
@@ -42,7 +43,7 @@ instance Show FUNCTION_DECLARATION where
 
 data STATEMENT = EXPR_STMT EXPRESSION 
                | PRINT_STMT EXPRESSION 
-               | BLOCK_STMT (S.Seq DECLARATION) 
+               | BLOCK_STMT (S.Seq DECLARATION)
                | IF_STMT EXPRESSION STATEMENT 
                | IF_ELSE_STMT EXPRESSION STATEMENT STATEMENT
                | WHILE_STMT EXPRESSION STATEMENT
@@ -80,14 +81,14 @@ instance Show EXPRESSION where
   show (EXP_TERNARY x _) = show x
   show (EXP_CALL x) = mconcat ["Function: ", show x]
 
-data LITERAL = NUMBER Double | STRING TextType | TRUE | FALSE | NIL | IDENTIFIER TextType (S.Seq Token) deriving Eq
+data LITERAL = NUMBER Double | STRING TextType | TRUE | FALSE | NIL | IDENTIFIER TextType (S.Seq Token) ID deriving Eq
 instance Show LITERAL where 
   show (NUMBER x) = show x
   show (STRING x) = T.unpack (T.concat [T.pack "\"", x, T.pack "\""])
   show TRUE = "true"
   show FALSE = "false"
   show NIL = "nil"
-  show (IDENTIFIER x _) = show x
+  show (IDENTIFIER x _ id) = show x ++ show id
    
 
 newtype GROUPING = GROUP EXPRESSION deriving Eq
@@ -111,9 +112,9 @@ instance Show TERNARY where
   show (TERN v w x y z) = mconcat [show v, show w, show x, show y, show z]
   
   
-data PARAMETERS = PARAMETERS (S.Seq EXPRESSION) | INVALID_PARAMS AST.TextType (S.Seq Token) deriving Eq
+data PARAMETERS = PARAMETERS (S.Seq EXPRESSION) (S.Seq Token) | INVALID_PARAMS AST.TextType (S.Seq Token) deriving Eq
 instance Show PARAMETERS where
-  show (PARAMETERS params) = show params
+  show (PARAMETERS params _) = show params
   show (INVALID_PARAMS a t) = mconcat ["Invalid parameters: ", show a, show t]
   
 data ARGUMENTS = ARGS (S.Seq EXPRESSION) | INVALID_ARGS TextType (S.Seq Token) deriving Eq
@@ -165,15 +166,15 @@ isSkipDec (SKIP_DEC) = True
 isSkipDec _ = False
 
 isExpLiteralIdentifier :: EXPRESSION -> Bool
-isExpLiteralIdentifier (EXP_LITERAL (IDENTIFIER _ _)) = True
+isExpLiteralIdentifier (EXP_LITERAL (IDENTIFIER _ _ _)) = True
 isExpLiteralIdentifier _ = False
 
 
 getASTErrorFromStatement :: DECLARATION -> Maybe String
 getASTErrorFromStatement (DEC_STMT (EXPR_STMT x)) = findASTError x
 getASTErrorFromStatement (DEC_STMT (PRINT_STMT x)) = findASTError x
-getASTErrorFromStatement (DEC_VAR (VAR_DEC_DEF _ x)) = findASTError x
-getASTErrorFromStatement (DEC_VAR (VAR_DEF _ x _)) = findASTError x
+getASTErrorFromStatement (DEC_VAR (VAR_DEC_DEF _ x _ _)) = findASTError x
+getASTErrorFromStatement (DEC_VAR (VAR_DEF _ x _ _)) = findASTError x
 getASTErrorFromStatement (DEC_STMT (BLOCK_STMT x)) = S.lookup 0 $ fmap fromJust $ S.filter isJust $ fmap getASTErrorFromStatement x
 getASTErrorFromStatement (DEC_FUNC (FUNC_DEC _ _ (FUNC_STMT x))) = getASTErrorFromStatement (DEC_STMT x)
 getASTErrorFromStatement _ = Nothing

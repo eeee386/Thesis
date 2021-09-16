@@ -21,7 +21,7 @@ createAndPrepGlobalEnv = do
   addUpdateIdentifier "clock" (FUNC_DEC_EVAL
                                "clock"
                                0
-                               (PARAMETERS S.empty)
+                               (PARAMETERS S.empty S.empty)
                                (NATIVE_FUNC_STMT (CLOCK clock))) globalEnv
 
 createGlobalEnvironment :: IO Environments

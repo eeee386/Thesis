@@ -80,9 +80,9 @@ updateFunctionType :: FunctionTypes -> ResolverMeta -> IO ResolverMeta
 updateFunctionType fType meta = return meta{funcType=fType}
 
 
-checkHandleIfAlreadyAdded :: (ResolverMeta -> T.Text -> IO ResolverMeta) -> T.Text -> ResolverMeta -> IO ResolverMeta
-checkHandleIfAlreadyAdded f iden meta  = do
+checkHandleIfAlreadyAdded :: (ResolverMeta -> T.Text -> IO ResolverMeta) -> S.Seq TH.Token -> T.Text -> ResolverMeta -> IO ResolverMeta
+checkHandleIfAlreadyAdded f tokens iden meta  = do
    res <- checkIfVarAlreadyAdded meta iden
    if res then do
-     addError (RESOLVER_ERROR "Variable already added in scope" S.empty) meta
+     addError (RESOLVER_ERROR "Variable already added in scope" tokens) meta
    else f meta iden

@@ -36,15 +36,15 @@ resolveMulti decs meta
 resolve ::  DECLARATION -> ResolverMeta -> IO ResolverMeta
 resolve (DEC_STMT (BLOCK_STMT decs)) meta = incDepth meta >>= resolveMulti decs >>= decDepth
 
-resolve (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) expr)) meta = checkHandleIfAlreadyAdded handleDecDef iden meta
+resolve (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) expr tokens id)) meta = checkHandleIfAlreadyAdded handleDecDef tokens iden meta
   where handleDecDef meta iden = updateMapInMeta meta iden >>= resolveExpression expr >>= cleanVarMeta
 
-resolve (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden))) meta = checkHandleIfAlreadyAdded updateMapInMeta iden meta
+resolve (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden) tokens id)) meta = checkHandleIfAlreadyAdded updateMapInMeta tokens iden meta
 
-resolve (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens)) meta = return meta
+resolve (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens id)) meta = return meta
 
-resolve  (DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) (PARAMETERS params) (FUNC_STMT (BLOCK_STMT decs)))) meta =
-  updateMapInMeta meta iden >>= incDepth >>= updateFunctionType FUNCTION >>= resolveParams (PARAMETERS params) >>= resolveMulti decs >>= updateFunctionType oldFuncType  >>= decDepth
+resolve  (DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) parameters (FUNC_STMT (BLOCK_STMT decs)))) meta =
+  updateMapInMeta meta iden >>= incDepth >>= updateFunctionType FUNCTION >>= resolveParams parameters >>= resolveMulti decs >>= updateFunctionType oldFuncType  >>= decDepth
   where oldFuncType = funcType meta
 
 resolve (DEC_STMT (EXPR_STMT x)) meta = resolveExpression x meta
@@ -68,12 +68,12 @@ resolve _ meta  = return meta
 
 
 resolveParams :: PARAMETERS -> ResolverMeta -> IO ResolverMeta
-resolveParams (PARAMETERS params) meta
+resolveParams (PARAMETERS params tokens) meta
   | S.null params = return meta
-  | otherwise = checkHandleIfAlreadyAdded (callResolveParams params) paramName meta
+  | otherwise = checkHandleIfAlreadyAdded (callResolveParams params) tokens paramName meta
   where param = S.index params 0
-        (EXP_LITERAL (IDENTIFIER paramName b)) = param
-        callResolveParams params meta paramName = updateMapInMeta meta paramName >>= cleanVarMeta >>= resolveParams (PARAMETERS (S.drop 1 params))
+        (EXP_LITERAL (IDENTIFIER paramName b id)) = param
+        callResolveParams params meta paramName = updateMapInMeta meta paramName >>= cleanVarMeta >>= resolveParams (PARAMETERS (S.drop 1 params) tokens)
 
 
 resolveExpressionMulti ::  S.Seq EXPRESSION -> ResolverMeta -> IO ResolverMeta
@@ -88,7 +88,7 @@ resolveExpression (EXP_BINARY (BIN left op right) bLines) meta = resolveExpressi
 resolveExpression (EXP_CALL (CALL_FUNC expr arguments)) meta = resolveExpression expr meta
 resolveExpression (EXP_GROUPING (GROUP x)) meta = resolveExpression x meta
 resolveExpression (EXP_UNARY (UNARY op x) tokens) meta = resolveExpression x meta
-resolveExpression (EXP_LITERAL (IDENTIFIER iden tokens)) meta = do
+resolveExpression (EXP_LITERAL (IDENTIFIER iden tokens id)) meta = do
   res <- checkIfResolverError meta iden
   if res then do
     addError (RESOLVER_ERROR "Can't read local variable in its own initializer." tokens) meta

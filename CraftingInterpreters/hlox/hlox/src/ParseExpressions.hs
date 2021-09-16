@@ -93,7 +93,7 @@ checkLiteralToken (TokenHelper.NUMBER a) tokens  = (EXP_LITERAL (AST.NUMBER a), 
 checkLiteralToken TokenHelper.FALSE tokens  = (EXP_LITERAL AST.FALSE, (S.drop 1 tokens))
 checkLiteralToken TokenHelper.TRUE tokens  = (EXP_LITERAL AST.TRUE, (S.drop 1 tokens))
 checkLiteralToken TokenHelper.NIL tokens = (EXP_LITERAL AST.NIL, (S.drop 1 tokens))
-checkLiteralToken (TokenHelper.IDENTIFIER a) tokens = (EXP_LITERAL (AST.IDENTIFIER a tokens), (S.drop 1 tokens))
+checkLiteralToken (TokenHelper.IDENTIFIER a) tokens = (EXP_LITERAL (AST.IDENTIFIER a tokens NOT_READY), (S.drop 1 tokens))
 checkLiteralToken TokenHelper.LEFT_PAREN tokens
   | isEof = (NON_EXP "Parenthesis not closed" tokens, tokens)
   | isEmpty = (NON_EXP "Empty parenthesis" tokens, tokens)
@@ -162,7 +162,7 @@ isIdentifierToken :: Token -> Bool
 isIdentifierToken t = isIdentifier (tokenType t)
 
 createASTIdentifier ::S.Seq Token ->  TokenType -> EXPRESSION
-createASTIdentifier tokens (TokenHelper.IDENTIFIER a) = EXP_LITERAL (AST.IDENTIFIER a tokens)
+createASTIdentifier tokens (TokenHelper.IDENTIFIER a) = EXP_LITERAL (AST.IDENTIFIER a tokens NOT_READY)
 
 getMaybeOpFromMap :: S.Seq Token ->  M.Map TokenType OPERATOR -> Maybe OPERATOR
 getMaybeOpFromMap firstRest  = M.lookup (tokenType $ S.index firstRest 0)

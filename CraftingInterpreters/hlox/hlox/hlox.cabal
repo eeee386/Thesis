@@ -33,6 +33,7 @@ library
       NativeFunctions
       ParseExpressions
       Parser
+      ParserTypes
       Resolver
       ResolverTypes
       Runners

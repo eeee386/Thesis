@@ -56,14 +56,14 @@ evalDeclaration (DEC_STMT (PRINT_STMT x)) meta = do
 evalDeclaration (DEC_STMT (EXPR_STMT x)) meta = do
   locMeta <- meta
   evalExpression x locMeta
-evalDeclaration (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) expr)) meta = do
+evalDeclaration (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) expr tokens id)) meta = do
   locMeta <- meta
   (locExpr, newMeta) <- evalExpression expr locMeta
   handleVarDeclarationAndDefinition iden locExpr newMeta
-evalDeclaration (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden))) meta = do
+evalDeclaration (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden) tokens id)) meta = do
   locMeta <- meta
   handleVarDeclaration iden locMeta
-evalDeclaration (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens)) meta = do
+evalDeclaration (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens id)) meta = do
   locMeta <- meta
   (locExpr, newMeta) <- evalExpression expr locMeta
   handleVarDefinition iden locExpr newMeta tokens
@@ -113,9 +113,9 @@ evalDeclaration (DEC_STMT (LOOP expr dec stmt)) meta = do
           evalDeclaration (DEC_STMT (LOOP expr dec stmt)) (return newMeta{isInLoop=False})
       else return (SKIP_EVAL, secondMeta)
 
-evalDeclaration (DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) (PARAMETERS params) stmt)) meta = do
+evalDeclaration (DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) (PARAMETERS params tokens) stmt)) meta = do
   locMeta <- meta
-  let eval = FUNC_DEC_EVAL iden (S.length params) (PARAMETERS params) stmt
+  let eval = FUNC_DEC_EVAL iden (S.length params) (PARAMETERS params tokens) stmt
   newMeta <- addIdentifierToMetaEnv iden eval locMeta
   return (eval, newMeta)
 
@@ -160,7 +160,7 @@ evalExpression (EXP_LITERAL (STRING x)) meta = return (EVAL_STRING x, meta)
 evalExpression (EXP_LITERAL FALSE) meta = return (EVAL_BOOL False, meta)
 evalExpression (EXP_LITERAL TRUE) meta = return (EVAL_BOOL True, meta)
 evalExpression (EXP_LITERAL NIL) meta = return (EVAL_NIL, meta)
-evalExpression (EXP_LITERAL (IDENTIFIER x tokens)) meta = do
+evalExpression (EXP_LITERAL (IDENTIFIER x tokens id)) meta = do
   val <- findValueInMetaEnv x meta
   if isJust val then return (fromJust val, meta) else return (RUNTIME_ERROR "Identifier is not defined" tokens, meta)
 
@@ -306,14 +306,14 @@ functionCall meta (FUNC_DEC_EVAL iden _ params (NATIVE_FUNC_STMT f)) arguments =
 
 
 saveFunctionArgs :: META -> PARAMETERS -> ARGUMENTS -> IO META
-saveFunctionArgs meta (PARAMETERS params) (ARGS args)
+saveFunctionArgs meta (PARAMETERS params tokens) (ARGS args)
  | S.null params = return meta
  | otherwise = do
-     let (EXP_LITERAL (IDENTIFIER p b)) = S.index params 0
+     let (EXP_LITERAL (IDENTIFIER p b id)) = S.index params 0
      let a = S.index args 0
      (evalA, evalMeta) <- evalExpression a meta
      newMeta <- addIdentifierToMetaEnv p evalA evalMeta
-     saveFunctionArgs newMeta (PARAMETERS (S.drop 1 params)) (ARGS (S.drop 1 args))
+     saveFunctionArgs newMeta (PARAMETERS (S.drop 1 params) tokens) (ARGS (S.drop 1 args))
 
 callNativeFunction :: NATIVE_FUNCTION_TYPES -> ARGUMENTS -> IO EVAL
 callNativeFunction (CLOCK x) _ = do
