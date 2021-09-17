@@ -24,7 +24,7 @@ instance Show DECLARATION where
 
 type IDENTIFIER = TokenType
 
-data VARIABLE_DECLARATION = VAR_DEC_DEF IDENTIFIER EXPRESSION (S.Seq Token) ID | VAR_DEC IDENTIFIER (S.Seq Token) ID | VAR_DEF IDENTIFIER EXPRESSION (S.Seq Token) ID deriving Eq
+data VARIABLE_DECLARATION = VAR_DEC_DEF IDENTIFIER EXPRESSION (S.Seq Token) ID | VAR_DEC IDENTIFIER (S.Seq Token) ID | VAR_DEF IDENTIFIER EXPRESSION (S.Seq Token) ID | PARAM_DEC IDENTIFIER (S.Seq Token) ID deriving Eq
 instance Show VARIABLE_DECLARATION where
   show (VAR_DEC_DEF iden expr _ _) = mconcat ["var", " ", show iden, " = ", show expr]
   show (VAR_DEC iden _ _) = mconcat ["var", " ", show iden] 
@@ -36,9 +36,9 @@ instance Show FUNCTION_STATEMENT where
   show (FUNC_STMT x) = show x
   show (NATIVE_FUNC_STMT x) = show x
 
-data FUNCTION_DECLARATION = FUNC_DEC IDENTIFIER PARAMETERS FUNCTION_STATEMENT deriving Eq
+data FUNCTION_DECLARATION = FUNC_DEC IDENTIFIER PARAMETERS FUNCTION_STATEMENT ID deriving Eq
 instance Show FUNCTION_DECLARATION where
-  show (FUNC_DEC i p s) = mconcat ["function name: ", show i,"params: " , show p, "statements: ", show s]
+  show (FUNC_DEC i p s _) = mconcat ["function name: ", show i,"params: " , show p, "statements: ", show s]
 
 
 data STATEMENT = EXPR_STMT EXPRESSION 
@@ -95,9 +95,9 @@ newtype GROUPING = GROUP EXPRESSION deriving Eq
 instance Show GROUPING where 
   show (GROUP x) = mconcat ["(", show x, ")"]
   
-data CALL = CALL_FUNC EXPRESSION (S.Seq ARGUMENTS) deriving Eq
+data CALL = CALL_FUNC EXPRESSION (S.Seq ARGUMENTS) ID deriving Eq
 instance Show CALL where
-  show (CALL_FUNC lit args) = mconcat [show lit, "(", show args, ")"]
+  show (CALL_FUNC lit args _) = mconcat [show lit, "(", show args, ")"]
 
 data UNARY = UNARY OPERATOR EXPRESSION deriving Eq
 instance Show UNARY where 
@@ -112,7 +112,7 @@ instance Show TERNARY where
   show (TERN v w x y z) = mconcat [show v, show w, show x, show y, show z]
   
   
-data PARAMETERS = PARAMETERS (S.Seq EXPRESSION) (S.Seq Token) | INVALID_PARAMS AST.TextType (S.Seq Token) deriving Eq
+data PARAMETERS = PARAMETERS (S.Seq DECLARATION) (S.Seq Token) | INVALID_PARAMS AST.TextType (S.Seq Token) deriving Eq
 instance Show PARAMETERS where
   show (PARAMETERS params _) = show params
   show (INVALID_PARAMS a t) = mconcat ["Invalid parameters: ", show a, show t]
@@ -176,7 +176,7 @@ getASTErrorFromStatement (DEC_STMT (PRINT_STMT x)) = findASTError x
 getASTErrorFromStatement (DEC_VAR (VAR_DEC_DEF _ x _ _)) = findASTError x
 getASTErrorFromStatement (DEC_VAR (VAR_DEF _ x _ _)) = findASTError x
 getASTErrorFromStatement (DEC_STMT (BLOCK_STMT x)) = S.lookup 0 $ fmap fromJust $ S.filter isJust $ fmap getASTErrorFromStatement x
-getASTErrorFromStatement (DEC_FUNC (FUNC_DEC _ _ (FUNC_STMT x))) = getASTErrorFromStatement (DEC_STMT x)
+getASTErrorFromStatement (DEC_FUNC (FUNC_DEC _ _ (FUNC_STMT x) _)) = getASTErrorFromStatement (DEC_STMT x)
 getASTErrorFromStatement _ = Nothing
 
 

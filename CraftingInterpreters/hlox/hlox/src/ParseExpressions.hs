@@ -74,7 +74,7 @@ createCall :: S.Seq Token -> (EXPRESSION, S.Seq Token)
 createCall tokens
   | not isIden || (isIden && not isCall) = createLiteral tokens
   | not hasRightParen = (NON_EXP "Missing right parenthesis from function call" tokens, tokens)
-  | otherwise = chainCall rest (CALL_FUNC (createASTIdentifier tokens tIden) (S.singleton args))
+  | otherwise = chainCall rest (CALL_FUNC (createASTIdentifier tokens tIden) (S.singleton args) NOT_READY)
   where maybeIden = S.lookup 0 tokens
         isIden = (isIdentifierToken <$> maybeIden) == Just True
         iden = fromJust maybeIden

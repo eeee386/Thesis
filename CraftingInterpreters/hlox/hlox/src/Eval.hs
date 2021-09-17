@@ -88,6 +88,7 @@ evalDeclaration (DEC_STMT (IF_ELSE_STMT expr stmt1 stmt2)) meta = do
 evalDeclaration (DEC_STMT (WHILE_STMT expr stmt)) meta = do
   evalDeclaration (DEC_STMT (LOOP expr SKIP_DEC stmt)) meta
 
+-- Fix for loop because the varDec is created in the for's scope
 evalDeclaration (DEC_STMT (FOR_STMT varDec expr incDec stmt)) meta = do
   nonIOMeta <- meta
   let locMetaIO =  updateMetaWithLocalEnv nonIOMeta

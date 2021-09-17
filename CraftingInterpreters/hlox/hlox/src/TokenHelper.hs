@@ -34,3 +34,8 @@ tokenType :: TokenType
 
 instance Show Token where
   show a = mconcat ["{", show (tokenType a), ", ", show (line a), "}"]
+
+
+isIdentifier :: TokenType -> Bool
+isIdentifier (IDENTIFIER _) = True
+isIdentifier _ = False
