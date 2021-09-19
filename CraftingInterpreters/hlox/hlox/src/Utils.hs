@@ -28,3 +28,17 @@ findMatching left right surplus index tokens
 findMatchingBraceIndex ::  S.Seq Token -> Maybe Int
 findMatchingBraceIndex = findMatching LEFT_BRACE RIGHT_BRACE 0 0
 
+-- Stack
+type Stack = []
+
+createStack :: Stack a
+createStack = []
+
+pop :: Stack a -> (a, Stack a)
+pop (x:xs) = (x,xs)
+
+push :: a -> Stack a -> Stack a
+push x xs = x:xs
+
+peek :: Stack a -> a
+peek = head

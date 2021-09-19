@@ -11,8 +11,6 @@ import qualified  Data.Text as T
 import qualified TokenHelper as TH
 import Data.Maybe
 
--- Fix declaration adding so that does not just add to newDeclearations sequence but adds to block declaration as well
--- And fix expressions to be saved to declarations
 
 resolveProgram :: PROGRAM -> IO ResolverMeta
 resolveProgram (PROG x) = createResolverMeta >>= resolveDeclarations x
@@ -30,7 +28,7 @@ resolveMulti decs meta
 
 
 resolve :: DECLARATION -> ResolverMeta -> IO ResolverMeta
-resolve (DEC_STMT (BLOCK_STMT decs)) meta = addBlockToMeta meta >>= resolveMulti decs >>= addDecToMeta (DEC_STMT (BLOCK_STMT decs)) >>= deleteBlockFromMeta
+resolve (DEC_STMT (BLOCK_STMT decs)) meta = addBlockToMeta meta >>= resolveMulti decs >>= addBlockDecToMeta >>= deleteBlockFromMeta
 
 resolve (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) expr tokens (Id id))) meta = checkHandleIfAlreadyAdded handleDecDef tokens iden meta
   where handleDecDef meta iden = updateBlockInMeta id iden meta >>= resolveExpression expr >>= cleanVarMeta >>= addDecToMeta (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) expr tokens (Id id)))
@@ -46,23 +44,23 @@ resolve (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens NOT_READY)) meta = do
     addDecToMeta (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens (Id (fromJust maybeId)))) meta
 
 resolve  (DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) parameters (FUNC_STMT (BLOCK_STMT decs)) (Id id))) meta =
-  updateBlockInMeta id iden meta >>= addBlockToMeta >>= updateFunctionType FUNCTION >>= resolveParams parameters >>= resolveMulti decs >>= updateFunctionType oldFuncType  >>=  addDecToMeta (DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) parameters (FUNC_STMT (BLOCK_STMT decs)) (Id id))) >>= deleteBlockFromMeta
+  updateBlockInMeta id iden meta >>= addBlockToMeta >>= updateFunctionType FUNCTION >>= resolveParams parameters >>= resolveMulti decs >>= updateFunctionType oldFuncType >>=  addFunctionDecToMeta iden parameters id >>= deleteBlockFromMeta
   where oldFuncType = funcType meta
 
 resolve (DEC_STMT (EXPR_STMT x)) meta = resolveExpression x meta >>= addDecToMeta (DEC_STMT (EXPR_STMT x))
 
-resolve (DEC_STMT (IF_STMT expr stmt)) meta = resolve (createDecFromStatement stmt) meta >>= addDecToMeta (DEC_STMT (IF_STMT expr stmt))
+resolve (DEC_STMT (IF_STMT expr stmt)) meta = resolveExpression expr meta >>= resolve (createDecFromStatement stmt) >>= addDecToMeta (DEC_STMT (IF_STMT expr stmt))
 
 resolve (DEC_STMT (IF_ELSE_STMT expr stmt1 stmt2)) meta = resolve (createDecFromStatement stmt1) meta >>= resolve (createDecFromStatement stmt2) >>= addDecToMeta (DEC_STMT (IF_ELSE_STMT expr stmt1 stmt2))
- 
-resolve (DEC_STMT (WHILE_STMT expr stmt)) meta = resolve (createDecFromStatement stmt) meta >>= addDecToMeta (DEC_STMT (WHILE_STMT expr stmt))
+
+resolve (DEC_STMT (WHILE_STMT expr stmt)) meta = resolveExpression expr meta >>= resolve (createDecFromStatement stmt) >>= addDecToMeta (DEC_STMT (WHILE_STMT expr stmt))
 
 resolve (DEC_STMT (FOR_STMT varDec expr incDec stmt)) meta = resolve varDec meta >>= resolveExpression expr >>= resolve incDec >>= resolve (createDecFromStatement stmt)
 --TODO: Add Tokens to returns in the AST!
 resolve (DEC_STMT (RETURN expr)) meta = checkReturn (resolveExpression expr) meta
   where handleReturn expr meta = resolveExpression expr meta >>= addDecToMeta (DEC_STMT (RETURN expr))
 
-resolve (DEC_STMT (RETURN_NIL)) meta = checkReturn (return) meta
+resolve (DEC_STMT RETURN_NIL) meta = checkReturn return meta
 
 resolve (DEC_STMT (PRINT_STMT x)) meta = resolveExpression x meta >>= addDecToMeta (DEC_STMT (PRINT_STMT x))
 
@@ -78,6 +76,7 @@ resolveParams (PARAMETERS params tokens) meta
         callResolveParams params meta iden = updateBlockInMeta id iden meta >>= cleanVarMeta >>= resolveParams (PARAMETERS (S.drop 1 params) tokens)
 
 
+-- ResolveExpression
 resolveExpressionMulti ::  S.Seq EXPRESSION -> ResolverMeta -> IO ResolverMeta
 resolveExpressionMulti exprs meta
   | S.null exprs = return meta
@@ -85,16 +84,21 @@ resolveExpressionMulti exprs meta
 
 
 resolveExpression :: EXPRESSION ->  ResolverMeta -> IO ResolverMeta
-resolveExpression (EXP_TERNARY (TERN expr1 op1 expr2 op2 expr3) _) meta = resolveExpression expr1 meta >>= resolveExpression expr2 >>= resolveExpression expr3
-resolveExpression (EXP_BINARY (BIN left op right) bLines) meta = resolveExpression left meta >>= resolveExpression right
-resolveExpression (EXP_CALL (CALL_FUNC expr arguments id)) meta = resolveExpression expr meta
-resolveExpression (EXP_GROUPING (GROUP x)) meta = resolveExpression x meta
-resolveExpression (EXP_UNARY (UNARY op x) tokens) meta = resolveExpression x meta
+resolveExpression (EXP_TERNARY (TERN expr1 op1 expr2 op2 expr3) tokens) meta =
+  resolveExpression expr1 meta >>= resolveExpression expr2 >>= resolveExpression expr3 >>= addTernaryExpr (op1, op2, tokens)
+resolveExpression (EXP_BINARY (BIN left op right) tokens) meta = resolveExpression left meta >>= resolveExpression right >>= addBinaryExpr (op, tokens)
+resolveExpression (EXP_CALL (CALL_FUNC expr arguments id)) meta =resolveExpression expr meta >>= addClosingExpr (\x -> EXP_CALL (CALL_FUNC x arguments id))
+resolveExpression (EXP_GROUPING (GROUP x)) meta = resolveExpression x meta >>= addClosingExpr (EXP_GROUPING . GROUP)
+resolveExpression (EXP_UNARY (UNARY op x) tokens) meta = resolveExpression x meta >>= addClosingExpr (\x -> EXP_UNARY (UNARY op x) tokens)
 resolveExpression (EXP_LITERAL (IDENTIFIER iden tokens id)) meta = do
-  res <- checkIfResolverError meta iden
-  if res then do
+  if checkIfResolverError meta iden then do
     addError (RESOLVER_ERROR "Can't read local variable in its own initializer." tokens) meta
   else do
-    return meta
-resolveExpression _ meta = return meta
+    maybeId <- findIdInResolverEnv iden (resolverEnv meta)
+    if isNothing maybeId then do
+      addError (RESOLVER_ERROR "Variable is not declared yet." tokens) meta
+    else do
+      addSimpleExpr (EXP_LITERAL (IDENTIFIER iden tokens (Id (fromJust maybeId)))) meta
+
+resolveExpression expr meta = addSimpleExpr expr meta
 

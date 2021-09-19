@@ -61,20 +61,20 @@ data ResolverMeta = ResolverMeta {
   , funcType :: FunctionTypes
   , resolverEnv :: ResolverEnvironment
   , idenSequence :: S.Seq T.Text
-  , blockDeclarations :: S.Seq DECLARATION
-  , newDeclarations :: S.Seq DECLARATION
+  , newDeclarations :: Stack (S.Seq DECLARATION)
+  , newExpressions :: Stack EXPRESSION
   } deriving (Show)
 
 createResolverMeta :: IO ResolverMeta
 createResolverMeta = do
   resEnv <- createNewResEnv
-  return ResolverMeta {varIden=Nothing, rErrors=S.empty, funcType=NONE, resolverEnv=resEnv, idenSequence=S.empty, newDeclarations=S.empty, blockDeclarations=S.empty}
+  return ResolverMeta {varIden=Nothing, rErrors=S.empty, funcType=NONE, resolverEnv=resEnv, idenSequence=S.empty, newDeclarations=createStack}
 
 
 addBlockToMeta :: ResolverMeta -> IO ResolverMeta
 addBlockToMeta meta = do
   newEnv <- addNewBlockToResEnv (resolverEnv meta)
-  return meta{resolverEnv=newEnv}
+  return meta{resolverEnv=newEnv, newDeclarations=(push S.empty (newDeclarations meta))}
 
 deleteBlockFromMeta :: ResolverMeta -> IO ResolverMeta
 deleteBlockFromMeta meta = return meta{resolverEnv=(deleteBlockFromResEnv (resolverEnv meta))}
@@ -87,13 +87,8 @@ updateBlockInMeta id iden meta = do
 findIdenInMeta :: T.Text -> ResolverMeta -> IO Bool
 findIdenInMeta iden meta = isJust <$> findIdInResolverEnv iden (resolverEnv meta)
 
-
-checkIfResolverError :: ResolverMeta -> T.Text -> IO Bool
-checkIfResolverError meta iden
-  | Just  iden /= (varIden meta) = return False
-  | otherwise = do
-    maybeId  <- findIdInResolverEnv iden (resolverEnv meta)
-    return (isNothing maybeId)
+checkIfResolverError :: ResolverMeta -> T.Text -> Bool
+checkIfResolverError meta iden = Just iden /= (varIden meta)
 
 checkIfVarAlreadyAdded :: ResolverMeta -> T.Text -> IO Bool
 checkIfVarAlreadyAdded meta iden = isJust <$> getIdOfIden iden currentBlock
@@ -127,4 +122,46 @@ checkReturn f meta = if
 
 
 addDecToMeta :: DECLARATION -> ResolverMeta -> IO ResolverMeta
-addDecToMeta dec meta = return meta{newDeclarations= (newDeclarations meta S.|> dec)}
+addDecToMeta dec meta = do
+  let (last, delDecs) = pop (newDeclarations meta)
+  let lastNew = last S.|> dec
+  return meta{newDeclarations=push lastNew delDecs}
+
+addBlockDecToMeta :: ResolverMeta -> IO ResolverMeta
+addBlockDecToMeta meta = do
+  let (newBlockStmt, last, delDecs) = handleBlockStatementSave meta
+  let lastUpdated = last S.|> DEC_STMT newBlockStmt
+  return meta{newDeclarations= push lastUpdated delDecs}
+
+addFunctionDecToMeta ::T.Text -> PARAMETERS -> Int -> ResolverMeta -> IO ResolverMeta
+addFunctionDecToMeta iden parameters id meta = do 
+  let (newBlockStmt, last, delDecs) = handleBlockStatementSave meta
+  let lastUpdated = last S.|> DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) parameters (FUNC_STMT newBlockStmt) (Id id))
+  return meta{newDeclarations=push lastUpdated delDecs}
+
+
+handleBlockStatementSave :: ResolverMeta -> (STATEMENT, S.Seq DECLARATION, Stack (S.Seq DECLARATION))
+handleBlockStatementSave meta = (BLOCK_STMT currentBlockDecs, last, delDecs)
+  where (currentBlockDecs, delDecs) = pop (newDeclarations meta)
+        last = peek delDecs
+
+addTernaryExpr :: (OPERATOR, OPERATOR, S.Seq TH.Token) -> ResolverMeta -> IO ResolverMeta
+addTernaryExpr (op1, op2, tokens) meta = return meta{newExpressions=newExprs}
+  where (firstExpr, fRest) = pop (newExpressions meta)
+        (secondExpr, sRest) = pop fRest
+        (thirdExpr, tRest) = pop sRest
+        newExprs = push (EXP_TERNARY (TERN firstExpr op1 secondExpr op2 thirdExpr) tokens) tRest
+
+addBinaryExpr :: (OPERATOR, S.Seq TH.Token) -> ResolverMeta -> IO ResolverMeta
+addBinaryExpr (op, tokens) meta = return meta{newExpressions=newExprs}
+  where (left, fRest) = pop (newExpressions meta)
+        (right, sRest) = pop fRest
+        newExprs = push (EXP_BINARY (BIN left op right) tokens) sRest
+
+addClosingExpr :: (EXPRESSION -> EXPRESSION) -> ResolverMeta -> IO ResolverMeta
+addClosingExpr cexpr meta = return meta{newExpressions=newExprs}
+  where (expr, rest) = pop (newExpressions meta)
+        newExprs = push (cexpr expr) rest
+
+addSimpleExpr :: EXPRESSION -> ResolverMeta -> IO ResolverMeta
+addSimpleExpr expr meta = return meta{newExpressions=push expr (newExpressions meta)}
