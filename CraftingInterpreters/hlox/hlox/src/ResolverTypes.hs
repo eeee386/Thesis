@@ -133,6 +133,11 @@ addBlockDecToMeta meta = do
   let lastUpdated = last S.|> DEC_STMT newBlockStmt
   return meta{newDeclarations= push lastUpdated delDecs}
 
+addDecWithExprToMeta :: (EXPRESSION -> DECLARATION) -> ResolverMeta -> IO ResolverMeta
+addDecWithExprToMeta unFinishedDec meta = addDecToMeta (unFinishedDec expr) meta
+  where (expr, rest) = pop (newExpressions meta)
+        newMeta = meta{newExpressions=rest}
+
 addFunctionDecToMeta ::T.Text -> PARAMETERS -> Int -> ResolverMeta -> IO ResolverMeta
 addFunctionDecToMeta iden parameters id meta = do 
   let (newBlockStmt, last, delDecs) = handleBlockStatementSave meta
@@ -147,15 +152,15 @@ handleBlockStatementSave meta = (BLOCK_STMT currentBlockDecs, last, delDecs)
 
 addTernaryExpr :: (OPERATOR, OPERATOR, S.Seq TH.Token) -> ResolverMeta -> IO ResolverMeta
 addTernaryExpr (op1, op2, tokens) meta = return meta{newExpressions=newExprs}
-  where (firstExpr, fRest) = pop (newExpressions meta)
+  where (thirdExpr, fRest) = pop (newExpressions meta)
         (secondExpr, sRest) = pop fRest
-        (thirdExpr, tRest) = pop sRest
+        (firstExpr, tRest) = pop sRest
         newExprs = push (EXP_TERNARY (TERN firstExpr op1 secondExpr op2 thirdExpr) tokens) tRest
 
 addBinaryExpr :: (OPERATOR, S.Seq TH.Token) -> ResolverMeta -> IO ResolverMeta
 addBinaryExpr (op, tokens) meta = return meta{newExpressions=newExprs}
-  where (left, fRest) = pop (newExpressions meta)
-        (right, sRest) = pop fRest
+  where (right, fRest) = pop (newExpressions meta)
+        (left, sRest) = pop fRest
         newExprs = push (EXP_BINARY (BIN left op right) tokens) sRest
 
 addClosingExpr :: (EXPRESSION -> EXPRESSION) -> ResolverMeta -> IO ResolverMeta

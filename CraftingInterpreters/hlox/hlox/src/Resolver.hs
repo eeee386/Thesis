@@ -31,7 +31,7 @@ resolve :: DECLARATION -> ResolverMeta -> IO ResolverMeta
 resolve (DEC_STMT (BLOCK_STMT decs)) meta = addBlockToMeta meta >>= resolveMulti decs >>= addBlockDecToMeta >>= deleteBlockFromMeta
 
 resolve (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) expr tokens (Id id))) meta = checkHandleIfAlreadyAdded handleDecDef tokens iden meta
-  where handleDecDef meta iden = updateBlockInMeta id iden meta >>= resolveExpression expr >>= cleanVarMeta >>= addDecToMeta (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) expr tokens (Id id)))
+  where handleDecDef meta iden = updateBlockInMeta id iden meta >>= resolveExpression expr >>= cleanVarMeta >>= addDecWithExprToMeta (\x -> (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) x tokens (Id id))))
 
 resolve (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden) tokens (Id id))) meta = checkHandleIfAlreadyAdded handleDec tokens iden meta
   where handleDec meta iden = updateBlockInMeta id iden meta >>= addDecToMeta (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden) tokens (Id id)))
@@ -41,30 +41,30 @@ resolve (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens NOT_READY)) meta = do
   if isNothing maybeId then do
     addError (RESOLVER_ERROR "Variable is not defined" tokens) meta
   else do
-    addDecToMeta (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens (Id (fromJust maybeId)))) meta
+    addDecWithExprToMeta (\x -> (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) x tokens (Id (fromJust maybeId))))) meta
 
 resolve  (DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) parameters (FUNC_STMT (BLOCK_STMT decs)) (Id id))) meta =
   updateBlockInMeta id iden meta >>= addBlockToMeta >>= updateFunctionType FUNCTION >>= resolveParams parameters >>= resolveMulti decs >>= updateFunctionType oldFuncType >>=  addFunctionDecToMeta iden parameters id >>= deleteBlockFromMeta
   where oldFuncType = funcType meta
 
-resolve (DEC_STMT (EXPR_STMT x)) meta = resolveExpression x meta >>= addDecToMeta (DEC_STMT (EXPR_STMT x))
+resolve (DEC_STMT (EXPR_STMT x)) meta = resolveExpression x meta >>= addDecWithExprToMeta (\x -> (DEC_STMT (EXPR_STMT x)))
 
-resolve (DEC_STMT (IF_STMT expr stmt)) meta = resolveExpression expr meta >>= resolve (createDecFromStatement stmt) >>= addDecToMeta (DEC_STMT (IF_STMT expr stmt))
+resolve (DEC_STMT (IF_STMT expr stmt)) meta = resolveExpression expr meta >>= resolve (createDecFromStatement stmt) >>= addDecWithExprToMeta (\x -> (DEC_STMT (IF_STMT x stmt)))
 
-resolve (DEC_STMT (IF_ELSE_STMT expr stmt1 stmt2)) meta = resolve (createDecFromStatement stmt1) meta >>= resolve (createDecFromStatement stmt2) >>= addDecToMeta (DEC_STMT (IF_ELSE_STMT expr stmt1 stmt2))
+resolve (DEC_STMT (IF_ELSE_STMT expr stmt1 stmt2)) meta = resolve (createDecFromStatement stmt1) meta >>= resolve (createDecFromStatement stmt2) >>= addDecWithExprToMeta (\x -> (DEC_STMT (IF_ELSE_STMT x stmt1 stmt2)))
 
-resolve (DEC_STMT (WHILE_STMT expr stmt)) meta = resolveExpression expr meta >>= resolve (createDecFromStatement stmt) >>= addDecToMeta (DEC_STMT (WHILE_STMT expr stmt))
+resolve (DEC_STMT (WHILE_STMT expr stmt)) meta = resolveExpression expr meta >>= resolve (createDecFromStatement stmt) >>= addDecWithExprToMeta (\x -> (DEC_STMT (WHILE_STMT expr stmt)))
 
-resolve (DEC_STMT (FOR_STMT varDec expr incDec stmt)) meta = resolve varDec meta >>= resolveExpression expr >>= resolve incDec >>= resolve (createDecFromStatement stmt)
+resolve (DEC_STMT (FOR_STMT varDec expr incDec stmt)) meta = resolve varDec meta >>= resolveExpression expr >>= resolve incDec >>= resolve (createDecFromStatement stmt) >>= addDecWithExprToMeta (\x -> (DEC_STMT (FOR_STMT varDec expr incDec stmt)))
 --TODO: Add Tokens to returns in the AST!
 resolve (DEC_STMT (RETURN expr)) meta = checkReturn (resolveExpression expr) meta
-  where handleReturn expr meta = resolveExpression expr meta >>= addDecToMeta (DEC_STMT (RETURN expr))
+  where handleReturn expr meta = resolveExpression expr meta >>= addDecWithExprToMeta (\x -> (DEC_STMT (RETURN x)))
 
 resolve (DEC_STMT RETURN_NIL) meta = checkReturn return meta
 
-resolve (DEC_STMT (PRINT_STMT x)) meta = resolveExpression x meta >>= addDecToMeta (DEC_STMT (PRINT_STMT x))
+resolve (DEC_STMT (PRINT_STMT x)) meta = resolveExpression x meta >>= addDecWithExprToMeta (\x ->(DEC_STMT (PRINT_STMT x)))
 
-resolve _ meta  = return meta
+resolve dec meta  = addDecToMeta dec meta
 
 
 resolveParams :: PARAMETERS -> ResolverMeta -> IO ResolverMeta
