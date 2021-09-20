@@ -108,7 +108,7 @@ findIdenInMeta :: T.Text -> ResolverMeta -> IO Bool
 findIdenInMeta iden meta = isJust <$> findIdInVariables iden meta
 
 checkIfResolverError :: ResolverMeta -> T.Text -> Bool
-checkIfResolverError meta iden = Just iden /= (varIden meta)
+checkIfResolverError meta iden = Just iden == (varIden meta)
 
 checkIfVarAlreadyAdded :: ResolverMeta -> T.Text -> IO Bool
 checkIfVarAlreadyAdded meta iden = isJust <$> getIdOfIden iden currentBlock
@@ -191,7 +191,7 @@ addClosingExpr cexpr meta = return meta{newExpressions=newExprs}
 addSimpleExpr :: EXPRESSION -> ResolverMeta -> IO ResolverMeta
 addSimpleExpr expr meta = return meta{newExpressions=push expr (newExpressions meta)}
 
-
+-- TODO: Print here is only for debugging
 addVariableToVector :: T.Text -> Int -> ResolverMeta -> IO ResolverMeta
 addVariableToVector iden id meta = do
   print iden

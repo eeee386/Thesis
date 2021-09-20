@@ -22,9 +22,12 @@ createGlobalMeta ::  V.Vector EVAL -> IO META
 createGlobalMeta vector = do
   return META { isInFunction=False, isInLoop=True, variableValues=vector, globalVariableValues=createGlobalVector }
 
-findValueInMeta ::  ID -> META -> IO EVAL
+findValueInMeta :: ID -> META -> IO EVAL
 findValueInMeta (LOCAL_ID id) meta = return (variableValues meta V.! id)
 findValueInMeta (GLOBAL_ID id) meta = return (globalVariableValues meta V.! id)
+findValueInMeta NOT_READY meta = do
+  print "fails"
+  return EVAL_NIL
 
 
 addUpdateValueToMeta :: ID -> EVAL -> META -> IO META
