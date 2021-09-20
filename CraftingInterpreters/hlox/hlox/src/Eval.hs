@@ -8,25 +8,23 @@ import Data.Maybe
 import qualified Data.Sequence as S
 import qualified TokenHelper as TH
 import EvalTypes
-import Environment
 import NativeFunctions
 import ResolverTypes
+import qualified Data.Vector as V
+import EvalMeta
+import NativeFunctionTypes
 
 -- TODO: Break and continue, if we have time
 
-evalProgram :: PROGRAM -> DepthMap -> IO ()
-evalProgram (PROG x) dMap = do
-  eval x SKIP_EVAL (createGlobalMeta dMap)
+evalProgram :: PROGRAM -> V.Vector EVAL -> IO ()
+evalProgram (PROG x) vector = do
+  eval x SKIP_EVAL (createGlobalMeta vector)
   return ()
 
 
 
 evalBlock :: S.Seq DECLARATION -> META -> IO (IO EVAL, IO META)
-evalBlock x meta = do
-  (pIO, envIO) <- eval x SKIP_EVAL (updateMetaWithLocalEnv meta)
-  let newEnvIO = deleteLocalEnvFromMeta <$> envIO
-  return (pIO, newEnvIO)
-
+evalBlock x meta = eval x SKIP_EVAL (return meta)
 
 
 eval :: S.Seq DECLARATION -> EVAL -> IO META -> IO (IO EVAL, IO META)
@@ -59,14 +57,14 @@ evalDeclaration (DEC_STMT (EXPR_STMT x)) meta = do
 evalDeclaration (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) expr tokens id)) meta = do
   locMeta <- meta
   (locExpr, newMeta) <- evalExpression expr locMeta
-  handleVarDeclarationAndDefinition iden locExpr newMeta
+  handleVarDeclarationAndDefinition iden id locExpr newMeta
 evalDeclaration (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden) tokens id)) meta = do
   locMeta <- meta
-  handleVarDeclaration iden locMeta
+  handleVarDeclaration iden id locMeta
 evalDeclaration (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens id)) meta = do
   locMeta <- meta
   (locExpr, newMeta) <- evalExpression expr locMeta
-  handleVarDefinition iden locExpr newMeta tokens
+  handleVarDefinition iden id locExpr newMeta tokens
 evalDeclaration (DEC_STMT (BLOCK_STMT x)) meta = do
   locMeta <- meta
   (evIO, newMetaIO) <- evalBlock x locMeta
@@ -88,13 +86,10 @@ evalDeclaration (DEC_STMT (IF_ELSE_STMT expr stmt1 stmt2)) meta = do
 evalDeclaration (DEC_STMT (WHILE_STMT expr stmt)) meta = do
   evalDeclaration (DEC_STMT (LOOP expr SKIP_DEC stmt)) meta
 
--- Fix for loop because the varDec is created in the for's scope
 evalDeclaration (DEC_STMT (FOR_STMT varDec expr incDec stmt)) meta = do
-  nonIOMeta <- meta
-  let locMetaIO =  updateMetaWithLocalEnv nonIOMeta
-  (ev, decMeta) <- evalDeclaration varDec locMetaIO
+  (ev, decMeta) <- evalDeclaration varDec meta
   if isRuntimeError ev then do
-    return (ev, nonIOMeta)
+    return (ev, decMeta)
   else do
     (checkEval, checkMeta) <- evalExpression expr decMeta
     if isRuntimeError checkEval then do return (checkEval, checkMeta) else do
@@ -114,10 +109,10 @@ evalDeclaration (DEC_STMT (LOOP expr dec stmt)) meta = do
           evalDeclaration (DEC_STMT (LOOP expr dec stmt)) (return newMeta{isInLoop=False})
       else return (SKIP_EVAL, secondMeta)
 
-evalDeclaration (DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) (PARAMETERS params tokens) stmt)) meta = do
+evalDeclaration (DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) (PARAMETERS params tokens) stmt id)) meta = do
   locMeta <- meta
   let eval = FUNC_DEC_EVAL iden (S.length params) (PARAMETERS params tokens) stmt
-  newMeta <- addIdentifierToMetaEnv iden eval locMeta
+  newMeta <- addUpdateValueToMeta id eval locMeta
   return (eval, newMeta)
 
 evalDeclaration (DEC_STMT (RETURN expr)) meta = do
@@ -136,20 +131,20 @@ evalDeclaration x meta = do
 
 -- Evaluate variable declaration and/or definition
 -- Think about redefinement
-handleVarDeclaration :: TextType -> META -> IO (EVAL, META)
-handleVarDeclaration iden meta = do
-  newMeta <- addIdentifierToMetaEnv iden EVAL_NIL meta
-  return (DEC_EVAL iden EVAL_NIL, newMeta)
+handleVarDeclaration :: T.Text  -> ID -> META -> IO (EVAL, META)
+handleVarDeclaration iden id meta = do
+  newMeta <- addUpdateValueToMeta id EVAL_NIL meta
+  return (DEC_EVAL iden EVAL_NIL id, newMeta)
 
-handleVarDeclarationAndDefinition :: TextType -> EVAL -> META -> IO (EVAL, META)
-handleVarDeclarationAndDefinition iden val meta = do
-  newMeta <- addIdentifierToMetaEnv iden val meta
-  return (DEC_EVAL iden val, newMeta)
+handleVarDeclarationAndDefinition :: TextType -> ID -> EVAL -> META -> IO (EVAL, META)
+handleVarDeclarationAndDefinition iden id val meta = do
+  newMeta <- addUpdateValueToMeta id val meta
+  return (DEC_EVAL iden val id, newMeta)
 
-handleVarDefinition :: TextType -> EVAL -> META -> S.Seq TH.Token -> IO (EVAL, META)
-handleVarDefinition iden val meta tokens = do
-  (newMeta, isSuccess) <- updateIdentifierToMetaEnv iden val meta
-  if isSuccess then return (DEC_EVAL iden val, newMeta) else return (RUNTIME_ERROR "Identifier is not defined" tokens, meta)
+handleVarDefinition :: TextType -> ID -> EVAL -> META -> S.Seq TH.Token -> IO (EVAL, META)
+handleVarDefinition iden id val meta tokens = do
+  newMeta <- addUpdateValueToMeta id val meta
+  return (DEC_EVAL iden val id, newMeta)
 
 
 
@@ -161,9 +156,9 @@ evalExpression (EXP_LITERAL (STRING x)) meta = return (EVAL_STRING x, meta)
 evalExpression (EXP_LITERAL FALSE) meta = return (EVAL_BOOL False, meta)
 evalExpression (EXP_LITERAL TRUE) meta = return (EVAL_BOOL True, meta)
 evalExpression (EXP_LITERAL NIL) meta = return (EVAL_NIL, meta)
-evalExpression (EXP_LITERAL (IDENTIFIER x tokens id)) meta = do
-  val <- findValueInMetaEnv x meta
-  if isJust val then return (fromJust val, meta) else return (RUNTIME_ERROR "Identifier is not defined" tokens, meta)
+evalExpression (EXP_LITERAL (IDENTIFIER x tokens id)) meta =do
+  val <- findValueInMeta id meta
+  return (val, meta)
 
 evalExpression (EXP_GROUPING (GROUP x)) meta = evalExpression x meta
 
@@ -181,7 +176,7 @@ evalExpression (EXP_TERNARY (TERN predi _ trueRes _ falseRes) tLines) meta = do
   let evalTrueVal = evalTernary tLines evalPred trueRes falseRes
   evalTrueVal newMeta
 
-evalExpression (EXP_CALL (CALL_FUNC exp args)) meta = do
+evalExpression (EXP_CALL (CALL_FUNC exp args id)) meta = do
   (eval, newMeta) <- evalExpression exp meta
   evalFunctions newMeta eval args
 
@@ -292,15 +287,12 @@ callFunction meta (FUNC_DEC_EVAL iden arity params stmt) (ARGS args)
 
 functionCall :: META -> EVAL -> ARGUMENTS -> IO (EVAL, META)
 functionCall meta (FUNC_DEC_EVAL iden _ params (FUNC_STMT (BLOCK_STMT decs))) arguments = do
-  withLocalMeta <- updateMetaWithLocalEnv meta
-  print arguments
-  toEvalMeta <- saveFunctionArgs withLocalMeta params arguments
+  toEvalMeta <- saveFunctionArgs meta params arguments
   (pIO, afterMetaIO) <- eval decs SKIP_EVAL (return toEvalMeta{isInFunction=True, isInLoop=False})
   afterMeta <- afterMetaIO
-  let deleteLocMeta = deleteLocalEnvFromMeta afterMeta
   returnEval <- pIO
   let evalValue = getValueFromReturn returnEval
-  return (evalValue, deleteLocMeta{isInFunction=isInFunction meta, isInLoop=isInLoop meta})
+  return (evalValue, afterMeta{isInFunction=isInFunction meta, isInLoop=isInLoop meta})
 functionCall meta (FUNC_DEC_EVAL iden _ params (NATIVE_FUNC_STMT f)) arguments = do
   eval <- callNativeFunction f arguments
   return (eval, meta)
@@ -310,10 +302,10 @@ saveFunctionArgs :: META -> PARAMETERS -> ARGUMENTS -> IO META
 saveFunctionArgs meta (PARAMETERS params tokens) (ARGS args)
  | S.null params = return meta
  | otherwise = do
-     let (EXP_LITERAL (IDENTIFIER p b id)) = S.index params 0
+     let (DEC_VAR (PARAM_DEC (TH.IDENTIFIER iden) tokens id)) = S.index params 0
      let a = S.index args 0
      (evalA, evalMeta) <- evalExpression a meta
-     newMeta <- addIdentifierToMetaEnv p evalA evalMeta
+     newMeta <- addUpdateValueToMeta id evalA evalMeta
      saveFunctionArgs newMeta (PARAMETERS (S.drop 1 params) tokens) (ARGS (S.drop 1 args))
 
 callNativeFunction :: NATIVE_FUNCTION_TYPES -> ARGUMENTS -> IO EVAL

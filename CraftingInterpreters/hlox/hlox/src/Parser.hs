@@ -83,18 +83,18 @@ buildSimpleDecFromTokens expr id
 
 handleAssignmentOrDecDef :: Bool -> Maybe Int -> Maybe TokenType -> S.Seq Token -> Int -> (DECLARATION, Int)
 handleAssignmentOrDecDef isVar findAssignment firstTokenType expr id
-  | isDecDef = (DEC_VAR (VAR_DEC_DEF (fromJust lValue) (createExpression defExpr) expr (Id id)), newId)
-  | isOnlyDec = (DEC_VAR (VAR_DEC (fromJust lValue) expr (Id id)), newId)
+  | isDecDef = (DEC_VAR (VAR_DEC_DEF (fromJust lValue) (createExpression defExpr) expr (LOCAL_ID id)), newId)
+  | isOnlyDec = (DEC_VAR (VAR_DEC (fromJust lValue) expr (LOCAL_ID id)), newId)
   | isRedef = (DEC_VAR (VAR_DEF (fromJust lValue) (createExpression redefExpr) expr NOT_READY), id)
   | otherwise = (PARSE_ERROR "Not a valid declaration" expr, id)
   where newId = id+1
         defExpr = S.drop 3 expr
         redefExpr = S.drop 2 expr
         secondTokenType = tokenType <$> S.lookup 1 expr
-        isDec = isVar && (isIdentifier <$> secondTokenType) == Just True
+        isDec = isVar && (ParseExpressions.isIdentifier <$> secondTokenType) == Just True
         isOnlyDec = isDec && (tokenType <$> S.lookup 2 expr) == Just TokenHelper.SEMICOLON
         isDecDef = isDec && findAssignment == Just 2 && not (S.null defExpr)
-        isRedef = (isIdentifier <$> firstTokenType) == Just True && findAssignment == Just 1 && not (S.null redefExpr)
+        isRedef = (ParseExpressions.isIdentifier <$> firstTokenType) == Just True && findAssignment == Just 1 && not (S.null redefExpr)
         lValue
           | isRedef = firstTokenType
           | isDec = secondTokenType
@@ -182,12 +182,12 @@ handleFunction meta
   | not isIden = updateDecAndTokens (PARSE_ERROR "Identifier is missing after 'fun' keyword" err) rest meta
   | not isLeftParen = updateDecAndTokens (PARSE_ERROR "Parenthesis should be after function header" err) rest meta
   | not isRightParen = updateDecAndTokens (PARSE_ERROR "Parenthesis is not closed" err) rest meta
-  | otherwise = updateParserMeta (DEC_FUNC (FUNC_DEC (fromJust maybeIdenType) params (FUNC_STMT (fromJust stmt))) (Id id)) funRest newId newPMF
+  | otherwise = updateParserMeta (DEC_FUNC (FUNC_DEC (fromJust maybeIdenType) params (FUNC_STMT (fromJust stmt)) (LOCAL_ID id))) funRest newId newPMF
   where id = currentVarId meta
         tokens = tokensLeft meta
         maybeIden = S.lookup 1 tokens
         maybeIdenType = tokenType <$>  maybeIden
-        isIden = (isIdentifier <$> maybeIdenType) == Just True
+        isIden = (ParseExpressions.isIdentifier <$> maybeIdenType) == Just True
         maybeLeftParen = S.lookup 2 tokens
         isLeftParen = (tokenType <$> maybeLeftParen) == Just LEFT_PAREN
         rightParenIndex = S.findIndexL (tokenIsType RIGHT_PAREN) (S.drop 3 tokens)
@@ -209,8 +209,8 @@ handleBuildParams tokens id (PARAMETERS idens paramTokens)
  | otherwise = handleBuildParams rest (id+1) (PARAMETERS (idens S.|> newIden) paramTokens)
  where idenTokens = S.takeWhileL (not . tokenIsType COMMA) tokens
        maybeIden = tokenType (S.index idenTokens 0)
-       isIden = isIdentifier maybeIden
-       newIden = (DEC_VAR (PARAM_DEC (S.index idenTokens 0) idenTokens id))
+       isIden = ParseExpressions.isIdentifier maybeIden
+       newIden = (DEC_VAR (PARAM_DEC (tokenType (S.index idenTokens 0)) idenTokens (LOCAL_ID id)))
        rest = S.drop (S.length idenTokens+1) tokens
 
 

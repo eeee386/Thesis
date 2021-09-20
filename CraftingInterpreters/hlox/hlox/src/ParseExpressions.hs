@@ -127,10 +127,10 @@ createBinaryExpressions tokenExpMap thisPrec nextPrec tokens
         (secondExpr, secondRest) = thisPrec (S.drop 1 firstRest)
 
 chainCall :: S.Seq Token -> CALL -> (EXPRESSION, S.Seq Token)
-chainCall tokens (CALL_FUNC iden callArgs)
-  | S.null tokens || isSemicolon || not isCall = (EXP_CALL (CALL_FUNC iden callArgs), tokens)
+chainCall tokens (CALL_FUNC iden callArgs id)
+  | S.null tokens || isSemicolon || not isCall = (EXP_CALL (CALL_FUNC iden callArgs id), tokens)
   | not hasRightParen = (NON_EXP "Missing right parenthesis from chain function call" tokens, tokens)
-  | otherwise = chainCall rest (CALL_FUNC iden (callArgs S.|> args))
+  | otherwise = chainCall rest (CALL_FUNC iden (callArgs S.|> args) id)
   where isCall = (tokenType <$> S.lookup 0 tokens) == Just LEFT_PAREN
         isSemicolon = (tokenType <$> S.lookup 0 tokens) == Just SEMICOLON
         (hasRightParen, rest, args) = functionHelper True tokens
@@ -159,7 +159,7 @@ isIdentifier (TokenHelper.IDENTIFIER _) = True
 isIdentifier _ = False
 
 isIdentifierToken :: Token -> Bool
-isIdentifierToken t = isIdentifier (tokenType t)
+isIdentifierToken t = ParseExpressions.isIdentifier (tokenType t)
 
 createASTIdentifier ::S.Seq Token ->  TokenType -> EXPRESSION
 createASTIdentifier tokens (TokenHelper.IDENTIFIER a) = EXP_LITERAL (AST.IDENTIFIER a tokens NOT_READY)

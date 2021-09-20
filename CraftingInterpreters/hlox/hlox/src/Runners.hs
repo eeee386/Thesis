@@ -19,6 +19,8 @@ import Data.Maybe
 import Utils
 import ResolverTypes
 import Resolver
+import EvalTypes
+import qualified Data.Vector as V
 
 
 run :: T.Text -> IO()
@@ -71,7 +73,6 @@ printScanErrorOrContinue tokens = if null scanError then printResolveErrorOrCont
   where scanError = S.filter (isNotToken . tokenType) tokens
         parsed = parse tokens
 
--- TODO: Handle Resolve Errors
 printResolveErrorOrContinue :: AST.PROGRAM -> IO()
 printResolveErrorOrContinue prog = do
   resolved <- resolveProgram prog
@@ -79,9 +80,9 @@ printResolveErrorOrContinue prog = do
   if not (S.null errors) then do
     print errors
   else do
-    printEvalErrorOrContinue prog (depthMap resolved)
+    printEvalErrorOrContinue prog (variableVector resolved)
 
-printEvalErrorOrContinue :: AST.PROGRAM -> DepthMap  -> IO ()
+printEvalErrorOrContinue :: AST.PROGRAM -> V.Vector EVAL  -> IO ()
 printEvalErrorOrContinue (PROG statements) dMap = handleCases
   where parseError = findParseError statements S.empty
         astError = S.filter isJust (fmap getASTErrorFromStatement statements)

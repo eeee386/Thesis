@@ -30,20 +30,20 @@ resolveMulti decs meta
 resolve :: DECLARATION -> ResolverMeta -> IO ResolverMeta
 resolve (DEC_STMT (BLOCK_STMT decs)) meta = addBlockToMeta meta >>= resolveMulti decs >>= addBlockDecToMeta >>= deleteBlockFromMeta
 
-resolve (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) expr tokens (Id id))) meta = checkHandleIfAlreadyAdded handleDecDef tokens iden meta
-  where handleDecDef meta iden = updateBlockInMeta id iden meta >>= resolveExpression expr >>= cleanVarMeta >>= addDecWithExprToMeta (\x -> (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) x tokens (Id id))))
+resolve (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) expr tokens (LOCAL_ID id))) meta = checkHandleIfAlreadyAdded handleDecDef tokens iden meta
+  where handleDecDef meta iden = updateBlockInMeta id iden meta >>= resolveExpression expr >>= cleanVarMeta >>= addVariableToVector iden id >>= addDecWithExprToMeta (\x -> (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) x tokens (LOCAL_ID id))))
 
-resolve (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden) tokens (Id id))) meta = checkHandleIfAlreadyAdded handleDec tokens iden meta
-  where handleDec meta iden = updateBlockInMeta id iden meta >>= addDecToMeta (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden) tokens (Id id)))
+resolve (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden) tokens (LOCAL_ID id))) meta = checkHandleIfAlreadyAdded handleDec tokens iden meta
+  where handleDec meta iden = updateBlockInMeta id iden meta >>= addVariableToVector iden id >>= addDecToMeta (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden) tokens (LOCAL_ID id)))
 
 resolve (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens NOT_READY)) meta = do
-  maybeId <- findIdInResolverEnv iden (resolverEnv meta)
+  maybeId <- findIdInVariables iden meta
   if isNothing maybeId then do
     addError (RESOLVER_ERROR "Variable is not defined" tokens) meta
   else do
-    addDecWithExprToMeta (\x -> (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) x tokens (Id (fromJust maybeId))))) meta
+    addDecWithExprToMeta (\x -> (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) x tokens (fromJust maybeId)))) meta
 
-resolve  (DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) parameters (FUNC_STMT (BLOCK_STMT decs)) (Id id))) meta =
+resolve  (DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) parameters (FUNC_STMT (BLOCK_STMT decs)) (LOCAL_ID id))) meta =
   updateBlockInMeta id iden meta >>= addBlockToMeta >>= updateFunctionType FUNCTION >>= resolveParams parameters >>= resolveMulti decs >>= updateFunctionType oldFuncType >>=  addFunctionDecToMeta iden parameters id >>= deleteBlockFromMeta
   where oldFuncType = funcType meta
 
@@ -72,7 +72,7 @@ resolveParams (PARAMETERS params tokens) meta
   | S.null params = return meta
   | otherwise = checkHandleIfAlreadyAdded (callResolveParams params) tokens iden meta
   where param = S.index params 0
-        (DEC_VAR (PARAM_DEC (TH.IDENTIFIER iden) tokens (Id id))) = param
+        (DEC_VAR (PARAM_DEC (TH.IDENTIFIER iden) tokens (LOCAL_ID id))) = param
         callResolveParams params meta iden = updateBlockInMeta id iden meta >>= cleanVarMeta >>= resolveParams (PARAMETERS (S.drop 1 params) tokens)
 
 
@@ -94,11 +94,11 @@ resolveExpression (EXP_LITERAL (IDENTIFIER iden tokens id)) meta = do
   if checkIfResolverError meta iden then do
     addError (RESOLVER_ERROR "Can't read local variable in its own initializer." tokens) meta
   else do
-    maybeId <- findIdInResolverEnv iden (resolverEnv meta)
+    maybeId <- findIdInVariables iden meta
     if isNothing maybeId then do
       addError (RESOLVER_ERROR "Variable is not declared yet." tokens) meta
     else do
-      addSimpleExpr (EXP_LITERAL (IDENTIFIER iden tokens (Id (fromJust maybeId)))) meta
+      addSimpleExpr (EXP_LITERAL (IDENTIFIER iden tokens (fromJust maybeId))) meta
 
 resolveExpression expr meta = addSimpleExpr expr meta
 

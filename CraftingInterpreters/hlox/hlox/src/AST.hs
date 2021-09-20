@@ -4,10 +4,10 @@ import qualified Data.Text as T
 import TokenHelper (Token, line, TokenType)
 import qualified Data.Sequence as S
 import Data.Maybe
-import NativeFunctions
+import NativeFunctionTypes
 
 type TextType = T.Text
-data ID = Id Int | NOT_READY deriving (Eq, Show)
+data ID = LOCAL_ID Int | GLOBAL_ID Int | NOT_READY deriving (Eq, Show)
 
 newtype PROGRAM = PROG (S.Seq DECLARATION)
 instance Show PROGRAM where

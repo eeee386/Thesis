@@ -9,6 +9,10 @@ import qualified Data.Sequence as S
 import AST
 import qualified TokenHelper as TH
 import Data.Maybe
+import qualified Data.Vector as V
+import EvalTypes
+import NativeFunctions
+import NativeFunctionTypes
 
 -- ResolverError
 data ResolverError = RESOLVER_ERROR T.Text (S.Seq TH.Token) deriving Show
@@ -45,14 +49,17 @@ updateBlockInResEnv iden id resEnv  = do
 getIdOfIden :: T.Text -> ResolverBlockEnvironment -> IO (Maybe Int)
 getIdOfIden iden resEnv = HT.lookup resEnv iden
 
-findIdInResolverEnv :: T.Text -> ResolverEnvironment ->IO (Maybe Int)
-findIdInResolverEnv iden resEnv
+
+findIdInVariables :: T.Text -> ResolverMeta ->IO (Maybe ID)
+findIdInVariables iden meta
   | S.null resEnv = return Nothing
   | otherwise = do
     values <- mapM (getIdOfIden iden) resEnv
     let index = S.findIndexR isJust values
-    if isJust index then return (S.index values (fromJust index)) else return Nothing
-
+    if isJust index then return (Just (LOCAL_ID (fromJust (S.index values (fromJust index))))) else do
+     maybeGlobId <- getGlobalVarId (globalResolverTable meta) iden 
+     if isJust maybeGlobId then return (Just (GLOBAL_ID (fromJust maybeGlobId))) else return Nothing
+  where resEnv = resolverEnv meta
 
 -- ResolverMeta
 data ResolverMeta = ResolverMeta {
@@ -63,12 +70,25 @@ data ResolverMeta = ResolverMeta {
   , idenSequence :: S.Seq T.Text
   , newDeclarations :: Stack (S.Seq DECLARATION)
   , newExpressions :: Stack EXPRESSION
+  , variableVector :: V.Vector EVAL
+  , globalResolverTable :: GlobalResolverTable
   } deriving (Show)
 
 createResolverMeta :: IO ResolverMeta
 createResolverMeta = do
   resEnv <- createNewResEnv
-  return ResolverMeta {varIden=Nothing, rErrors=S.empty, funcType=NONE, resolverEnv=resEnv, idenSequence=S.empty, newDeclarations=createStack}
+  globTable <- createGlobalResolverTable
+  return ResolverMeta {
+    varIden=Nothing,
+    rErrors=S.empty,
+    funcType=NONE,
+    resolverEnv=resEnv,
+    idenSequence=S.empty,
+    newDeclarations=createStack,
+    newExpressions=createStack,
+    variableVector=V.empty,
+    globalResolverTable=globTable
+    }
 
 
 addBlockToMeta :: ResolverMeta -> IO ResolverMeta
@@ -85,7 +105,7 @@ updateBlockInMeta id iden meta = do
   return meta{resolverEnv=newEnv, varIden=Just iden}
 
 findIdenInMeta :: T.Text -> ResolverMeta -> IO Bool
-findIdenInMeta iden meta = isJust <$> findIdInResolverEnv iden (resolverEnv meta)
+findIdenInMeta iden meta = isJust <$> findIdInVariables iden meta
 
 checkIfResolverError :: ResolverMeta -> T.Text -> Bool
 checkIfResolverError meta iden = Just iden /= (varIden meta)
@@ -141,7 +161,7 @@ addDecWithExprToMeta unFinishedDec meta = addDecToMeta (unFinishedDec expr) meta
 addFunctionDecToMeta ::T.Text -> PARAMETERS -> Int -> ResolverMeta -> IO ResolverMeta
 addFunctionDecToMeta iden parameters id meta = do 
   let (newBlockStmt, last, delDecs) = handleBlockStatementSave meta
-  let lastUpdated = last S.|> DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) parameters (FUNC_STMT newBlockStmt) (Id id))
+  let lastUpdated = last S.|> DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) parameters (FUNC_STMT newBlockStmt) (LOCAL_ID id))
   return meta{newDeclarations=push lastUpdated delDecs}
 
 
@@ -170,3 +190,10 @@ addClosingExpr cexpr meta = return meta{newExpressions=newExprs}
 
 addSimpleExpr :: EXPRESSION -> ResolverMeta -> IO ResolverMeta
 addSimpleExpr expr meta = return meta{newExpressions=push expr (newExpressions meta)}
+
+
+addVariableToVector :: T.Text -> Int -> ResolverMeta -> IO ResolverMeta
+addVariableToVector iden id meta = do
+  print iden
+  print id
+  return meta{variableVector=(V.snoc (variableVector meta) EVAL_NIL)}
