@@ -13,12 +13,7 @@ import Data.Maybe
 
 
 resolveProgram :: PROGRAM -> IO ResolverMeta
-resolveProgram (PROG x) = createResolverMeta >>= resolveDeclarations x
-
-resolveDeclarations ::  S.Seq DECLARATION ->  ResolverMeta -> IO ResolverMeta
-resolveDeclarations decs meta
-  | S.null decs = return meta
-  | otherwise = resolve (S.index decs 0) meta >>= resolveDeclarations (S.drop 1 decs)
+resolveProgram (PROG x) = createResolverMeta >>= resolveMulti x
 
 resolveMulti ::  S.Seq DECLARATION -> ResolverMeta -> IO ResolverMeta
 resolveMulti decs meta
@@ -40,11 +35,10 @@ resolve (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens NOT_READY)) meta = do
   maybeId <- findIdInVariables iden meta
   if isNothing maybeId then do
     addError (RESOLVER_ERROR "Variable is not defined" tokens) meta
-  else do
-    addDecWithExprToMeta (\x -> (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) x tokens (fromJust maybeId)))) meta
+  else resolveExpression expr meta >>= addDecWithExprToMeta (\x -> (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) x tokens (fromJust maybeId))))
 
 resolve  (DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) parameters (FUNC_STMT (BLOCK_STMT decs)) (LOCAL_ID id))) meta =
-  updateBlockInMeta id iden meta >>= addBlockToMeta >>= updateFunctionType FUNCTION >>= resolveParams parameters >>= resolveMulti decs >>= updateFunctionType oldFuncType >>=  addFunctionDecToMeta iden parameters id >>= deleteBlockFromMeta
+  updateBlockWithFunctionInMeta id iden meta >>= addBlockToMeta >>= updateFunctionType FUNCTION >>= resolveParams parameters >>= resolveMulti decs >>= updateFunctionType oldFuncType >>= addVariableToVector iden id >>= addFunctionDecToMeta iden parameters id >>= deleteBlockFromMeta
   where oldFuncType = funcType meta
 
 resolve (DEC_STMT (EXPR_STMT x)) meta = resolveExpression x meta >>= addDecWithExprToMeta (\x -> (DEC_STMT (EXPR_STMT x)))

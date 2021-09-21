@@ -79,7 +79,10 @@ printResolveErrorOrContinue prog = do
   if not (S.null errors) then do
     print errors
   else do
-    printEvalErrorOrContinue prog (variableVector resolved)
+    let newProgStack = newDeclarations resolved
+    let (newProg, _) = pop newProgStack
+    print newProg
+    printEvalErrorOrContinue (PROG newProg) (variableVector resolved)
 
 printEvalErrorOrContinue :: AST.PROGRAM -> V.Vector EVAL  -> IO ()
 printEvalErrorOrContinue (PROG statements) dMap = handleCases

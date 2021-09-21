@@ -26,9 +26,10 @@ type IDENTIFIER = TokenType
 
 data VARIABLE_DECLARATION = VAR_DEC_DEF IDENTIFIER EXPRESSION (S.Seq Token) ID | VAR_DEC IDENTIFIER (S.Seq Token) ID | VAR_DEF IDENTIFIER EXPRESSION (S.Seq Token) ID | PARAM_DEC IDENTIFIER (S.Seq Token) ID deriving Eq
 instance Show VARIABLE_DECLARATION where
-  show (VAR_DEC_DEF iden expr _ _) = mconcat ["var", " ", show iden, " = ", show expr]
-  show (VAR_DEC iden _ _) = mconcat ["var", " ", show iden] 
-  show (VAR_DEF iden expr _ _) = mconcat [show iden, " = ", show expr]
+  show (VAR_DEC_DEF iden expr _ id) = mconcat ["var", " ", show iden, " = ", show expr, ";id: ", show id]
+  show (VAR_DEC iden _ id) = mconcat ["var", " ", show iden, ";id: ", show id] 
+  show (VAR_DEF iden expr _ id) = mconcat [show iden, " = ", show expr, ";id: ", show id]
+  show (PARAM_DEC iden _ id) = mconcat ["var", " ", show iden, ";id: ", show id] 
 
 
 data FUNCTION_STATEMENT = FUNC_STMT STATEMENT | NATIVE_FUNC_STMT NATIVE_FUNCTION_TYPES deriving Eq
@@ -53,7 +54,7 @@ data STATEMENT = EXPR_STMT EXPRESSION
 
 instance Show STATEMENT where 
   show (EXPR_STMT x) = show x
-  show (PRINT_STMT x) = show x
+  show (PRINT_STMT x) = mconcat ["print ", show x]
   show (BLOCK_STMT x) = show x
   show (IF_STMT expr stmt) = mconcat ["if (", show expr, ")", show stmt]
   show (IF_ELSE_STMT expr ifStmt elseStmt) = mconcat ["if (", show expr, ") ", show ifStmt, " else ", show elseStmt]

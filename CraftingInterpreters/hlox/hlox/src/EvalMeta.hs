@@ -25,10 +25,8 @@ createGlobalMeta vector = do
 findValueInMeta :: ID -> META -> IO EVAL
 findValueInMeta (LOCAL_ID id) meta = return (variableValues meta V.! id)
 findValueInMeta (GLOBAL_ID id) meta = return (globalVariableValues meta V.! id)
-findValueInMeta NOT_READY meta = do
-  print "fails"
-  return EVAL_NIL
+findValueInMeta NOT_READY meta = return EVAL_NIL
 
 
 addUpdateValueToMeta :: ID -> EVAL -> META -> IO META
-addUpdateValueToMeta (LOCAL_ID id) eval meta = return meta{globalVariableValues=(V.update (globalVariableValues meta) (V.singleton (id, eval)))}
+addUpdateValueToMeta (LOCAL_ID id) eval meta = return meta{variableValues=(V.update (variableValues meta) (V.singleton (id, eval)))}

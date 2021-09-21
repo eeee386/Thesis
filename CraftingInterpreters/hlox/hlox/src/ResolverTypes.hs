@@ -13,6 +13,7 @@ import qualified Data.Vector as V
 import EvalTypes
 import NativeFunctions
 import NativeFunctionTypes
+import Data.List
 
 -- ResolverError
 data ResolverError = RESOLVER_ERROR T.Text (S.Seq TH.Token) deriving Show
@@ -23,7 +24,7 @@ data FunctionTypes = NONE | FUNCTION | METHOD deriving (Show, Eq)
 -- Resolver Environment
 type ResolverBlockEnvironment = HT.BasicHashTable T.Text Int
 
-type ResolverEnvironment = S.Seq ResolverBlockEnvironment
+type ResolverEnvironment = Stack ResolverBlockEnvironment
 
 createResolverBlockEnvironment :: IO ResolverBlockEnvironment
 createResolverBlockEnvironment = HT.new
@@ -31,35 +32,24 @@ createResolverBlockEnvironment = HT.new
 addNewBlockToResEnv :: ResolverEnvironment -> IO ResolverEnvironment
 addNewBlockToResEnv resEnv = do
   block <- createResolverBlockEnvironment
-  return (resEnv S.|> block)
+  return (push block resEnv)
 
 createNewResEnv ::  IO ResolverEnvironment
-createNewResEnv = addNewBlockToResEnv S.empty
+createNewResEnv = addNewBlockToResEnv createStack
 
 deleteBlockFromResEnv :: ResolverEnvironment -> ResolverEnvironment
-deleteBlockFromResEnv resEnv = S.take (S.length resEnv-1) resEnv
+deleteBlockFromResEnv resEnv = newResEnv
+  where (_,newResEnv) = pop resEnv 
 
 updateBlockInResEnv :: T.Text -> Int ->  ResolverEnvironment -> IO ResolverEnvironment
 updateBlockInResEnv iden id resEnv  = do
-  let last = S.index resEnv (S.length resEnv-1)
+  let (last, delResEnv) = pop resEnv 
   HT.insert last iden id
-  let delResEnv = deleteBlockFromResEnv resEnv
-  return (delResEnv S.|> last)
+  return (push last delResEnv)
 
 getIdOfIden :: T.Text -> ResolverBlockEnvironment -> IO (Maybe Int)
 getIdOfIden iden resEnv = HT.lookup resEnv iden
 
-
-findIdInVariables :: T.Text -> ResolverMeta ->IO (Maybe ID)
-findIdInVariables iden meta
-  | S.null resEnv = return Nothing
-  | otherwise = do
-    values <- mapM (getIdOfIden iden) resEnv
-    let index = S.findIndexR isJust values
-    if isJust index then return (Just (LOCAL_ID (fromJust (S.index values (fromJust index))))) else do
-     maybeGlobId <- getGlobalVarId (globalResolverTable meta) iden 
-     if isJust maybeGlobId then return (Just (GLOBAL_ID (fromJust maybeGlobId))) else return Nothing
-  where resEnv = resolverEnv meta
 
 -- ResolverMeta
 data ResolverMeta = ResolverMeta {
@@ -84,7 +74,7 @@ createResolverMeta = do
     funcType=NONE,
     resolverEnv=resEnv,
     idenSequence=S.empty,
-    newDeclarations=createStack,
+    newDeclarations= push S.empty createStack,
     newExpressions=createStack,
     variableVector=V.empty,
     globalResolverTable=globTable
@@ -104,6 +94,22 @@ updateBlockInMeta id iden meta = do
   newEnv <- updateBlockInResEnv iden id (resolverEnv meta)
   return meta{resolverEnv=newEnv, varIden=Just iden}
 
+updateBlockWithFunctionInMeta :: Int -> T.Text -> ResolverMeta -> IO ResolverMeta
+updateBlockWithFunctionInMeta id iden meta = do
+  newEnv <- updateBlockInResEnv iden id (resolverEnv meta)
+  return meta{resolverEnv=newEnv}
+
+findIdInVariables :: T.Text -> ResolverMeta ->IO (Maybe ID)
+findIdInVariables iden meta
+  | null resEnv = return Nothing
+  | otherwise = do
+    values <- mapM (getIdOfIden iden) resEnv
+    let val = find isJust values
+    if isJust val then return (Just (LOCAL_ID (fromJust (fromJust val)))) else do
+     maybeGlobId <- getGlobalVarId (globalResolverTable meta) iden 
+     if isJust maybeGlobId then return (Just (GLOBAL_ID (fromJust maybeGlobId))) else return Nothing
+  where resEnv = resolverEnv meta
+
 findIdenInMeta :: T.Text -> ResolverMeta -> IO Bool
 findIdenInMeta iden meta = isJust <$> findIdInVariables iden meta
 
@@ -112,7 +118,7 @@ checkIfResolverError meta iden = Just iden == (varIden meta)
 
 checkIfVarAlreadyAdded :: ResolverMeta -> T.Text -> IO Bool
 checkIfVarAlreadyAdded meta iden = isJust <$> getIdOfIden iden currentBlock
-  where currentBlock = (S.index resEnv (S.length resEnv-1))
+  where currentBlock = peek resEnv
         resEnv = resolverEnv meta
 
 
@@ -154,7 +160,7 @@ addBlockDecToMeta meta = do
   return meta{newDeclarations= push lastUpdated delDecs}
 
 addDecWithExprToMeta :: (EXPRESSION -> DECLARATION) -> ResolverMeta -> IO ResolverMeta
-addDecWithExprToMeta unFinishedDec meta = addDecToMeta (unFinishedDec expr) meta
+addDecWithExprToMeta unFinishedDec meta = addDecToMeta (unFinishedDec expr) newMeta
   where (expr, rest) = pop (newExpressions meta)
         newMeta = meta{newExpressions=rest}
 
@@ -191,9 +197,6 @@ addClosingExpr cexpr meta = return meta{newExpressions=newExprs}
 addSimpleExpr :: EXPRESSION -> ResolverMeta -> IO ResolverMeta
 addSimpleExpr expr meta = return meta{newExpressions=push expr (newExpressions meta)}
 
--- TODO: Print here is only for debugging
 addVariableToVector :: T.Text -> Int -> ResolverMeta -> IO ResolverMeta
 addVariableToVector iden id meta = do
-  print iden
-  print id
   return meta{variableVector=(V.snoc (variableVector meta) EVAL_NIL)}
