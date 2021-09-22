@@ -104,7 +104,7 @@ findIdInVariables iden meta
   | null resEnv = return Nothing
   | otherwise = do
     values <- mapM (getIdOfIden iden) resEnv
-    let val = find isJust values
+    let val = find isJust (reverse values)
     if isJust val then return (Just (LOCAL_ID (fromJust (fromJust val)))) else do
      maybeGlobId <- getGlobalVarId (globalResolverTable meta) iden 
      if isJust maybeGlobId then return (Just (GLOBAL_ID (fromJust maybeGlobId))) else return Nothing
@@ -170,6 +170,23 @@ addFunctionDecToMeta iden parameters id meta = do
   let lastUpdated = last S.|> DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) parameters (FUNC_STMT newBlockStmt) (LOCAL_ID id))
   return meta{newDeclarations=push lastUpdated delDecs}
 
+addIfLoopDecToMeta :: (EXPRESSION -> STATEMENT -> DECLARATION) -> ResolverMeta -> IO ResolverMeta
+addIfLoopDecToMeta unfinishedDec meta = do
+  let (newBlockStmt, last, delDecs) = handleBlockStatementSave meta
+  let (expr, rest) = pop (newExpressions meta)
+  let lastUpdated = last S.|> unfinishedDec expr newBlockStmt
+  return meta{newDeclarations=push lastUpdated delDecs, newExpressions=rest}
+
+
+addIfElseDecToMeta :: (EXPRESSION -> STATEMENT -> STATEMENT -> DECLARATION) -> ResolverMeta -> IO ResolverMeta
+addIfElseDecToMeta unfinishedDec meta = do
+  let (secondBlock, firstDelDecs) = pop (newDeclarations meta)
+  let (firstBlock, secondDelDecs) = pop firstDelDecs
+  let last = peek secondDelDecs
+  let (expr, rest) = pop (newExpressions meta)
+  let lastUpdated = last S.|> unfinishedDec expr (BLOCK_STMT firstBlock) (BLOCK_STMT secondBlock)
+  return meta{newDeclarations=push lastUpdated secondDelDecs, newExpressions=rest}
+
 
 handleBlockStatementSave :: ResolverMeta -> (STATEMENT, S.Seq DECLARATION, Stack (S.Seq DECLARATION))
 handleBlockStatementSave meta = (BLOCK_STMT currentBlockDecs, last, delDecs)
@@ -200,3 +217,9 @@ addSimpleExpr expr meta = return meta{newExpressions=push expr (newExpressions m
 addVariableToVector :: T.Text -> Int -> ResolverMeta -> IO ResolverMeta
 addVariableToVector iden id meta = do
   return meta{variableVector=(V.snoc (variableVector meta) EVAL_NIL)}
+
+--TODO: print
+printFunc :: ResolverMeta -> IO ResolverMeta
+printFunc meta = do
+  print meta
+  return meta

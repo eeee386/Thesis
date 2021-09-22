@@ -6,7 +6,7 @@ fun count(n) {while (n < 5) {print n; n = n + 1;}} print count(1);
 
 fun count(n) {for (var i = 0; i < 5; i = i+1){ print i;}} count(1);
 
-var a = 0; while(a < 5) {if(a == 3) print a; a=a+1; }
+var a = 0; while(a < 5) {if(a == 3) {print a;} a=a+1; }
 
 for (var i = 0; i < 5; i = i+1){ print i;}
 
@@ -18,9 +18,9 @@ print i;
 // Fix "if without block, it does not see return after first return"
 fun fib(n) {if (n <= 1) {return n}; return fib(n-2) + fib(n-1);} for (var i = 0; i < 20; i = i + 1) {print fib(i);}
 
-fun addOne(n){print n; if (n == 5) return n; return addOne(n+1);} addOne(1);
+fun addOne(n){print n; if (n == 5) {return n;} return addOne(n+1);} addOne(1);
 
-var n = 1 ;fun addOne(n){print n; if (n == 5) return n; return addOne(n+1);} addOne(n); print n;
+var n = 1 ;fun addOne(n){print n; if (n == 5) {return n;} return addOne(n+1);} addOne(n); print n;
 
 
 fun addOne(n){print n; if (n > 7) {return n} return addOne(n+1) + addOne(n+3);} addOne(1);
@@ -42,3 +42,5 @@ fun makeCounter() {var i = 0; fun count() {i = i + 1;print i;}return count;}var 
 var a = "global";{fun showA() {print a;}showA();var a = "block";showA();}
 
 var a = 5; {a = 4;} print a;
+
+var a = 5; if(a){print a;}

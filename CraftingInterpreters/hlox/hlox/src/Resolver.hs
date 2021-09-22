@@ -38,18 +38,18 @@ resolve (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens NOT_READY)) meta = do
   else resolveExpression expr meta >>= addDecWithExprToMeta (\x -> (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) x tokens (fromJust maybeId))))
 
 resolve  (DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) parameters (FUNC_STMT (BLOCK_STMT decs)) (LOCAL_ID id))) meta =
-  updateBlockWithFunctionInMeta id iden meta >>= addBlockToMeta >>= updateFunctionType FUNCTION >>= resolveParams parameters >>= resolveMulti decs >>= updateFunctionType oldFuncType >>= addVariableToVector iden id >>= addFunctionDecToMeta iden parameters id >>= deleteBlockFromMeta
+  updateBlockWithFunctionInMeta id iden meta >>= addBlockToMeta >>= updateFunctionType FUNCTION >>= resolveParams parameters >>= resolveMulti decs >>= updateFunctionType oldFuncType >>= addVariableToVector iden id >>= addFunctionDecToMeta iden parameters id
   where oldFuncType = funcType meta
 
 resolve (DEC_STMT (EXPR_STMT x)) meta = resolveExpression x meta >>= addDecWithExprToMeta (\x -> (DEC_STMT (EXPR_STMT x)))
 
-resolve (DEC_STMT (IF_STMT expr stmt)) meta = resolveExpression expr meta >>= resolve (createDecFromStatement stmt) >>= addDecWithExprToMeta (\x -> (DEC_STMT (IF_STMT x stmt)))
+resolve (DEC_STMT (IF_STMT expr (BLOCK_STMT decs))) meta =  resolveBlockStatement decs meta >>= resolveExpression expr >>= addIfLoopDecToMeta (\x y -> (DEC_STMT (IF_STMT x y)))
 
-resolve (DEC_STMT (IF_ELSE_STMT expr stmt1 stmt2)) meta = resolve (createDecFromStatement stmt1) meta >>= resolve (createDecFromStatement stmt2) >>= addDecWithExprToMeta (\x -> (DEC_STMT (IF_ELSE_STMT x stmt1 stmt2)))
+resolve (DEC_STMT (IF_ELSE_STMT expr (BLOCK_STMT decs1) (BLOCK_STMT decs2))) meta = resolveBlockStatement decs1 meta >>= resolveBlockStatement decs2 >>= resolveExpression expr >>= addIfElseDecToMeta (\x y z -> (DEC_STMT (IF_ELSE_STMT x y z)))
 
-resolve (DEC_STMT (WHILE_STMT expr stmt)) meta = resolveExpression expr meta >>= resolve (createDecFromStatement stmt) >>= addDecWithExprToMeta (\x -> (DEC_STMT (WHILE_STMT expr stmt)))
+resolve (DEC_STMT (WHILE_STMT expr (BLOCK_STMT decs))) meta = resolveExpression expr meta >>= resolveBlockStatement decs >>= addIfLoopDecToMeta (\x y -> (DEC_STMT (WHILE_STMT x y)))
 
-resolve (DEC_STMT (FOR_STMT varDec expr incDec stmt)) meta = resolve varDec meta >>= resolveExpression expr >>= resolve incDec >>= resolve (createDecFromStatement stmt) >>= addDecWithExprToMeta (\x -> (DEC_STMT (FOR_STMT varDec expr incDec stmt)))
+resolve (DEC_STMT (FOR_STMT varDec expr incDec (BLOCK_STMT decs))) meta = resolve varDec meta >>= resolveExpression expr >>= resolve incDec >>= resolveBlockStatement decs >>= addIfLoopDecToMeta (\x y -> (DEC_STMT (FOR_STMT varDec expr incDec y)))
 --TODO: Add Tokens to returns in the AST!
 resolve (DEC_STMT (RETURN expr)) meta = checkReturn (resolveExpression expr) meta
   where handleReturn expr meta = resolveExpression expr meta >>= addDecWithExprToMeta (\x -> (DEC_STMT (RETURN x)))
@@ -60,6 +60,8 @@ resolve (DEC_STMT (PRINT_STMT x)) meta = resolveExpression x meta >>= addDecWith
 
 resolve dec meta  = addDecToMeta dec meta
 
+resolveBlockStatement :: S.Seq DECLARATION -> ResolverMeta -> IO ResolverMeta
+resolveBlockStatement decs meta = addBlockToMeta meta >>= resolveMulti decs
 
 resolveParams :: PARAMETERS -> ResolverMeta -> IO ResolverMeta
 resolveParams (PARAMETERS params tokens) meta
