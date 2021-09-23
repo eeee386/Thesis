@@ -47,7 +47,13 @@ resolve (DEC_STMT (IF_STMT expr (BLOCK_STMT decs))) meta =  resolveBlockStatemen
 
 resolve (DEC_STMT (IF_ELSE_STMT expr (BLOCK_STMT decs1) (BLOCK_STMT decs2))) meta = resolveBlockStatement decs1 meta >>= resolveBlockStatement decs2 >>= resolveExpression expr >>= addIfElseDecToMeta (\x y z -> (DEC_STMT (IF_ELSE_STMT x y z)))
 
-resolve (DEC_STMT (WHILE_STMT expr (BLOCK_STMT decs))) meta = resolveExpression expr meta >>= resolveBlockStatement decs >>= addIfLoopDecToMeta (\x y -> (DEC_STMT (WHILE_STMT x y)))
+--TODO: Why did not work from monads I wonder...
+resolve (DEC_STMT (WHILE_STMT expr (BLOCK_STMT decs))) meta = do
+  exprMeta  <- resolveExpression expr meta
+  let (x, xRest) = pop (newExpressions exprMeta)
+  blockMeta <- resolveBlockStatement decs exprMeta{newExpressions=xRest}
+  let (block, blockRest) = pop (newDeclarations blockMeta)
+  addDecToMeta (DEC_STMT (WHILE_STMT x (BLOCK_STMT block))) meta{newDeclarations=blockRest}
 
 resolve (DEC_STMT (FOR_STMT varDec expr incDec (BLOCK_STMT decs))) meta = resolve varDec meta >>= resolveExpression expr >>= resolve incDec >>= resolveBlockStatement decs >>= addIfLoopDecToMeta (\x y -> (DEC_STMT (FOR_STMT varDec expr incDec y)))
 --TODO: Add Tokens to returns in the AST!

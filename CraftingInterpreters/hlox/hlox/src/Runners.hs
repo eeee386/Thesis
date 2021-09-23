@@ -81,6 +81,7 @@ printResolveErrorOrContinue prog = do
   else do
     let newProgStack = newDeclarations resolved
     let (newProg, _) = pop newProgStack
+    print "newProg"
     print newProg
     printEvalErrorOrContinue (PROG newProg) (variableVector resolved)
 
