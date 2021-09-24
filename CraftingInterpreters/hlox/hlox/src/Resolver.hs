@@ -45,11 +45,11 @@ resolve (DEC_STMT (EXPR_STMT x)) meta = resolveExpression x meta >>= addDecWithE
 
 resolve (DEC_STMT (IF_STMT expr (BLOCK_STMT decs))) meta = resolveIfWhile (\x y -> DEC_STMT (IF_STMT x (BLOCK_STMT y))) expr decs meta
 
-resolve (DEC_STMT (IF_ELSE_STMT expr (BLOCK_STMT decs1) (BLOCK_STMT decs2))) meta = resolveBlockStatement decs1 meta >>= resolveBlockStatement decs2 >>= resolveExpression expr >>= addIfElseDecToMeta (\x y z -> (DEC_STMT (IF_ELSE_STMT x y z)))
+resolve (DEC_STMT (IF_ELSE_STMT expr (BLOCK_STMT decs1) (BLOCK_STMT decs2))) meta = resolveIfElse (\x y z -> (DEC_STMT (IF_ELSE_STMT x (BLOCK_STMT y) (BLOCK_STMT z)))) expr decs1 decs2 meta
 
 resolve (DEC_STMT (WHILE_STMT expr (BLOCK_STMT decs))) meta = resolveIfWhile (\x block -> DEC_STMT (WHILE_STMT x (BLOCK_STMT block))) expr decs meta
 
-resolve (DEC_STMT (FOR_STMT varDec expr incDec (BLOCK_STMT decs))) meta = resolve varDec meta >>= resolveExpression expr >>= resolve incDec >>= resolveBlockStatement decs >>= addIfLoopDecToMeta (\x y -> (DEC_STMT (FOR_STMT varDec expr incDec y)))
+resolve (DEC_STMT (FOR_STMT varDec expr incDec (BLOCK_STMT decs))) meta = resolveForLoop (\nVar x nInc block -> (DEC_STMT (FOR_STMT nVar x nInc (BLOCK_STMT block)))) varDec expr incDec decs meta
 
 --TODO: Add Tokens to returns in the AST!
 resolve (DEC_STMT (RETURN expr)) meta = checkReturn (resolveExpression expr) meta
@@ -64,13 +64,36 @@ resolve dec meta  = addDecToMeta dec meta
 resolveBlockStatement :: S.Seq DECLARATION -> ResolverMeta -> IO ResolverMeta
 resolveBlockStatement decs meta = addBlockToMeta meta >>= resolveMulti decs
 
+resolveForLoop  :: (DECLARATION -> EXPRESSION -> DECLARATION -> S.Seq DECLARATION -> DECLARATION) -> DECLARATION -> EXPRESSION -> DECLARATION -> S.Seq DECLARATION -> ResolverMeta -> IO ResolverMeta
+resolveForLoop unfinishedDec varDec expr incDec decs meta = do
+  varMeta <- resolve varDec meta
+  (nVar, lastMeta) <- getLastDecFromMeta meta
+  exprMeta <- resolveExpression expr lastMeta
+  let (x, xRest) = pop (newExpressions exprMeta)
+  incMeta <- resolve incDec exprMeta{newExpressions=xRest}
+  (nInc, incMeta) <- getLastDecFromMeta meta
+  blockMeta <- resolveBlockStatement decs incMeta
+  let (block, blockRest) =  pop (newDeclarations blockMeta)
+  addDecToMeta (unfinishedDec nVar x nInc block) meta{newDeclarations=blockRest}
+
 --TODO: Why did not work from monads I wonder...
+resolveIfWhile :: (EXPRESSION -> S.Seq DECLARATION -> DECLARATION) -> EXPRESSION -> S.Seq DECLARATION -> ResolverMeta -> IO ResolverMeta
 resolveIfWhile unfinishedDec expr decs meta  = do
   exprMeta  <- resolveExpression expr meta
   let (x, xRest) = pop (newExpressions exprMeta)
   blockMeta <- resolveBlockStatement decs exprMeta{newExpressions=xRest}
   let (block, blockRest) = pop (newDeclarations blockMeta)
   addDecToMeta (unfinishedDec x block) meta{newDeclarations=blockRest}
+
+resolveIfElse :: (EXPRESSION -> S.Seq DECLARATION -> S.Seq DECLARATION -> DECLARATION) -> EXPRESSION -> S.Seq DECLARATION -> S.Seq DECLARATION -> ResolverMeta -> IO ResolverMeta
+resolveIfElse unfinished expr decs1 decs2 meta = do
+  exprMeta  <- resolveExpression expr meta
+  let (x, xRest) = pop (newExpressions exprMeta)
+  blockMeta1 <- resolveBlockStatement decs1 exprMeta{newExpressions=xRest}
+  let (block1, blockRest1) = pop (newDeclarations blockMeta1)
+  blockMeta2 <- resolveBlockStatement decs2 blockMeta1{newDeclarations=blockRest1}
+  let (block2, blockRest2) = pop (newDeclarations blockMeta2)
+  addDecToMeta (unfinished x block1 block2) meta{newDeclarations=blockRest2}
 
 resolveParams :: PARAMETERS -> ResolverMeta -> IO ResolverMeta
 resolveParams (PARAMETERS params tokens) meta

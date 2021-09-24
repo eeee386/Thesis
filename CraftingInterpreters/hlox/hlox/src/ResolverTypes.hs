@@ -164,14 +164,18 @@ addDecWithExprToMeta unFinishedDec meta = addDecToMeta (unFinishedDec expr) newM
   where (expr, rest) = pop (newExpressions meta)
         newMeta = meta{newExpressions=rest}
 
-addFunctionDecToMeta ::T.Text -> PARAMETERS -> Int -> ResolverMeta -> IO ResolverMeta
+addFunctionDecToMeta :: T.Text -> PARAMETERS -> Int -> ResolverMeta -> IO ResolverMeta
 addFunctionDecToMeta iden parameters id meta = do 
   let (newBlockStmt, last, delDecs) = handleBlockStatementSave meta
-  print ("delDecs: "++ show delDecs)
-  print ("newBlockStatement :" ++ show newBlockStmt)
-  print ("last: " ++ show last)
   let lastUpdated = last S.|> DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) parameters (FUNC_STMT newBlockStmt) (LOCAL_ID id))
   return meta{newDeclarations=push lastUpdated delDecs}
+
+getLastDecFromMeta :: ResolverMeta -> IO (DECLARATION, ResolverMeta)
+getLastDecFromMeta meta = do
+  let newDecs = newDeclarations meta
+  let (last, otherDecs) = pop newDecs
+  let (rest, wrappedDec) = S.splitAt (S.length last-2) last
+  return (S.index wrappedDec 0,meta{newDeclarations=(push rest otherDecs)})
 
 addIfLoopDecToMeta :: (EXPRESSION -> STATEMENT -> DECLARATION) -> ResolverMeta -> IO ResolverMeta
 addIfLoopDecToMeta unfinishedDec meta = do
