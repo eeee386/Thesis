@@ -29,7 +29,7 @@ instance Show VARIABLE_DECLARATION where
   show (VAR_DEC_DEF iden expr _ id) = mconcat ["var", " ", show iden, " = ", show expr, ";id: ", show id]
   show (VAR_DEC iden _ id) = mconcat ["var", " ", show iden, ";id: ", show id] 
   show (VAR_DEF iden expr _ id) = mconcat [show iden, " = ", show expr, ";id: ", show id]
-  show (PARAM_DEC iden _ id) = mconcat ["var", " ", show iden, ";id: ", show id] 
+  show (PARAM_DEC iden _ id) = mconcat ["param", " ", show iden, ";id: ", show id] 
 
 
 data FUNCTION_STATEMENT = FUNC_STMT STATEMENT | NATIVE_FUNC_STMT NATIVE_FUNCTION_TYPES deriving Eq

@@ -164,12 +164,12 @@ addDecWithExprToMeta unFinishedDec meta = addDecToMeta (unFinishedDec expr) newM
   where (expr, rest) = pop (newExpressions meta)
         newMeta = meta{newExpressions=rest}
 
-addFunctionDecToMeta :: T.Text -> PARAMETERS -> Int -> ResolverMeta -> IO ResolverMeta
-addFunctionDecToMeta iden parameters id meta = do
-  let (currentBlockDecs, delDecs) = pop (newDeclarations meta)
-  let last = peek delDecs
-  let lastUpdated = last S.|> DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) parameters (FUNC_STMT (BLOCK_STMT currentBlockDecs)) (LOCAL_ID id))
-  return meta{newDeclarations=push lastUpdated delDecs}
+addFunctionDecToMeta :: T.Text -> PARAMETERS -> Int -> FunctionTypes -> ResolverMeta -> IO ResolverMeta
+addFunctionDecToMeta iden parameters id oldFuncType meta = do
+   let (block, rest) = pop (newDeclarations meta)
+   let (last, otherDecs) = pop rest
+   let lastUpdated = last S.|> DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) parameters (FUNC_STMT (BLOCK_STMT block)) (LOCAL_ID id))
+   return meta{newDeclarations=push lastUpdated otherDecs, funcType=oldFuncType}
 
 getLastDecFromMeta :: ResolverMeta -> IO (DECLARATION, ResolverMeta)
 getLastDecFromMeta meta = do

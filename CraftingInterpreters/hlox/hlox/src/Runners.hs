@@ -26,6 +26,7 @@ import qualified Data.Vector as V
 run :: T.Text -> IO()
 run text = do
   let tokens = scanTokens text
+  print (parse tokens)
   printScanErrorOrContinue tokens
 
 runLoxFile :: T.Text -> IO ()
