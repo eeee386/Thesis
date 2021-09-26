@@ -26,7 +26,6 @@ import qualified Data.Vector as V
 run :: T.Text -> IO()
 run text = do
   let tokens = scanTokens text
-  print (parse tokens)
   printScanErrorOrContinue tokens
 
 runLoxFile :: T.Text -> IO ()
@@ -82,7 +81,6 @@ printResolveErrorOrContinue prog = do
   else do
     let newProgStack = newDeclarations resolved
     let (newProg, _) = pop newProgStack
-    print "newProg"
     print newProg
     printEvalErrorOrContinue (PROG newProg) (variableVector resolved)
 

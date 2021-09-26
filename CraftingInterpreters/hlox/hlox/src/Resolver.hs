@@ -74,8 +74,8 @@ resolveForLoop varDec expr incDec decs meta = do
   incMeta <- resolve incDec exprMeta{newExpressions=xRest}
   (nInc, incLastMeta) <- getLastDecFromMeta incMeta
   blockMeta <- resolveBlockStatement decs incLastMeta
-  let (block, blockRest) =  pop (newDeclarations blockMeta)
-  addDecToMeta (DEC_STMT (FOR_STMT nVar x nInc (BLOCK_STMT block))) meta{newDeclarations=blockRest}
+  let (block, blockRest) = pop (newDeclarations blockMeta)
+  addDecToMeta (DEC_STMT (FOR_STMT nVar x nInc (BLOCK_STMT block))) blockMeta{newDeclarations=blockRest}
 
 --TODO: Why did not work from monads I wonder...
 resolveIfWhile :: (EXPRESSION -> S.Seq DECLARATION -> DECLARATION) -> EXPRESSION -> S.Seq DECLARATION -> ResolverMeta -> IO ResolverMeta

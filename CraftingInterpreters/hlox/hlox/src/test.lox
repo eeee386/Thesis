@@ -10,6 +10,9 @@ var a = 0; while(a < 5) {if(a == 3) {print a;} a=a+1; }
 
 for (var i = 0; i < 5; i = i+1){ print i;}
 
+var a = 5; for (var i = 0; i < 5; i = i+1){ print i;}
+
+
 for (var i = 0; i < 5; i = i+1)
 {
 print i;
