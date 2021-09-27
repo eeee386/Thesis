@@ -104,7 +104,7 @@ findIdInVariables iden meta
   | null resEnv = return Nothing
   | otherwise = do
     values <- mapM (getIdOfIden iden) resEnv
-    let val = find isJust (reverse values)
+    let val = find isJust values
     if isJust val then return (Just (LOCAL_ID (fromJust (fromJust val)))) else do
      maybeGlobId <- getGlobalVarId (globalResolverTable meta) iden 
      if isJust maybeGlobId then return (Just (GLOBAL_ID (fromJust maybeGlobId))) else return Nothing
@@ -175,8 +175,8 @@ getLastDecFromMeta :: ResolverMeta -> IO (DECLARATION, ResolverMeta)
 getLastDecFromMeta meta = do
   let newDecs = newDeclarations meta
   let (last, otherDecs) = pop newDecs
-  let (rest, wrappedDec) = S.splitAt (S.length last-2) last
-  return (S.index wrappedDec 0,meta{newDeclarations=(push rest otherDecs)})
+  let (rest, wrappedDec) = S.splitAt (S.length last-1) last
+  return (S.index wrappedDec 0,meta{newDeclarations=push rest otherDecs})
 
 addIfLoopDecToMeta :: (EXPRESSION -> STATEMENT -> DECLARATION) -> ResolverMeta -> IO ResolverMeta
 addIfLoopDecToMeta unfinishedDec meta = do

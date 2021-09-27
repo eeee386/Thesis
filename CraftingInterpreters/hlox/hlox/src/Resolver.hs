@@ -26,7 +26,7 @@ resolve :: DECLARATION -> ResolverMeta -> IO ResolverMeta
 resolve (DEC_STMT (BLOCK_STMT decs)) meta = addBlockToMeta meta >>= resolveMulti decs >>= addBlockDecToMeta >>= deleteBlockFromMeta
 
 resolve (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) expr tokens (LOCAL_ID id))) meta = checkHandleIfAlreadyAdded handleDecDef tokens iden meta
-  where handleDecDef meta iden = updateBlockInMeta id iden meta >>= resolveExpression expr >>= cleanVarMeta >>= addVariableToVector iden id >>= addDecWithExprToMeta (\x -> (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) x tokens (LOCAL_ID id))))
+  where handleDecDef meta iden = updateBlockInMeta id iden meta >>= resolveExpression expr >>= cleanVarMeta >>= addVariableToVector iden id >>= addDecWithExprToMeta (\x -> DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) x tokens (LOCAL_ID id)))
 
 resolve (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden) tokens (LOCAL_ID id))) meta = checkHandleIfAlreadyAdded handleDec tokens iden meta
   where handleDec meta iden = updateBlockInMeta id iden meta >>= addVariableToVector iden id >>= addDecToMeta (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden) tokens (LOCAL_ID id)))
@@ -35,14 +35,14 @@ resolve (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens NOT_READY)) meta = do
   maybeId <- findIdInVariables iden meta
   if isNothing maybeId then do
     addError (RESOLVER_ERROR "Variable is not defined" tokens) meta
-  else resolveExpression expr meta >>= addDecWithExprToMeta (\x -> (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) x tokens (fromJust maybeId))))
+  else resolveExpression expr meta >>= addDecWithExprToMeta (\x -> DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) x tokens (fromJust maybeId)))
 
 -- TODO: Add tokens to function declaration in AST!
 resolve  (DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) parameters (FUNC_STMT (BLOCK_STMT decs)) (LOCAL_ID id))) meta = checkHandleIfAlreadyAdded handleFunction S.empty iden meta 
   where oldFuncType = funcType meta
         handleFunction meta iden = updateBlockWithFunctionInMeta id iden meta >>= addVariableToVector iden id >>= updateFunctionType FUNCTION >>= addBlockToMeta >>= resolveParams parameters >>= resolveMulti decs >>= addFunctionDecToMeta iden parameters id oldFuncType
 
-resolve (DEC_STMT (EXPR_STMT x)) meta = resolveExpression x meta >>= addDecWithExprToMeta (\x -> (DEC_STMT (EXPR_STMT x)))
+resolve (DEC_STMT (EXPR_STMT x)) meta = resolveExpression x meta >>= addDecWithExprToMeta (DEC_STMT . EXPR_STMT)
 
 resolve (DEC_STMT (IF_STMT expr (BLOCK_STMT decs))) meta = resolveIfWhile (\x y -> DEC_STMT (IF_STMT x (BLOCK_STMT y))) expr decs meta
 
@@ -54,11 +54,11 @@ resolve (DEC_STMT (FOR_STMT varDec expr incDec (BLOCK_STMT decs))) meta = resolv
 
 --TODO: Add Tokens to returns in the AST!
 resolve (DEC_STMT (RETURN expr)) meta = checkReturn (handleReturn expr) meta
-  where handleReturn expr meta = resolveExpression expr meta >>= addDecWithExprToMeta (\x -> (DEC_STMT (RETURN x)))
+  where handleReturn expr meta = resolveExpression expr meta >>= addDecWithExprToMeta (DEC_STMT . RETURN)
 
 resolve (DEC_STMT RETURN_NIL) meta = checkReturn return meta
 
-resolve (DEC_STMT (PRINT_STMT x)) meta = resolveExpression x meta >>= addDecWithExprToMeta (\x ->(DEC_STMT (PRINT_STMT x)))
+resolve (DEC_STMT (PRINT_STMT x)) meta = resolveExpression x meta >>= addDecWithExprToMeta (DEC_STMT . PRINT_STMT)
 
 resolve dec meta = addDecToMeta dec meta
 
@@ -119,12 +119,12 @@ resolveArgs args newArgs meta
     let newExprs = newExpressions exprsMeta
     resolveArgs (S.drop 1 args) (newArgs S.|> ARGS (S.fromList (take (S.length exprs) newExprs))) meta{newExpressions=drop (S.length exprs) newExprs}
   where (ARGS exprs) = S.index args 0
-        
+
 
 addCallExpression :: EXPRESSION -> S.Seq ARGUMENTS -> ID ->  ResolverMeta -> IO ResolverMeta
 addCallExpression expr args id meta = do
   exprMeta <- resolveExpression expr meta
-  let (x, rest) = pop (newExpressions exprMeta)
+  let (x, _) = pop (newExpressions exprMeta)
   (newArgs, newMeta) <- resolveArgs args S.empty meta
   addSimpleExpr (EXP_CALL (CALL_FUNC x newArgs id)) newMeta
 

@@ -284,13 +284,15 @@ callFunction meta (FUNC_DEC_EVAL iden arity params stmt) (ARGS args)
   | otherwise = functionCall meta (FUNC_DEC_EVAL iden arity params stmt) (ARGS args)
   where argsLength = S.length args
 
-
+-- TODO: right now all of them saves to one variable, is is fine for blocks and loops, but for functions when there are multiple one running 
+-- It should be different closure for all function call, so params should be taken out of the resolver, and functions should build up their closures
 functionCall :: META -> EVAL -> ARGUMENTS -> IO (EVAL, META)
 functionCall meta (FUNC_DEC_EVAL iden _ params (FUNC_STMT (BLOCK_STMT decs))) arguments = do
   toEvalMeta <- saveFunctionArgs meta params arguments
   (pIO, afterMetaIO) <- eval decs SKIP_EVAL (return toEvalMeta{isInFunction=True, isInLoop=False})
   afterMeta <- afterMetaIO
   returnEval <- pIO
+  print returnEval
   let evalValue = getValueFromReturn returnEval
   return (evalValue, afterMeta{isInFunction=isInFunction meta, isInLoop=isInLoop meta})
 functionCall meta (FUNC_DEC_EVAL iden _ params (NATIVE_FUNC_STMT f)) arguments = do
@@ -310,7 +312,8 @@ saveFunctionArgs meta (PARAMETERS params tokens) (ARGS args)
 
 callNativeFunction :: NATIVE_FUNCTION_TYPES -> ARGUMENTS -> IO EVAL
 callNativeFunction (CLOCK x) _ = do
-  val <- (x id)
+  val <- x id
   return (EVAL_NUMBER (fromInteger val))
 
+returnFromLoop :: EVAL -> META -> Bool
 returnFromLoop newEv newMeta = isRuntimeError newEv || (isInFunction newMeta && isReturn newEv)
