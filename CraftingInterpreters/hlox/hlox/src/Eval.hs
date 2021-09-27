@@ -156,9 +156,14 @@ evalExpression (EXP_LITERAL (STRING x)) meta = return (EVAL_STRING x, meta)
 evalExpression (EXP_LITERAL FALSE) meta = return (EVAL_BOOL False, meta)
 evalExpression (EXP_LITERAL TRUE) meta = return (EVAL_BOOL True, meta)
 evalExpression (EXP_LITERAL NIL) meta = return (EVAL_NIL, meta)
-evalExpression (EXP_LITERAL (IDENTIFIER x tokens id)) meta =do
-  val <- findValueInMeta id meta
-  return (val, meta)
+evalExpression (EXP_LITERAL (IDENTIFIER iden tokens id)) meta = do
+  if isInFunction meta 
+  then do
+    val <- findValueInFunction iden id meta
+    return (val, meta)
+  else do
+    val <- findValueInMeta id meta
+    return (val, meta)
 
 evalExpression (EXP_GROUPING (GROUP x)) meta = evalExpression x meta
 
@@ -288,27 +293,26 @@ callFunction meta (FUNC_DEC_EVAL iden arity params stmt) (ARGS args)
 -- It should be different closure for all function call, so params should be taken out of the resolver, and functions should build up their closures
 functionCall :: META -> EVAL -> ARGUMENTS -> IO (EVAL, META)
 functionCall meta (FUNC_DEC_EVAL iden _ params (FUNC_STMT (BLOCK_STMT decs))) arguments = do
-  toEvalMeta <- saveFunctionArgs meta params arguments
+  toEvalMeta <- addNewScopeToMeta meta >>= saveFunctionArgs params arguments
   (pIO, afterMetaIO) <- eval decs SKIP_EVAL (return toEvalMeta{isInFunction=True, isInLoop=False})
   afterMeta <- afterMetaIO
   returnEval <- pIO
-  print returnEval
   let evalValue = getValueFromReturn returnEval
-  return (evalValue, afterMeta{isInFunction=isInFunction meta, isInLoop=isInLoop meta})
+  return (evalValue, afterMeta{isInFunction=isInFunction meta, isInLoop=isInLoop meta, closure=deleteScopeFromClosure (closure meta)})
 functionCall meta (FUNC_DEC_EVAL iden _ params (NATIVE_FUNC_STMT f)) arguments = do
   eval <- callNativeFunction f arguments
   return (eval, meta)
 
 
-saveFunctionArgs :: META -> PARAMETERS -> ARGUMENTS -> IO META
-saveFunctionArgs meta (PARAMETERS params tokens) (ARGS args)
+saveFunctionArgs :: PARAMETERS -> ARGUMENTS -> META -> IO META
+saveFunctionArgs (PARAMETERS params tokens) (ARGS args) meta
  | S.null params = return meta
  | otherwise = do
-     let (DEC_VAR (PARAM_DEC (TH.IDENTIFIER iden) tokens id)) = S.index params 0
+     let (DEC_VAR (PARAM_DEC (TH.IDENTIFIER iden) tokens _)) = S.index params 0
      let a = S.index args 0
      (evalA, evalMeta) <- evalExpression a meta
-     newMeta <- addUpdateValueToMeta id evalA evalMeta
-     saveFunctionArgs newMeta (PARAMETERS (S.drop 1 params) tokens) (ARGS (S.drop 1 args))
+     newMeta <- addUpdateScopeInMeta iden evalA evalMeta
+     saveFunctionArgs (PARAMETERS (S.drop 1 params) tokens) (ARGS (S.drop 1 args)) newMeta
 
 callNativeFunction :: NATIVE_FUNCTION_TYPES -> ARGUMENTS -> IO EVAL
 callNativeFunction (CLOCK x) _ = do

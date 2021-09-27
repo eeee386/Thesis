@@ -101,8 +101,8 @@ resolveParams (PARAMETERS params tokens) meta
   | S.null params = return meta
   | otherwise = checkHandleIfAlreadyAdded (callResolveParams params) tokens iden meta
   where param = S.index params 0
-        (DEC_VAR (PARAM_DEC (TH.IDENTIFIER iden) tokens (LOCAL_ID id))) = param
-        callResolveParams params meta iden = updateBlockInMeta id iden meta >>= cleanVarMeta >>= addVariableToVector iden id >>= resolveParams (PARAMETERS (S.drop 1 params) tokens)
+        (DEC_VAR (PARAM_DEC (TH.IDENTIFIER iden) tokens _)) = param
+        callResolveParams params meta iden = resolveParams (PARAMETERS (S.drop 1 params) tokens) meta
 
 
 -- ResolveExpression
@@ -135,7 +135,7 @@ resolveExpression (EXP_TERNARY (TERN expr1 op1 expr2 op2 expr3) tokens) meta =
 resolveExpression (EXP_BINARY (BIN left op right) tokens) meta = resolveExpression left meta >>= resolveExpression right >>= addBinaryExpr (op, tokens)
 resolveExpression (EXP_CALL (CALL_FUNC expr arguments id)) meta = addCallExpression expr arguments id meta
 resolveExpression (EXP_GROUPING (GROUP x)) meta = resolveExpression x meta >>= addClosingExpr (EXP_GROUPING . GROUP)
-resolveExpression (EXP_UNARY (UNARY op x) tokens) meta = resolveExpression x meta >>= addClosingExpr (\x -> EXP_UNARY (UNARY op x) tokens)
+resolveExpression (EXP_UNARY (UNARY op x) tokens) meta = resolveExpression x meta >>= addClosingExpr (\ex -> EXP_UNARY (UNARY op ex) tokens)
 resolveExpression (EXP_LITERAL (IDENTIFIER iden tokens id)) meta = do
   if checkIfResolverError meta iden then do
     addError (RESOLVER_ERROR "Can't read local variable in its own initializer." tokens) meta

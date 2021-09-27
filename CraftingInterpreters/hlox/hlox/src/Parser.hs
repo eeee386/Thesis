@@ -182,7 +182,7 @@ handleFunction meta
   | not isIden = updateDecAndTokens (PARSE_ERROR "Identifier is missing after 'fun' keyword" err) rest meta
   | not isLeftParen = updateDecAndTokens (PARSE_ERROR "Parenthesis should be after function header" err) rest meta
   | not isRightParen = updateDecAndTokens (PARSE_ERROR "Parenthesis is not closed" err) rest meta
-  | otherwise = updateParserMeta (DEC_FUNC (FUNC_DEC (fromJust maybeIdenType) params (FUNC_STMT (fromJust stmt)) (LOCAL_ID id))) funRest newId newPMF
+  | otherwise = updateParserMeta (DEC_FUNC (FUNC_DEC (fromJust maybeIdenType) params (FUNC_STMT (fromJust stmt)) (LOCAL_ID id))) funRest (id+1) newPMF
   where id = currentVarId meta
         tokens = tokensLeft meta
         maybeIden = S.lookup 1 tokens
@@ -193,7 +193,7 @@ handleFunction meta
         rightParenIndex = S.findIndexL (tokenIsType RIGHT_PAREN) (S.drop 3 tokens)
         isRightParen = isJust rightParenIndex
         paramTokens = S.drop 3 (S.takeWhileL (not . tokenIsType RIGHT_PAREN) tokens)
-        (params, newId) = handleBuildParams paramTokens (id+1) (PARAMETERS S.empty paramTokens)
+        params = handleBuildParams paramTokens (PARAMETERS S.empty paramTokens)
         stmtRest = S.drop 1 (S.dropWhileL (not . tokenIsType RIGHT_PAREN) tokens)
         newPMF = createDeclaration (updateTokens stmtRest meta)
         dec = declaration newPMF
@@ -201,16 +201,16 @@ handleFunction meta
         stmt = getStmtFromDec dec
         (err, rest) = synchronize tokens
 
-handleBuildParams :: S.Seq Token -> Int -> PARAMETERS -> (PARAMETERS, Int)
-handleBuildParams tokens id (PARAMETERS idens paramTokens)
- | S.null tokens = (PARAMETERS idens tokens, id)
- | S.null idenTokens = (INVALID_PARAMS "Empty parameter" paramTokens, id)
- | not isIden = (INVALID_PARAMS "Parameters can only be identifiers" paramTokens, id)
- | otherwise = handleBuildParams rest (id+1) (PARAMETERS (idens S.|> newIden) paramTokens)
+handleBuildParams :: S.Seq Token -> PARAMETERS -> PARAMETERS
+handleBuildParams tokens (PARAMETERS idens paramTokens)
+ | S.null tokens = PARAMETERS idens tokens
+ | S.null idenTokens = INVALID_PARAMS "Empty parameter" paramTokens
+ | not isIden = INVALID_PARAMS "Parameters can only be identifiers" paramTokens
+ | otherwise = handleBuildParams rest (PARAMETERS (idens S.|> newIden) paramTokens)
  where idenTokens = S.takeWhileL (not . tokenIsType COMMA) tokens
        maybeIden = tokenType (S.index idenTokens 0)
        isIden = ParseExpressions.isIdentifier maybeIden
-       newIden = (DEC_VAR (PARAM_DEC (tokenType (S.index idenTokens 0)) idenTokens (LOCAL_ID id)))
+       newIden = DEC_VAR (PARAM_DEC (tokenType (S.index idenTokens 0)) idenTokens PARAM)
        rest = S.drop (S.length idenTokens+1) tokens
 
 

@@ -7,7 +7,7 @@ import Data.Maybe
 import NativeFunctionTypes
 
 type TextType = T.Text
-data ID = LOCAL_ID Int | GLOBAL_ID Int | NOT_READY deriving (Eq, Show)
+data ID = LOCAL_ID Int | GLOBAL_ID Int | NOT_READY | PARAM deriving (Eq, Show)
 
 newtype PROGRAM = PROG (S.Seq DECLARATION)
 instance Show PROGRAM where
@@ -29,7 +29,7 @@ instance Show VARIABLE_DECLARATION where
   show (VAR_DEC_DEF iden expr _ id) = mconcat ["var", " ", show iden, " = ", show expr, ";id: ", show id]
   show (VAR_DEC iden _ id) = mconcat ["var", " ", show iden, ";id: ", show id] 
   show (VAR_DEF iden expr _ id) = mconcat [show iden, " = ", show expr, ";id: ", show id]
-  show (PARAM_DEC iden _ id) = mconcat ["param", " ", show iden, ";id: ", show id] 
+  show (PARAM_DEC iden _ _) = mconcat ["param", " ", show iden, ";id: "]
 
 
 data FUNCTION_STATEMENT = FUNC_STMT STATEMENT | NATIVE_FUNC_STMT NATIVE_FUNCTION_TYPES deriving Eq
@@ -90,7 +90,7 @@ instance Show LITERAL where
   show FALSE = "false"
   show NIL = "nil"
   show (IDENTIFIER x _ id) = show x ++ show id
-   
+
 
 newtype GROUPING = GROUP EXPRESSION deriving Eq
 instance Show GROUPING where 
