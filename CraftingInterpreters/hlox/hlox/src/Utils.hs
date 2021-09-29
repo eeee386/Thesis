@@ -3,7 +3,13 @@ module Utils where
 import qualified Data.Sequence as S
 import TokenHelper
 import Data.Maybe
+import qualified Data.Text as T
 
+-- Types
+type TextType = T.Text
+data ID = LOCAL_ID Int | GLOBAL_ID Int | NOT_READY | PARAM deriving (Eq, Show)
+
+-- Helper Functions
 getLast :: S.Seq a -> Maybe a
 getLast s = S.lookup (S.length s -1) s
 
@@ -23,10 +29,10 @@ findMatching left right surplus index tokens
   where tTail = S.drop 1 tokens
         tType = tokenType <$> S.lookup 0 tokens
         
-
--- Find matching brace
+        
 findMatchingBraceIndex ::  S.Seq Token -> Maybe Int
 findMatchingBraceIndex = findMatching LEFT_BRACE RIGHT_BRACE 0 0
+
 
 -- Stack
 type Stack = []

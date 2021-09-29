@@ -13,6 +13,7 @@ import NativeFunctionTypes
 import qualified Data.HashTable.IO as HT
 import qualified Data.Sequence as S
 import AST
+import Utils
 
 -- (Integer -> Integer) function is needed that is how I could force it to not return the same number every time I call it
 clock :: (Integer -> Integer) -> IO Integer
@@ -31,9 +32,9 @@ createGlobalVector = V.singleton (FUNC_DEC_EVAL
 createGlobalResolverTable :: IO GlobalResolverTable
 createGlobalResolverTable = do
   table <- HT.new
-  HT.insert table "clock" 0
+  HT.insert table "clock" (GLOBAL_ID 0)
   return table
 
-getGlobalVarId ::  GlobalResolverTable -> T.Text -> IO (Maybe Int)
+getGlobalVarId ::  GlobalResolverTable -> T.Text -> IO (Maybe ID)
 getGlobalVarId = HT.lookup
 

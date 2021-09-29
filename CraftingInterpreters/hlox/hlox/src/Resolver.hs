@@ -26,10 +26,10 @@ resolve :: DECLARATION -> ResolverMeta -> IO ResolverMeta
 resolve (DEC_STMT (BLOCK_STMT decs)) meta = addBlockToMeta meta >>= resolveMulti decs >>= addBlockDecToMeta >>= deleteBlockFromMeta
 
 resolve (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) expr tokens (LOCAL_ID id))) meta = checkHandleIfAlreadyAdded handleDecDef tokens iden meta
-  where handleDecDef meta iden = updateBlockInMeta id iden meta >>= resolveExpression expr >>= cleanVarMeta >>= addVariableToVector iden id >>= addDecWithExprToMeta (\x -> DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) x tokens (LOCAL_ID id)))
+  where handleDecDef meta iden = updateBlockInMeta (LOCAL_ID id) iden meta >>= resolveExpression expr >>= cleanVarMeta >>= addVariableToVector iden id >>= addDecWithExprToMeta (\x -> DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) x tokens (LOCAL_ID id)))
 
 resolve (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden) tokens (LOCAL_ID id))) meta = checkHandleIfAlreadyAdded handleDec tokens iden meta
-  where handleDec meta iden = updateBlockInMeta id iden meta >>= addVariableToVector iden id >>= addDecToMeta (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden) tokens (LOCAL_ID id)))
+  where handleDec meta iden = updateBlockInMeta (LOCAL_ID id) iden meta >>= addVariableToVector iden id >>= addDecToMeta (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden) tokens (LOCAL_ID id)))
 
 resolve (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens NOT_READY)) meta = do
   maybeId <- findIdInVariables iden meta
@@ -40,7 +40,7 @@ resolve (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens NOT_READY)) meta = do
 -- TODO: Add tokens to function declaration in AST!
 resolve  (DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) parameters (FUNC_STMT (BLOCK_STMT decs)) (LOCAL_ID id))) meta = checkHandleIfAlreadyAdded handleFunction S.empty iden meta 
   where oldFuncType = funcType meta
-        handleFunction meta iden = updateBlockWithFunctionInMeta id iden meta >>= addVariableToVector iden id >>= updateFunctionType FUNCTION >>= addBlockToMeta >>= resolveParams parameters >>= resolveMulti decs >>= addFunctionDecToMeta iden parameters id oldFuncType
+        handleFunction meta iden = updateBlockWithFunctionInMeta (LOCAL_ID id) iden meta >>= addVariableToVector iden id >>= updateFunctionType FUNCTION >>= addBlockToMeta >>= resolveParams parameters >>= resolveMulti decs >>= addFunctionDecToMeta iden parameters id oldFuncType
 
 resolve (DEC_STMT (EXPR_STMT x)) meta = resolveExpression x meta >>= addDecWithExprToMeta (DEC_STMT . EXPR_STMT)
 
@@ -101,8 +101,8 @@ resolveParams (PARAMETERS params tokens) meta
   | S.null params = return meta
   | otherwise = checkHandleIfAlreadyAdded (callResolveParams params) tokens iden meta
   where param = S.index params 0
-        (DEC_VAR (PARAM_DEC (TH.IDENTIFIER iden) tokens _)) = param
-        callResolveParams params meta iden = resolveParams (PARAMETERS (S.drop 1 params) tokens) meta
+        (DEC_VAR (PARAM_DEC (TH.IDENTIFIER iden) tokens pid)) = param
+        callResolveParams params meta iden = updateBlockInMeta pid iden meta >>= cleanVarMeta >>= resolveParams (PARAMETERS (S.drop 1 params) tokens)
 
 
 -- ResolveExpression

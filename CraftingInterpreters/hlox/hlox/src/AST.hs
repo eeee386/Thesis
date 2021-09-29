@@ -5,9 +5,7 @@ import TokenHelper (Token, line, TokenType)
 import qualified Data.Sequence as S
 import Data.Maybe
 import NativeFunctionTypes
-
-type TextType = T.Text
-data ID = LOCAL_ID Int | GLOBAL_ID Int | NOT_READY | PARAM deriving (Eq, Show)
+import Utils
 
 newtype PROGRAM = PROG (S.Seq DECLARATION)
 instance Show PROGRAM where
@@ -113,7 +111,7 @@ instance Show TERNARY where
   show (TERN v w x y z) = mconcat [show v, show w, show x, show y, show z]
   
   
-data PARAMETERS = PARAMETERS (S.Seq DECLARATION) (S.Seq Token) | INVALID_PARAMS AST.TextType (S.Seq Token) deriving Eq
+data PARAMETERS = PARAMETERS (S.Seq DECLARATION) (S.Seq Token) | INVALID_PARAMS TextType (S.Seq Token) deriving Eq
 instance Show PARAMETERS where
   show (PARAMETERS params _) = show params
   show (INVALID_PARAMS a t) = mconcat ["Invalid parameters: ", show a, show t]

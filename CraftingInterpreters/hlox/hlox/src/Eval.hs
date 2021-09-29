@@ -13,6 +13,7 @@ import ResolverTypes
 import qualified Data.Vector as V
 import EvalMeta
 import NativeFunctionTypes
+import Utils
 
 -- TODO: Break and continue, if we have time
 
@@ -20,8 +21,6 @@ evalProgram :: PROGRAM -> V.Vector EVAL -> IO ()
 evalProgram (PROG x) vector = do
   eval x SKIP_EVAL (createGlobalMeta vector)
   return ()
-
-
 
 evalBlock :: S.Seq DECLARATION -> META -> IO (IO EVAL, IO META)
 evalBlock x meta = eval x SKIP_EVAL (return meta)
@@ -256,11 +255,11 @@ maybeEvalTruthy (EVAL_NUMBER _) = Just True
 maybeEvalTruthy (EVAL_STRING _) = Just True
 maybeEvalTruthy _ = Nothing
 
-maybeEvalString :: EVAL -> Maybe AST.TextType
+maybeEvalString :: EVAL -> Maybe TextType
 maybeEvalString (EVAL_STRING x) = Just x
 maybeEvalString _ = Nothing
 
-concatTwoString :: AST.TextType -> AST.TextType -> EVAL
+concatTwoString :: TextType -> TextType -> EVAL
 concatTwoString l r = EVAL_STRING (T.concat [l,r])
 
 createMathOp :: (a -> EVAL) -> S.Seq TH.Token -> Maybe Double -> Maybe Double -> (Double -> Double -> a)  -> EVAL
@@ -298,7 +297,7 @@ functionCall meta (FUNC_DEC_EVAL iden _ params (FUNC_STMT (BLOCK_STMT decs))) ar
   afterMeta <- afterMetaIO
   returnEval <- pIO
   let evalValue = getValueFromReturn returnEval
-  return (evalValue, afterMeta{isInFunction=isInFunction meta, isInLoop=isInLoop meta, closure=deleteScopeFromClosure (closure meta)})
+  return (evalValue, afterMeta{isInFunction=isInFunction meta, isInLoop=isInLoop meta, closure=deleteScopeFromClosure (closure afterMeta)})
 functionCall meta (FUNC_DEC_EVAL iden _ params (NATIVE_FUNC_STMT f)) arguments = do
   eval <- callNativeFunction f arguments
   return (eval, meta)

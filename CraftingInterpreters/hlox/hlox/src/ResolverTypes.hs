@@ -22,7 +22,7 @@ data ResolverError = RESOLVER_ERROR T.Text (S.Seq TH.Token) deriving Show
 data FunctionTypes = NONE | FUNCTION | METHOD deriving (Show, Eq)
 
 -- Resolver Environment
-type ResolverBlockEnvironment = HT.BasicHashTable T.Text Int
+type ResolverBlockEnvironment = HT.BasicHashTable T.Text ID
 
 type ResolverEnvironment = Stack ResolverBlockEnvironment
 
@@ -41,13 +41,13 @@ deleteBlockFromResEnv :: ResolverEnvironment -> ResolverEnvironment
 deleteBlockFromResEnv resEnv = newResEnv
   where (_,newResEnv) = pop resEnv 
 
-updateBlockInResEnv :: T.Text -> Int ->  ResolverEnvironment -> IO ResolverEnvironment
+updateBlockInResEnv :: T.Text -> ID ->  ResolverEnvironment -> IO ResolverEnvironment
 updateBlockInResEnv iden id resEnv  = do
   let (last, delResEnv) = pop resEnv 
   HT.insert last iden id
   return (push last delResEnv)
 
-getIdOfIden :: T.Text -> ResolverBlockEnvironment -> IO (Maybe Int)
+getIdOfIden :: T.Text -> ResolverBlockEnvironment -> IO (Maybe ID)
 getIdOfIden iden resEnv = HT.lookup resEnv iden
 
 
@@ -89,12 +89,12 @@ addBlockToMeta meta = do
 deleteBlockFromMeta :: ResolverMeta -> IO ResolverMeta
 deleteBlockFromMeta meta = return meta{resolverEnv=(deleteBlockFromResEnv (resolverEnv meta))}
 
-updateBlockInMeta ::Int -> T.Text -> ResolverMeta -> IO ResolverMeta
+updateBlockInMeta :: ID -> T.Text -> ResolverMeta -> IO ResolverMeta
 updateBlockInMeta id iden meta = do
   newEnv <- updateBlockInResEnv iden id (resolverEnv meta)
   return meta{resolverEnv=newEnv, varIden=Just iden}
 
-updateBlockWithFunctionInMeta :: Int -> T.Text -> ResolverMeta -> IO ResolverMeta
+updateBlockWithFunctionInMeta :: ID -> T.Text -> ResolverMeta -> IO ResolverMeta
 updateBlockWithFunctionInMeta id iden meta = do
   newEnv <- updateBlockInResEnv iden id (resolverEnv meta)
   return meta{resolverEnv=newEnv}
@@ -105,9 +105,9 @@ findIdInVariables iden meta
   | otherwise = do
     values <- mapM (getIdOfIden iden) resEnv
     let val = find isJust values
-    if isJust val then return (Just (LOCAL_ID (fromJust (fromJust val)))) else do
+    if isJust val then return (fromJust val) else do
      maybeGlobId <- getGlobalVarId (globalResolverTable meta) iden 
-     if isJust maybeGlobId then return (Just (GLOBAL_ID (fromJust maybeGlobId))) else return Nothing
+     if isJust maybeGlobId then return maybeGlobId else return Nothing
   where resEnv = resolverEnv meta
 
 findIdenInMeta :: T.Text -> ResolverMeta -> IO Bool

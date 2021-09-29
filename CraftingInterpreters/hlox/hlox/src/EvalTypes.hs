@@ -4,14 +4,15 @@ import AST
 import qualified Data.Sequence as S
 import qualified TokenHelper as TH
 import qualified Data.Vector as V
+import Utils
 
 -- Types
 type Arity = Int
-type Name = AST.TextType
-type ErrorMessage = AST.TextType
+type Name = TextType
+type ErrorMessage = TextType
 
 data EVAL = EVAL_NUMBER Double
-          | EVAL_STRING AST.TextType
+          | EVAL_STRING TextType
           | EVAL_BOOL Bool
           | EVAL_NIL
           | RUNTIME_ERROR ErrorMessage (S.Seq TH.Token) 
