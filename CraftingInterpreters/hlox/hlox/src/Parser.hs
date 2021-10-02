@@ -35,6 +35,7 @@ createDeclaration meta
   | isFunction = handleFunction meta
   | isReturn = handleReturn meta
   | isBlockDec = handleBlock meta
+  | isClass = handleClass meta
   | otherwise = handleSimpleDeclaration meta
   where firstToken = S.lookup 0 (tokensLeft meta)
         firstTokenType = tokenType <$> firstToken
@@ -44,6 +45,7 @@ createDeclaration meta
         isFor = firstTokenType == Just FOR
         isFunction = firstTokenType == Just FUN
         isReturn = firstTokenType == Just TokenHelper.RETURN
+        isClass = firstTokenType == Just CLASS
 
 
 handleBlock :: ParserMeta -> ParserMeta
@@ -220,6 +222,29 @@ handleReturn meta
   | otherwise = updateDecAndTokens (DEC_STMT (AST.RETURN (createExpression exprTokens))) (S.drop 2 $ S.drop (S.length exprTokens+1) tokens) meta
   where tokens = tokensLeft meta
         exprTokens = S.drop 1 (S.takeWhileL (not . tokenIsType SEMICOLON) tokens)
+
+handleClass :: ParserMeta -> ParserMeta
+handleClass meta 
+  | not isIden = updateDecAndTokens (PARSE_ERROR "Identifier is missing after 'class' keyword" err) rest meta
+  | not isLeftBrace = updateDecAndTokens (PARSE_ERROR "Expect '{' before class body." err) rest meta
+  | not isRightBrace = updateDecAndTokens (PARSE_ERROR "Expect '}' after class body.." err) rest meta
+  | otherwise = updateParserMeta (DEC_CLASS (CLASS_DEC (fromJust maybeIdenType) methods (LOCAL_ID id))) restTokens newId meta
+  where id = currentVarId meta
+        tokens = tokensLeft meta
+        (err, rest) = synchronize tokens
+        maybeIden = S.lookup 1 tokens
+        maybeIdenType = tokenType <$>  maybeIden
+        isIden = (ParseExpressions.isIdentifier <$> maybeIdenType) == Just True
+        maybeLeftBrace = S.lookup 2 tokens
+        isLeftBrace = (tokenType <$> maybeLeftBrace) == Just LEFT_BRACE
+        rightBraceIndex = S.findIndexL (tokenIsType RIGHT_BRACE) (S.drop 3 tokens)
+        isRightBrace = isJust rightBraceIndex
+        classBodyTokens = S.drop 3 (S.takeWhileL (not . tokenIsType RIGHT_BRACE) tokens)
+        (methods, restTokens) = handleMethods classBodyTokens
+        newId = id+1
+
+handleMethods :: S.Seq Token -> (S.Seq FUNCTION_DECLARATION, S.Seq Token)
+handleMethods tokens = (S.empty, tokens)
 
 
 getStmtFromDec :: DECLARATION -> Maybe STATEMENT

@@ -11,7 +11,7 @@ newtype PROGRAM = PROG (S.Seq DECLARATION)
 instance Show PROGRAM where
   show (PROG x) = show x
 
-data DECLARATION = DEC_STMT STATEMENT | DEC_VAR VARIABLE_DECLARATION | DEC_FUNC FUNCTION_DECLARATION  | PARSE_ERROR TextType (S.Seq Token) | SKIP_DEC deriving Eq
+data DECLARATION = DEC_STMT STATEMENT | DEC_VAR VARIABLE_DECLARATION | DEC_FUNC FUNCTION_DECLARATION | DEC_CLASS CLASS_DECLARATION | PARSE_ERROR TextType (S.Seq Token) | SKIP_DEC deriving Eq
 
 instance Show DECLARATION where
   show (DEC_STMT x) = show x
@@ -39,6 +39,9 @@ data FUNCTION_DECLARATION = FUNC_DEC IDENTIFIER PARAMETERS FUNCTION_STATEMENT ID
 instance Show FUNCTION_DECLARATION where
   show (FUNC_DEC i p s _) = mconcat ["function name: ", show i,"params: " , show p, "statements: ", show s]
 
+data CLASS_DECLARATION = CLASS_DEC IDENTIFIER (S.Seq FUNCTION_DECLARATION) ID deriving Eq
+instance Show CLASS_DECLARATION where 
+  show (CLASS_DEC i methods _) = mconcat ["class name: ", show i, "  methods: ", show methods] 
 
 data STATEMENT = EXPR_STMT EXPRESSION 
                | PRINT_STMT EXPRESSION 
