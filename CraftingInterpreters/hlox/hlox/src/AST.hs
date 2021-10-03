@@ -19,6 +19,7 @@ instance Show DECLARATION where
   show (PARSE_ERROR errMsg tokens) = mconcat ["ParseError: ", show errMsg, ". In line: " ,show (line (S.index tokens (S.length tokens-1)))]
   show SKIP_DEC = "skip dec"
   show (DEC_FUNC x) = "function: " ++ show x
+  show (DEC_CLASS x) = "class: " ++ show x
 
 type IDENTIFIER = TokenType
 
@@ -39,9 +40,9 @@ data FUNCTION_DECLARATION = FUNC_DEC IDENTIFIER PARAMETERS FUNCTION_STATEMENT ID
 instance Show FUNCTION_DECLARATION where
   show (FUNC_DEC i p s _) = mconcat ["function name: ", show i,"params: " , show p, "statements: ", show s]
 
-data CLASS_DECLARATION = CLASS_DEC IDENTIFIER (S.Seq FUNCTION_DECLARATION) ID deriving Eq
+data CLASS_DECLARATION = CLASS_DEC IDENTIFIER (S.Seq DECLARATION) ID deriving Eq
 instance Show CLASS_DECLARATION where 
-  show (CLASS_DEC i methods _) = mconcat ["class name: ", show i, "  methods: ", show methods] 
+  show (CLASS_DEC i methods id) = mconcat ["class name: ", show i, "  methods: ", show methods ++ ", id: ", show id] 
 
 data STATEMENT = EXPR_STMT EXPRESSION 
                | PRINT_STMT EXPRESSION 

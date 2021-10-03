@@ -94,8 +94,8 @@ updateBlockInMeta id iden meta = do
   newEnv <- updateBlockInResEnv iden id (resolverEnv meta)
   return meta{resolverEnv=newEnv, varIden=Just iden}
 
-updateBlockWithFunctionInMeta :: ID -> T.Text -> ResolverMeta -> IO ResolverMeta
-updateBlockWithFunctionInMeta id iden meta = do
+updateBlockWithFunctionOrClassInMeta :: ID -> T.Text -> ResolverMeta -> IO ResolverMeta
+updateBlockWithFunctionOrClassInMeta id iden meta = do
   newEnv <- updateBlockInResEnv iden id (resolverEnv meta)
   return meta{resolverEnv=newEnv}
 
@@ -164,12 +164,19 @@ addDecWithExprToMeta unFinishedDec meta = addDecToMeta (unFinishedDec expr) newM
   where (expr, rest) = pop (newExpressions meta)
         newMeta = meta{newExpressions=rest}
 
-addFunctionDecToMeta :: T.Text -> PARAMETERS -> Int -> FunctionTypes -> ResolverMeta -> IO ResolverMeta
+addFunctionDecToMeta :: T.Text -> PARAMETERS -> ID -> FunctionTypes -> ResolverMeta -> IO ResolverMeta
 addFunctionDecToMeta iden parameters id oldFuncType meta = do
    let (block, rest) = pop (newDeclarations meta)
    let (last, otherDecs) = pop rest
-   let lastUpdated = last S.|> DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) parameters (FUNC_STMT (BLOCK_STMT block)) (LOCAL_ID id))
+   let lastUpdated = last S.|> DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) parameters (FUNC_STMT (BLOCK_STMT block)) id)
    return meta{newDeclarations=push lastUpdated otherDecs, funcType=oldFuncType}
+   
+addClassDecToMeta :: T.Text -> S.Seq DECLARATION -> Int -> ResolverMeta -> IO ResolverMeta
+addClassDecToMeta iden methods id meta = do
+   let (block, rest) = pop (newDeclarations meta)
+   let (last, otherDecs) = pop rest
+   let lastUpdated = last S.|> DEC_CLASS (CLASS_DEC (TH.IDENTIFIER iden) methods (LOCAL_ID id))
+   return meta{newDeclarations=push lastUpdated otherDecs}
 
 getLastDecFromMeta :: ResolverMeta -> IO (DECLARATION, ResolverMeta)
 getLastDecFromMeta meta = do

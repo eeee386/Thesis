@@ -40,7 +40,15 @@ resolve (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens NOT_READY)) meta = do
 -- TODO: Add tokens to function declaration in AST!
 resolve  (DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) parameters (FUNC_STMT (BLOCK_STMT decs)) (LOCAL_ID id))) meta = checkHandleIfAlreadyAdded handleFunction S.empty iden meta 
   where oldFuncType = funcType meta
-        handleFunction meta iden = updateBlockWithFunctionInMeta (LOCAL_ID id) iden meta >>= addVariableToVector iden id >>= updateFunctionType FUNCTION >>= addBlockToMeta >>= resolveParams parameters >>= resolveMulti decs >>= addFunctionDecToMeta iden parameters id oldFuncType
+        handleFunction meta iden = updateBlockWithFunctionOrClassInMeta (LOCAL_ID id) iden meta >>= printFunc >>= addVariableToVector iden id >>= updateFunctionType FUNCTION >>= addBlockToMeta >>= resolveParams parameters >>= resolveMulti decs >>= addFunctionDecToMeta iden parameters (LOCAL_ID id) oldFuncType
+
+resolve  (DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) parameters (FUNC_STMT (BLOCK_STMT decs)) Utils.METHOD)) meta = checkHandleIfAlreadyAdded handleFunction S.empty iden meta 
+  where oldFuncType = funcType meta
+        handleFunction meta iden = updateBlockWithFunctionOrClassInMeta Utils.METHOD iden meta >>= printFunc >>= updateFunctionType ResolverTypes.METHOD >>= addBlockToMeta >>= resolveParams parameters >>= resolveMulti decs >>= addFunctionDecToMeta iden parameters Utils.METHOD oldFuncType
+
+-- TODO: Add tokens to class declaration in AST!
+resolve (DEC_CLASS (CLASS_DEC (TH.IDENTIFIER iden) methods (LOCAL_ID id))) meta = checkHandleIfAlreadyAdded handleClass S.empty iden meta
+  where handleClass meta iden = updateBlockWithFunctionOrClassInMeta (LOCAL_ID id) iden meta >>= addVariableToVector iden id >>= addBlockToMeta >>= resolveMulti methods >>= addClassDecToMeta iden methods id
 
 resolve (DEC_STMT (EXPR_STMT x)) meta = resolveExpression x meta >>= addDecWithExprToMeta (DEC_STMT . EXPR_STMT)
 

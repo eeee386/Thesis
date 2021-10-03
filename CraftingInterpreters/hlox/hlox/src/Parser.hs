@@ -12,7 +12,7 @@ import ParserTypes
 
 -- Parser will add the id to the declarations, and the Resolver will add the ids to the expressions
 
-
+-- TODO: check if ids can cause problems (especially is functions and classes (we update the original meta, with the original id+1, instead using the new metas, weird that it doesnot break))
 parse :: S.Seq Token -> PROGRAM
 parse = createProgram
 
@@ -20,7 +20,7 @@ createProgram :: S.Seq Token -> PROGRAM
 createProgram tokens = PROG (createDeclarations (createParserMeta tokens) S.empty)
 
 createDeclarations :: ParserMeta -> S.Seq DECLARATION -> S.Seq DECLARATION
-createDeclarations meta decSeq 
+createDeclarations meta decSeq
   | isLastParseError || S.null (tokensLeft meta) = S.drop 1 (decSeq S.|> dec)
   | otherwise = createDeclarations newMeta (decSeq S.|> dec)
   where isLastParseError = (isParseError <$> getLast decSeq) == Just True
@@ -39,6 +39,8 @@ createDeclaration meta
   | otherwise = handleSimpleDeclaration meta
   where firstToken = S.lookup 0 (tokensLeft meta)
         firstTokenType = tokenType <$> firstToken
+        secondToken = S.lookup 1 (tokensLeft meta)
+        secondTokenType = tokenType <$> secondToken
         isIf = firstTokenType == Just IF
         isBlockDec = firstTokenType == Just LEFT_BRACE
         isWhile = firstTokenType == Just WHILE
@@ -46,7 +48,6 @@ createDeclaration meta
         isFunction = firstTokenType == Just FUN
         isReturn = firstTokenType == Just TokenHelper.RETURN
         isClass = firstTokenType == Just CLASS
-
 
 handleBlock :: ParserMeta -> ParserMeta
 handleBlock meta
@@ -184,11 +185,12 @@ handleFunction meta
   | not isIden = updateDecAndTokens (PARSE_ERROR "Identifier is missing after 'fun' keyword" err) rest meta
   | not isLeftParen = updateDecAndTokens (PARSE_ERROR "Parenthesis should be after function header" err) rest meta
   | not isRightParen = updateDecAndTokens (PARSE_ERROR "Parenthesis is not closed" err) rest meta
+  | isNothing stmt = updateDecAndTokens (PARSE_ERROR "Parse error on block" err) rest meta
   | otherwise = updateParserMeta (DEC_FUNC (FUNC_DEC (fromJust maybeIdenType) params (FUNC_STMT (fromJust stmt)) (LOCAL_ID id))) funRest (id+1) newPMF
   where id = currentVarId meta
         tokens = tokensLeft meta
         maybeIden = S.lookup 1 tokens
-        maybeIdenType = tokenType <$>  maybeIden
+        maybeIdenType = tokenType <$> maybeIden
         isIden = (ParseExpressions.isIdentifier <$> maybeIdenType) == Just True
         maybeLeftParen = S.lookup 2 tokens
         isLeftParen = (tokenType <$> maybeLeftParen) == Just LEFT_PAREN
@@ -228,7 +230,7 @@ handleClass meta
   | not isIden = updateDecAndTokens (PARSE_ERROR "Identifier is missing after 'class' keyword" err) rest meta
   | not isLeftBrace = updateDecAndTokens (PARSE_ERROR "Expect '{' before class body." err) rest meta
   | not isRightBrace = updateDecAndTokens (PARSE_ERROR "Expect '}' after class body.." err) rest meta
-  | otherwise = updateParserMeta (DEC_CLASS (CLASS_DEC (fromJust maybeIdenType) methods (LOCAL_ID id))) restTokens newId meta
+  | otherwise = updateParserMeta (DEC_CLASS (CLASS_DEC (fromJust maybeIdenType) methods (LOCAL_ID id))) classRest newId meta
   where id = currentVarId meta
         tokens = tokensLeft meta
         (err, rest) = synchronize tokens
@@ -237,14 +239,12 @@ handleClass meta
         isIden = (ParseExpressions.isIdentifier <$> maybeIdenType) == Just True
         maybeLeftBrace = S.lookup 2 tokens
         isLeftBrace = (tokenType <$> maybeLeftBrace) == Just LEFT_BRACE
-        rightBraceIndex = S.findIndexL (tokenIsType RIGHT_BRACE) (S.drop 3 tokens)
+        rightBraceIndex = findMatchingBraceIndex tokens
         isRightBrace = isJust rightBraceIndex
-        classBodyTokens = S.drop 3 (S.takeWhileL (not . tokenIsType RIGHT_BRACE) tokens)
-        (methods, restTokens) = handleMethods classBodyTokens
+        classBodyTokens = S.drop 3 (S.take (fromJust rightBraceIndex) tokens)
+        methods = createDeclarations (updateTokens classBodyTokens meta) S.empty
+        classRest = S.drop (fromJust rightBraceIndex+1) tokens
         newId = id+1
-
-handleMethods :: S.Seq Token -> (S.Seq FUNCTION_DECLARATION, S.Seq Token)
-handleMethods tokens = (S.empty, tokens)
 
 
 getStmtFromDec :: DECLARATION -> Maybe STATEMENT
