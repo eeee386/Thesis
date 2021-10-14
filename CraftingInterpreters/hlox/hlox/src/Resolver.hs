@@ -133,7 +133,7 @@ addCallExpression :: EXPRESSION -> S.Seq ARGUMENTS -> ID ->  ResolverMeta -> IO 
 addCallExpression expr args id meta = do
   exprMeta <- resolveExpression expr meta
   let (x, _) = pop (newExpressions exprMeta)
-  (newArgs, newMeta) <- resolveArgs args S.empty meta
+  (newArgs, newMeta) <- resolveArgs args S.empty exprMeta
   addSimpleExpr (EXP_CALL (CALL_FUNC x newArgs id)) newMeta
 
 
