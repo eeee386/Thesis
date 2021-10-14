@@ -29,7 +29,7 @@ resolve (DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) expr tokens (LOCAL_ID id))) m
   where handleDecDef meta iden = updateBlockInMeta (LOCAL_ID id) iden meta >>= resolveExpression expr >>= cleanVarMeta >>= addVariableToVector iden id >>= addDecWithExprToMeta (\x -> DEC_VAR (VAR_DEC_DEF (TH.IDENTIFIER iden) x tokens (LOCAL_ID id)))
 
 resolve (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden) tokens (LOCAL_ID id))) meta = checkHandleIfAlreadyAdded handleDec tokens iden meta
-  where handleDec meta iden = updateBlockInMeta (LOCAL_ID id) iden meta >>= addVariableToVector iden id >>= addDecToMeta (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden) tokens (LOCAL_ID id)))
+  where handleDec meta iden = updateBlockInMeta (LOCAL_ID id) iden meta >>= cleanVarMeta >>= addVariableToVector iden id >>= addDecToMeta (DEC_VAR (VAR_DEC (TH.IDENTIFIER iden) tokens (LOCAL_ID id)))
 
 resolve (DEC_VAR (VAR_DEF (TH.IDENTIFIER iden) expr tokens NOT_READY)) meta = do
   maybeId <- findIdInVariables iden meta
