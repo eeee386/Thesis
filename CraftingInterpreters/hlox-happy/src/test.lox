@@ -1,0 +1,58 @@
+var a = clock(); for (var i = 0; i < 1000000; i = i+1) {i;} var b = clock(); print b-a;
+
+fun count(n) {while (n < 5) {if (n == 3) print n; n = n + 1;}} print count(1);
+
+fun count(n) {while (n < 5) {print n; n = n + 1;}} print count(1);
+
+fun count(n) {for (var i = 0; i < 5; i = i+1){ print i;}} count(1);
+
+var a = 0; while(a < 5) {if(a == 3) {print a;} a=a+1; }
+
+for (var i = 0; i < 5; i = i+1){ print i;}
+
+var a = 5; for (var i = 0; i < 5; i = i+1){ print i;}
+
+
+for (var i = 0; i < 5; i = i+1)
+{
+print i;
+}
+
+// Fix "if without block, it does not see return after first return"
+fun fib(n) {if (n <= 1) {return n;} return fib(n-2) + fib(n-1);} for (var i = 0; i < 20; i = i + 1) {print fib(i);}
+
+fun addOne(n){print n; if (n == 5) {return n;} return addOne(n+1);} addOne(1);
+
+fun ret(n){if(!n) {return n-1;} return n-3;} print ret(5);
+
+var n = 1 ;fun addOne(n){print n; if (n == 5) {return n;} return addOne(n+1);} addOne(n); print n;
+
+
+fun addOne(n){print n; if (n > 7) {return n} return addOne(n+1) + addOne(n+3);} addOne(1);
+
+
+fun a(n) {return n;} fun b(n) {return a(n-1)+a(n-2);} print b(5) + b(4);
+
+fun a(n) {return n;} fun b(n) {return a(n-1)+a(n-2);} print b(5);
+
+fun a(n) {return n-1;} print a(5);
+
+fun a(n) {return n;} print a(5);
+
+fun add(a,b) {return a+b;} print add(1+3,2);
+
+var n = 0; add(1,3)(1, 2);
+
+
+fun makeCounter() {var i = 0; fun count() {i = i + 1;print i;}return count;}var counter = makeCounter();counter();counter();
+
+var a = "global";{fun showA() {print a;}showA();var a = "block";showA();}
+
+var a = 5; {a = 4;} print a;
+
+var a = 5; if(a){print a;}
+
+var a=5; {var a = 3; a = a+1;} print a;
+
+
+class Breakfast {fun cook() {print "Eggs a-fryin'!";} fun serve(who) {print "Enjoy your breakfast + " + who + ".";}}
