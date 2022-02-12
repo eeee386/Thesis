@@ -6,20 +6,24 @@ import AST
 import Lexer as L
 }
 
-%name calc
+%name parser
 %tokentype { Token }
 %error { parseError }
 
+%left '='
+%nonassoc '?' ':'
 %left 'and' 'or'
 %left '==' '!='
 %left '>' '<' '<=' '>='
 %left '+' '-'
 %left '*' '/'
 %right UN
+%nonassoc call
 
 %token
       NUMBER          { L.NUMBER $$ }
       STRING          { L.STRING $$ }
+      IDENTIFIER      { L.IDENTIFIER $$ }
       '='             { L.EQUAL }
       '+'             { L.PLUS }
       '-'             { L.MINUS }
@@ -27,6 +31,8 @@ import Lexer as L
       '/'             { L.SLASH }
       '('             { L.LEFT_PAREN }
       ')'             { L.RIGHT_PAREN }
+      '{'             { L.LEFT_BRACE }
+      '}'             { L.RIGHT_BRACE }
       '!'             { L.BANG }
       '<'             { L.LESS }
       '>'             { L.GREATER }
@@ -39,13 +45,82 @@ import Lexer as L
       'true'          { L.TRUE }
       'false'         { L.FALSE }
       'nil'           { L.NIL }
+      ';'             { L.SEMICOLON }
+      ','             { L.COMMA }
+      '?'             { L.QUESTION_MARK }
+      ':'             { L.COLON }
+      'print'         { L.PRINT }
+      'var'           { L.VAR }
+      'if'            { L.IF }
+      'else'          { L.ELSE }
+      'while'         { L.WHILE }
+      'for'           { L.FOR }
+      'fun'           { L.FUN }
+      'return'        { L.RETURN }
+      'class'         { L.CLASS }
 
 %%
+
+program        : declarations                 { PROG (reverse $1) }
+
+declarations   : declarations declaration     { $2 : $1 }
+               | declaration                  { [$1] }
+
+declaration    : statement                    { DEC_STMT $1 }
+               | variable_declaration         { DEC_VAR $1 }
+               | function_declaration         { DEC_FUNC $1 }
+               | class_declaration            { DEC_CLASS $1 }
+
+statement      : expression_statement              { $1 }
+               | print_statement                   { $1 }
+               | block_statement                   { $1 }
+               | conditional_statement             { $1 }
+               | while_statement                   { $1 }
+               | for_statement                     { $1 }
+               | return_statement                  { $1 }
+
+expression_statement  : expression ';'                    { EXPR_STMT $1 }
+print_statement       : 'print' expression ';'            { PRINT_STMT $2 }
+block_statement       : '{' declarations '}'              { BLOCK_STMT (reverse $2) }
+conditional_statement : 'if' '(' expression ')' statement                         { IF_STMT $3 $5}
+                      | 'if' '(' expression ')' statement 'else' statement        { IF_ELSE_STMT $3 $5 $7 }
+while_statement       : 'while' '(' expression ')' statement                      { WHILE_STMT $3 $5 }
+for_statement         : 'for' '(' ';'  ';' ')' statement                                  { FOR_STMT (FOR_EMPTY $6) }
+                      | 'for' '(' variable_declaration ';' ';' ')' statement              { FOR_STMT (FOR_DEC $3 $7) }
+                      | 'for' '(' ';' expression ';' ')' statement                        { FOR_STMT (FOR_MID $4 $7) }
+                      | 'for' '(' ';' ';' expression ')' statement                        { FOR_STMT (FOR_END $5 $7) }
+                      | 'for' '(' variable_declaration ';' expression ';' ')' statement               { FOR_STMT (FOR_DEC_MID $3 $5 $8) }
+                      | 'for' '(' variable_declaration ';' ';' expression ')' statement               { FOR_STMT (FOR_DEC_END $3 $6 $8) }
+                      | 'for' '(' ';' expression ';' expression ')' statement             { FOR_STMT (FOR_MID_END $4 $6 $8) }
+                      | 'for' '(' variable_declaration ';' expression ';' expression ')' statement    { FOR_STMT (FOR_ALL $3 $5 $7 $9) }
+return_statement      : 'return' expression ';'                                                       { AST.RETURN $2 }
+
+variable_declaration       : 'var' IDENTIFIER '=' expression ';'  { VAR_DEC_DEF $2 $4 }
+                           | 'var' IDENTIFIER ';'                 { VAR_DEC $2 }
+                           | IDENTIFIER '=' expression ';'        { VAR_DEF $1 $3 }
+
+class_declaration          : 'class' IDENTIFIER '{' methods '}'   { CLASS_DEC $2 (reverse $4) }
+methods                    : {- empty -}                          { [] }
+                           | methods method_declaration           { $2 : $1 }
+
+function_declaration       : 'fun' IDENTIFIER '(' parameters ')' block_statement     { FUNC_DEC $2 (reverse $4) $6 }
+method_declaration         : IDENTIFIER '(' parameters ')' block_statement           { METHOD_DEC $1 (reverse $3) $5 }
+
+parameters                 : parameters ',' IDENTIFIER            { $3 : $1 }
+                           | {- empty -}                          { [] }
+
+function_call  : IDENTIFIER '(' arguments ')'         { CALL $1 (reverse $3) }
+               | function_call '(' arguments ')'      { CALL_MULTI $1 (reverse $3) }
+
+arguments      : arguments ',' expression             { $3 : $1 }
+               | {- empty -}                          { [] }
 
 expression     : literal        {EXP_LITERAL $1}
                | unary          {EXP_UNARY $1}
                | binary         {EXP_BINARY $1}
+               | ternary        {EXP_TERNARY $1}
                | grouping       {EXP_GROUPING $1}
+               | function_call  {EXP_CALL $1}
 
 literal        : NUMBER         {AST.NUMBER $1}
                | STRING         {AST.STRING $1}
@@ -53,27 +128,28 @@ literal        : NUMBER         {AST.NUMBER $1}
                | 'false'        {AST.FALSE}
                | 'nil'          {AST.NIL}
 
-grouping       : '(' expression ')'                  {GROUP $2}
+grouping       : '(' expression ')'              {GROUP $2}
 unary          : '-' expression %prec UN         {UNARY_MINUS $2}
                | '!' expression %prec UN         {UNARY_NEGATE $2}
 binary         : expression '==' expression      {BIN_EQ $1 $3}
                | expression '!=' expression      {BIN_NOT_EQ $1 $3}
-               | expression '+' expression      {BIN_ADD $1 $3}
-               | expression '-' expression      {BIN_SUB $1 $3}
-               | expression '*' expression      {BIN_MUL $1 $3}
-               | expression '/' expression      {BIN_DIV $1 $3}
-               | expression '>' expression      {BIN_COMP_GREATER $1 $3}
-               | expression '<' expression      {BIN_COMP_LESS $1 $3}
+               | expression '+' expression       {BIN_ADD $1 $3}
+               | expression '-' expression       {BIN_SUB $1 $3}
+               | expression '*' expression       {BIN_MUL $1 $3}
+               | expression '/' expression       {BIN_DIV $1 $3}
+               | expression '>' expression       {BIN_COMP_GREATER $1 $3}
+               | expression '<' expression       {BIN_COMP_LESS $1 $3}
                | expression '>=' expression      {BIN_COMP_GREATER_EQ $1 $3}
                | expression '<=' expression      {BIN_COMP_LESS_EQ $1 $3}
                | expression 'and' expression     {BIN_AND $1 $3}
                | expression 'or' expression      {BIN_OR $1 $3}
+ternary        : expression '?' expression ':' expression { TERNARY $1 $3 $5 }
 
 {
 parseError :: [Token] -> a
 parseError _ = error "Parse error"
 
 
-happyParser = calc . lexer
+happyParser = parser . lexer
 
 }

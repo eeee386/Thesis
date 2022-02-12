@@ -3,7 +3,7 @@ module EvalTypes where
 import AST
 import qualified Data.Sequence as S
 import qualified TokenHelper as TH
-import qualified Data.Vector as V
+import NativeFunctionTypes
 import Utils
 
 -- Types
@@ -18,7 +18,8 @@ data EVAL = EVAL_NUMBER Double
           | RUNTIME_ERROR ErrorMessage (S.Seq TH.Token) 
           | SKIP_EVAL
           | DEC_EVAL Name EVAL ID
-          | FUNC_DEC_EVAL Name Arity AST.PARAMETERS FUNCTION_STATEMENT
+          | FUNC_DEC_EVAL Name Arity [PARAMETER] STATEMENT
+          | NATIVE_FUNC_DEC_EVAL Name Arity [PARAMETER] NATIVE_FUNCTION_TYPES
           | RETURN_EVAL EVAL
           deriving Eq
 
@@ -32,6 +33,7 @@ instance Show EVAL where
   show (DEC_EVAL x y _) = mconcat [show x, " = ",show y]
   show SKIP_EVAL = "skip"
   show (FUNC_DEC_EVAL iden arity params stmt) = mconcat ["Function ", show iden, ", arity: ", show arity, ", params: ", show params, ", statement: ", show stmt]
+  show (NATIVE_FUNC_DEC_EVAL iden arity params _) = mconcat ["<<native>> Function ", show iden, ", arity: ", show arity, ", params: ", show params]
   show (RETURN_EVAL x) = "return: " ++ show x
 
 getLineError :: S.Seq TH.Token -> String

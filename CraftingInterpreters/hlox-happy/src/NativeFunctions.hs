@@ -22,11 +22,11 @@ clock f = do
   return (f (div valInNanoSec 1000000))
 
 createGlobalVector :: V.Vector EVAL
-createGlobalVector = V.singleton (FUNC_DEC_EVAL
+createGlobalVector = V.singleton (NATIVE_FUNC_DEC_EVAL
                                "clock"
                                0
-                               (PARAMETERS S.empty S.empty)
-                               (NATIVE_FUNC_STMT (CLOCK clock)))
+                               []
+                               (CLOCK clock))
 
 
 createGlobalResolverTable :: IO GlobalResolverTable

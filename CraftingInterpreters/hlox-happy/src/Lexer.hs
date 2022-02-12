@@ -39,6 +39,7 @@ lexer ('(':cs) = LEFT_PAREN : lexer cs
 lexer (')':cs) = RIGHT_PAREN : lexer cs
 lexer ('<': cs) = LESS : lexer cs
 lexer ('>': cs) = GREATER : lexer cs
+lexer (';': cs) = SEMICOLON : lexer cs
 lexer ('\"': cs) = lexString cs
 lexer [] = []
 
@@ -55,11 +56,20 @@ lexKeyword cs =
       ("nil", rest) -> NIL : lexer rest
       ("and", rest) -> AND : lexer rest
       ("or", rest) -> OR : lexer rest
+      ("print", rest) -> PRINT : lexer rest
+      ("if", rest) -> IF : lexer rest
+      ("else", rest) -> ELSE : lexer rest
+      ("while", rest) -> WHILE : lexer rest
+      ("for", rest) -> FOR : lexer rest
+      ("fun", rest) -> FUN : lexer rest
+      ("return", rest) -> RETURN : lexer rest
+      ("class", rest) -> CLASS : lexer rest
       (var,rest)   -> IDENTIFIER (T.pack var) : lexer rest
 
 lexString :: String -> [Token]
 lexString cs = STRING (T.pack str) : lexer rest
-  where (str, rest) = span (/= '\"') cs
+  where (str, restWithQuoteSign) = span (/= '\"') cs
+        (_:rest) = restWithQuoteSign
 
 lexHandleEqual :: String -> [Token]
 lexHandleEqual (c:cs) = if c == '=' then EQUAL_EQUAL : lexer cs else EQUAL : lexer (c:cs)
