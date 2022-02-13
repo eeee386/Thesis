@@ -49,6 +49,7 @@ import Lexer as L
       ','             { L.COMMA }
       '?'             { L.QUESTION_MARK }
       ':'             { L.COLON }
+      '.'             { L.DOT }
       'print'         { L.PRINT }
       'var'           { L.VAR }
       'if'            { L.IF }
@@ -58,6 +59,8 @@ import Lexer as L
       'fun'           { L.FUN }
       'return'        { L.RETURN }
       'class'         { L.CLASS }
+      'this'          { L.THIS }
+      'super'         { L.SUPER }
 
 %%
 
@@ -100,6 +103,7 @@ variable_declaration       : 'var' IDENTIFIER '=' expression ';'  { VAR_DEC_DEF 
                            | IDENTIFIER '=' expression ';'        { VAR_DEF $1 $3 }
 
 class_declaration          : 'class' IDENTIFIER '{' methods '}'   { CLASS_DEC $2 (reverse $4) }
+                           | 'class' IDENTIFIER '<' IDENTIFIER '{' methods '}' { SUB_CLASS_DEC $2 $4 $6 }
 methods                    : {- empty -}                          { [] }
                            | methods method_declaration           { $2 : $1 }
 
@@ -112,6 +116,18 @@ parameters                 : parameters ',' IDENTIFIER            { $3 : $1 }
 function_call  : IDENTIFIER '(' arguments ')'         { CALL $1 (reverse $3) }
                | function_call '(' arguments ')'      { CALL_MULTI $1 (reverse $3) }
 
+chain          : chaining                             { CHAIN (reverse $1)}
+chaining       : IDENTIFIER '.' IDENTIFIER            { [(LINK_IDENTIFIER $3), (LINK_IDENTIFIER $1)] }
+               | 'this' '.' IDENTIFIER                { [(LINK_IDENTIFIER $3), LINK_THIS] }
+               | IDENTIFIER '.' method_chain          { mconcat [$3, [(LINK_IDENTIFIER $1)]] }
+               | 'this' '.' method_chain              { mconcat [$3, [LINK_THIS]] }
+               | 'super' '.' method_chain             { mconcat [$3, [LINK_SUPER]] }
+               | 'super' '.' IDENTIFIER               { [(LINK_IDENTIFIER $3), LINK_SUPER] }
+               | method_chain '.' IDENTIFIER          { (LINK_IDENTIFIER $3) : $1 }
+
+method_chain   : method_chain '.' function_call      { (LINK_CALL $3) : $1 }
+               | {- empty -}                          { [] }
+
 arguments      : arguments ',' expression             { $3 : $1 }
                | {- empty -}                          { [] }
 
@@ -121,6 +137,8 @@ expression     : literal        {EXP_LITERAL $1}
                | ternary        {EXP_TERNARY $1}
                | grouping       {EXP_GROUPING $1}
                | function_call  {EXP_CALL $1}
+               | chain          {EXP_CHAIN $1}
+               | 'this'         {EXP_THIS}
 
 literal        : NUMBER         {AST.NUMBER $1}
                | STRING         {AST.STRING $1}

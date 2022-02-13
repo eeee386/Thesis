@@ -11,6 +11,8 @@ newtype PROGRAM = PROG [DECLARATION]
 instance Show PROGRAM where
   show (PROG x) = show x
 
+-- DECLARATION
+
 data DECLARATION = DEC_STMT STATEMENT | DEC_VAR VARIABLE_DECLARATION | DEC_FUNC FUNCTION_DECLARATION | DEC_CLASS CLASS_DECLARATION | PARSE_ERROR TextType (S.Seq Token) | SKIP_DEC deriving Eq
 
 instance Show DECLARATION where
@@ -38,32 +40,12 @@ instance Show FUNCTION_DECLARATION where
   show (FUNC_DEC i p s) = mconcat ["function name: ", show i,"params: " , show p, "statements: ", show s]
   show (METHOD_DEC i p s) = mconcat ["method name: ", show i,"params: " , show p, "statements: ", show s]
 
-
-data CLASS_DECLARATION = CLASS_DEC IDENTIFIER [FUNCTION_DECLARATION] deriving Eq
+data CLASS_DECLARATION = CLASS_DEC IDENTIFIER [FUNCTION_DECLARATION] | SUB_CLASS_DEC IDENTIFIER IDENTIFIER [FUNCTION_DECLARATION] deriving Eq
 instance Show CLASS_DECLARATION where 
   show (CLASS_DEC i methods) = mconcat ["class name: ", show i, "  methods: ", show methods]
 
-data FOR_LOOP = FOR_EMPTY STATEMENT
-              | FOR_DEC VARIABLE_DECLARATION STATEMENT
-              | FOR_MID EXPRESSION STATEMENT
-              | FOR_END EXPRESSION STATEMENT
-              | FOR_DEC_MID VARIABLE_DECLARATION EXPRESSION STATEMENT
-              | FOR_DEC_END VARIABLE_DECLARATION EXPRESSION STATEMENT
-              | FOR_MID_END EXPRESSION EXPRESSION STATEMENT
-              | FOR_ALL VARIABLE_DECLARATION EXPRESSION EXPRESSION STATEMENT
-              deriving Eq
 
-instance Show FOR_LOOP where
-  show (FOR_EMPTY x) = mconcat ["for(;;)", show x]
-  show (FOR_DEC x y) = mconcat ["for(", show x, ";;)", show y]
-  show (FOR_MID x y) = mconcat ["for(;", show x, ";)", show y]
-  show (FOR_END x y) = mconcat ["for(;;", show x, ")", show y]
-  show (FOR_DEC_MID x y z) = mconcat ["for(", show x, ";", show y, ";)", show z]
-  show (FOR_DEC_END x y z) = mconcat ["for(;", show x, ";", show y, ")", show z]
-  show (FOR_MID_END x y z) = mconcat ["for(;", show x, ";", show y, ")", show z]
-  show (FOR_ALL w x y z) = mconcat ["for(", show w , ";", show x, ";", show y, ")", show z]
-
-
+-- STATEMENT
 
 data STATEMENT = EXPR_STMT EXPRESSION 
                | PRINT_STMT EXPRESSION 
@@ -85,6 +67,29 @@ instance Show STATEMENT where
   show (FOR_STMT x) = show x
   show (LOOP expr1 expr2 stmt) = mconcat ["loop ", show expr1, " ", show expr2, " ", show stmt]
   show (RETURN x) = "return " ++ show x
+  
+data FOR_LOOP = FOR_EMPTY STATEMENT
+              | FOR_DEC VARIABLE_DECLARATION STATEMENT
+              | FOR_MID EXPRESSION STATEMENT
+              | FOR_END EXPRESSION STATEMENT
+              | FOR_DEC_MID VARIABLE_DECLARATION EXPRESSION STATEMENT
+              | FOR_DEC_END VARIABLE_DECLARATION EXPRESSION STATEMENT
+              | FOR_MID_END EXPRESSION EXPRESSION STATEMENT
+              | FOR_ALL VARIABLE_DECLARATION EXPRESSION EXPRESSION STATEMENT
+              deriving Eq
+
+instance Show FOR_LOOP where
+  show (FOR_EMPTY x) = mconcat ["for(;;)", show x]
+  show (FOR_DEC x y) = mconcat ["for(", show x, ";;)", show y]
+  show (FOR_MID x y) = mconcat ["for(;", show x, ";)", show y]
+  show (FOR_END x y) = mconcat ["for(;;", show x, ")", show y]
+  show (FOR_DEC_MID x y z) = mconcat ["for(", show x, ";", show y, ";)", show z]
+  show (FOR_DEC_END x y z) = mconcat ["for(;", show x, ";", show y, ")", show z]
+  show (FOR_MID_END x y z) = mconcat ["for(;", show x, ";", show y, ")", show z]
+  show (FOR_ALL w x y z) = mconcat ["for(", show w , ";", show x, ";", show y, ")", show z]
+
+
+-- EXPRESSION
 
 -- Tokens only needed in operator expression because there are some, that cannot be evaluated, and we want to show why
 data EXPRESSION = EXP_LITERAL LITERAL 
@@ -93,6 +98,8 @@ data EXPRESSION = EXP_LITERAL LITERAL
                 | EXP_TERNARY TERNARY
                 | EXP_GROUPING GROUPING
                 | EXP_CALL CALL
+                | EXP_CHAIN CHAIN
+                | EXP_THIS
                 deriving Eq
 
 instance Show EXPRESSION where 
@@ -102,6 +109,8 @@ instance Show EXPRESSION where
   show (EXP_GROUPING x) = show x
   show (EXP_TERNARY x) = show x
   show (EXP_CALL x) = mconcat ["Function: ", show x]
+  show (EXP_CHAIN x) = show x
+  show EXP_THIS = "this"
 
 data LITERAL = NUMBER Double | STRING TextType | TRUE | FALSE | NIL | IDENTIFIER TextType ID deriving Eq
 instance Show LITERAL where 
@@ -123,6 +132,19 @@ data CALL = CALL IDENTIFIER [ARGUMENT] | CALL_MULTI CALL [ARGUMENT] deriving Eq
 instance Show CALL where
   show (CALL lit args) = mconcat [show lit, "(", show args, ")"]
   show (CALL_MULTI call args) = mconcat [ show call, "(", show args, ")"]
+  
+-- CHAIN data structure: list but the first and last element CAN be IDENTIFIERs, and this and super can only be first 
+data CHAIN_LINK = LINK_CALL CALL | LINK_IDENTIFIER IDENTIFIER | LINK_THIS | LINK_SUPER deriving Eq
+instance Show CHAIN_LINK where
+  show (LINK_CALL x) = show x
+  show (LINK_IDENTIFIER x) = show x
+  show LINK_THIS = "this"
+  show LINK_SUPER = "super"
+
+newtype CHAIN = CHAIN [CHAIN_LINK] deriving Eq
+instance Show CHAIN where
+  show (CHAIN links) = mconcat $ reverse $ foldl (\y x -> mconcat [show x, "."] : y) [] links
+  
 
 data UNARY = UNARY_NEGATE EXPRESSION |
              UNARY_MINUS EXPRESSION

@@ -40,6 +40,8 @@ lexer (')':cs) = RIGHT_PAREN : lexer cs
 lexer ('<': cs) = LESS : lexer cs
 lexer ('>': cs) = GREATER : lexer cs
 lexer (';': cs) = SEMICOLON : lexer cs
+lexer (':': cs) = COLON : lexer cs
+lexer ('.': cs) = DOT : lexer cs
 lexer ('\"': cs) = lexString cs
 lexer [] = []
 
@@ -64,6 +66,8 @@ lexKeyword cs =
       ("fun", rest) -> FUN : lexer rest
       ("return", rest) -> RETURN : lexer rest
       ("class", rest) -> CLASS : lexer rest
+      ("tihs", rest) -> THIS : lexer rest
+      ("super", rest) -> SUPER : lexer rest
       (var,rest)   -> IDENTIFIER (T.pack var) : lexer rest
 
 lexString :: String -> [Token]

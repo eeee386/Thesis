@@ -13,10 +13,11 @@
   - Talk about monads (and functors, applicatives)
   - I think we should talk about how the Environments work (sequence, and the last element is the innermost scope that we are in)
   - Closure implementation
-  
-- One gripe with Haskell: An even more fine-tuned type handling would be better, maybe I am not using the language the right way
+- One gripe with Haskell: An even more fine-tuned type handling would be better, maybe I am not using the language the right way -> this is fixed with introducing happy and using better types
 - I had a problem with parameterized types, and I could not create a good solution for a polymorphic type for functions (as I had to add everywhere that polymorphic type as type parameter) -> created a type for every native function
 
+- Happy: much better than the Recursive descent algorythm I used before, less ambiguity in types as it forces a different thinking
+- Show how happy works!
 ### Interesting problems 
 #### The clock implementation
   - so the problem was that it saves the value only when it is used but because it is a zero param function -> it is a value, so when used it wil save the value and return anytime it is called again.
