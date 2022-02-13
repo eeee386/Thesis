@@ -66,7 +66,7 @@ lexKeyword cs =
       ("fun", rest) -> FUN : lexer rest
       ("return", rest) -> RETURN : lexer rest
       ("class", rest) -> CLASS : lexer rest
-      ("tihs", rest) -> THIS : lexer rest
+      ("this", rest) -> THIS : lexer rest
       ("super", rest) -> SUPER : lexer rest
       (var,rest)   -> IDENTIFIER (T.pack var) : lexer rest
 
