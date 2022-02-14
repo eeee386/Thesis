@@ -34,9 +34,6 @@ library
       Lexer
       NativeFunctions
       NativeFunctionTypes
-      ParseExpressions
-      Parser
-      ParserTypes
       Resolver
       ResolverTypes
       Runners

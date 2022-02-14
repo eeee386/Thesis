@@ -32,7 +32,7 @@ createGlobalVector = V.singleton (NATIVE_FUNC_DEC_EVAL
 createGlobalResolverTable :: IO GlobalResolverTable
 createGlobalResolverTable = do
   table <- HT.new
-  HT.insert table "clock" (GLOBAL_ID 0)
+  HT.insert table "clock" 0
   return table
 
 getGlobalVarId ::  GlobalResolverTable -> T.Text -> IO (Maybe ID)

@@ -1,16 +1,30 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Resolver where
-{-
 
 import ResolverTypes
-import Utils
-import qualified Data.Sequence as S
 import AST
-import qualified  Data.Text as T
-import qualified TokenHelper as TH
-import Data.Maybe
 
+
+  
+resolveProgram :: PROGRAM -> IO ResolverMeta
+resolveProgram (PROG decs) = createNewMeta >>= resolveDeclarations decs
+
+resolveDeclarations :: [DECLARATION] -> ResolverMeta -> IO ResolverMeta
+resolveDeclarations (x:xs) meta = resolveDeclaration x meta >>= resolveDeclarations xs
+
+resolveDeclaration :: DECLARATION -> ResolverMeta -> IO ResolverMeta 
+resolveDeclaration (DEC_VAR x) meta = resolveVarDeclaration x meta
+resolveDeclaration (DEC_STMT (BLOCK_STMT x)) meta = resolveBlock x meta
+resolveDeclaration x meta = return meta{declarations=x:declarations meta}
+
+resolveVarDeclaration :: VARIABLE_DECLARATION -> ResolverMeta -> IO ResolverMeta
+resolveVarDeclaration (VAR_DEC_DEF iden exp) meta = resolveExpression exp >>= checkIfDefinedForDeclaration iden (R_VAR_DEC_DEF iden exp)
+resolveVarDeclaration (VAR_DEC iden) meta = checkIfDefinedForDeclaration iden (R_VAR_DEC iden) meta
+resolveVarDeclaration (VAR_DEF iden exp) meta = resolveExpression exp >>= checkIfDefinedForDefinition iden exp
+
+
+{-
 
 resolveProgram :: PROGRAM -> IO ResolverMeta
 resolveProgram (PROG x) = createResolverMeta >>= resolveMulti x

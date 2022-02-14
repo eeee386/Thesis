@@ -7,7 +7,7 @@ import qualified Data.Text as T
 
 -- Types
 type TextType = T.Text
-data ID = LOCAL_ID Int | GLOBAL_ID Int | NOT_READY | PARAM | METHOD deriving (Eq, Show)
+type ID = Int
 
 -- Helper Functions
 getLast :: S.Seq a -> Maybe a

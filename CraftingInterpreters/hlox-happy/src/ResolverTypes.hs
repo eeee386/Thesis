@@ -1,20 +1,91 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module ResolverTypes where
-{-
+  
 import qualified Data.HashTable.IO as HT
 import Utils
 import qualified Data.Text as T
-import qualified Data.Sequence as S
 import AST
-import qualified TokenHelper as TH
 import Data.Maybe
 import qualified Data.Vector as V
 import EvalTypes
 import NativeFunctions
-import NativeFunctionTypes
-import Data.List
 
+type ResolverBlockEnvironment = (HT.BasicHashTable T.Text ID)
+type ResolverEnvironment = [ResolverBlockEnvironment]
+
+data ResolverMeta = ResolverMeta {
+  resolverEnv :: ResolverEnvironment
+  , currentVariableId :: Int
+  , variableVector :: V.Vector EVAL
+  , declarations :: [DECLARATION]
+  , currentVariableInDeclaration :: Maybe TextType
+  , resolverErrors :: [TextType]
+} 
+
+createNewMeta :: IO ResolverMeta
+createNewMeta = do
+  resEnv <- createNewResEnv
+  return ResolverMeta {
+    resolverEnv=resEnv
+  , currentVariableId=1
+  , variableVector=createGlobalVector
+  , declarations=[]
+  , currentVariableInDeclaration=Nothing
+  , resolverErrors=[]
+  }
+  
+createResolverBlockEnvironment :: IO ResolverBlockEnvironment
+createResolverBlockEnvironment = HT.new
+
+addNewBlockToResEnv :: ResolverEnvironment -> IO ResolverEnvironment
+addNewBlockToResEnv resEnv = do
+  block <- createResolverBlockEnvironment
+  return (block:resEnv)
+
+createNewResEnv ::  IO ResolverEnvironment
+createNewResEnv = addNewBlockToResEnv createStack
+
+deleteBlockFromResEnv :: ResolverEnvironment -> ResolverEnvironment
+deleteBlockFromResEnv resEnv = newResEnv
+  where (_,newResEnv) = pop resEnv 
+  
+updateBlockInResEnv :: T.Text -> ID ->  ResolverEnvironment -> IO ResolverEnvironment
+updateBlockInResEnv iden id resEnv  = do
+  let (last, delResEnv) = pop resEnv 
+  HT.insert last iden id
+  return (push last delResEnv)
+  
+getIdOfIden :: T.Text -> ResolverBlockEnvironment -> IO (Maybe ID)
+getIdOfIden iden resEnv = HT.lookup resEnv iden
+  
+updateBlockInMeta :: ID -> T.Text -> ResolverMeta -> IO ResolverMeta
+updateBlockInMeta id iden meta = do
+  newEnv <- updateBlockInResEnv iden id (resolverEnv meta)
+  return meta{resolverEnv=newEnv, currentVariableInDeclaration= Just iden}
+  
+
+
+
+checkIfDefinedForDeclaration :: TextType -> (Int -> RESOLVED_VARIABLE_DECLARATION) -> ResolverMeta -> IO ResolverMeta
+checkIfDefinedForDeclaration iden fact meta = do
+  let (currentResEnv:_) = resolverEnv meta
+  maybeId <- getIdOfIden iden currentResEnv
+  if isNothing maybeId then 
+    return meta{declarations=(R_DEC_VAR (fact (currentVariableId meta))):(declarations meta), currentVariableId=currentVariableId meta+1}
+  else 
+    return meta{resolverErrors="Value already defined in scope":(resolverErrors meta)}
+    
+    
+checkIfDefinedForDefinition :: TextType -> EXPRESSION -> ResolverMeta -> IO ResolverMeta
+checkIfDefinedForDefinition iden exp meta = do
+  let (currentResEnv:_) = resolverEnv meta
+  maybeId <- getIdOfIden iden currentResEnv
+  if isJust maybeId then 
+    return meta{declarations=(R_DEC_VAR (R_VAR_DEF iden exp (fromJust maybeId)):(declarations meta)), currentVariableId=currentVariableId meta+1}
+  else 
+    return meta{resolverErrors="Value is not in scope":(resolverErrors meta)}
+{-
 -- ResolverError
 data ResolverError = RESOLVER_ERROR T.Text (S.Seq TH.Token) deriving Show
 

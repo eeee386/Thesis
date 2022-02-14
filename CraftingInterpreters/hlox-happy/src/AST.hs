@@ -13,13 +13,11 @@ instance Show PROGRAM where
 
 -- DECLARATION
 
-data DECLARATION = DEC_STMT STATEMENT | DEC_VAR VARIABLE_DECLARATION | DEC_FUNC FUNCTION_DECLARATION | DEC_CLASS CLASS_DECLARATION | PARSE_ERROR TextType (S.Seq Token) | SKIP_DEC deriving Eq
+data DECLARATION = DEC_STMT STATEMENT | DEC_VAR VARIABLE_DECLARATION | R_DEC_VAR RESOLVED_VARIABLE_DECLARATION | DEC_FUNC FUNCTION_DECLARATION | DEC_CLASS CLASS_DECLARATION deriving Eq
 
 instance Show DECLARATION where
   show (DEC_STMT x) = show x
   show (DEC_VAR x) = show x
-  --show (PARSE_ERROR errMsg tokens) = mconcat ["ParseError: ", show errMsg, ". In line: " ,show (line (S.index tokens (S.length tokens-1)))]
-  show SKIP_DEC = "skip dec"
   show (DEC_FUNC x) = "function: " ++ show x
   show (DEC_CLASS x) = "class: " ++ show x
 
@@ -31,7 +29,7 @@ instance Show VARIABLE_DECLARATION where
   show (VAR_DEC_DEF iden expr) = mconcat ["var", " ", show iden, " = ", show expr]
   show (VAR_DEC iden) = mconcat ["var", " ", show iden]
   show (VAR_DEF iden expr) = mconcat [show iden, " = ", show expr]
-
+  
 data FUNCTION_DECLARATION = FUNC_DEC IDENTIFIER [PARAMETER] STATEMENT
                           | METHOD_DEC IDENTIFIER [PARAMETER] STATEMENT
                           deriving Eq
@@ -43,6 +41,14 @@ instance Show FUNCTION_DECLARATION where
 data CLASS_DECLARATION = CLASS_DEC IDENTIFIER [FUNCTION_DECLARATION] | SUB_CLASS_DEC IDENTIFIER IDENTIFIER [FUNCTION_DECLARATION] deriving Eq
 instance Show CLASS_DECLARATION where 
   show (CLASS_DEC i methods) = mconcat ["class name: ", show i, "  methods: ", show methods]
+  
+data RESOLVED_VARIABLE_DECLARATION = R_VAR_DEC_DEF IDENTIFIER EXPRESSION ID | R_VAR_DEC IDENTIFIER ID | R_VAR_DEF IDENTIFIER EXPRESSION ID  deriving Eq
+instance Show RESOLVED_VARIABLE_DECLARATION where
+  show (R_VAR_DEC_DEF iden expr _) = mconcat ["var", " ", show iden, " = ", show expr]
+  show (R_VAR_DEC iden _) = mconcat ["var", " ", show iden]
+  show (R_VAR_DEF iden expr _) = mconcat [show iden, " = ", show expr]
+
+
 
 
 -- STATEMENT
