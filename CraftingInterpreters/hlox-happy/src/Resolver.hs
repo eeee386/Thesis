@@ -4,6 +4,7 @@ module Resolver where
 
 import ResolverTypes
 import AST
+import Data.Maybe
 
 
   
@@ -19,11 +20,36 @@ resolveDeclaration (DEC_STMT (BLOCK_STMT x)) meta = resolveBlock x meta
 resolveDeclaration x meta = return meta{declarations=x:declarations meta}
 
 resolveVarDeclaration :: VARIABLE_DECLARATION -> ResolverMeta -> IO ResolverMeta
-resolveVarDeclaration (VAR_DEC_DEF iden exp) meta = resolveExpression exp >>= checkIfDefinedForDeclaration iden (R_VAR_DEC_DEF iden exp)
+resolveVarDeclaration (VAR_DEC_DEF iden exp) meta = resolveExpression exp meta >>= checkIfDefinedForDeclaration iden (R_VAR_DEC_DEF iden exp)
 resolveVarDeclaration (VAR_DEC iden) meta = checkIfDefinedForDeclaration iden (R_VAR_DEC iden) meta
-resolveVarDeclaration (VAR_DEF iden exp) meta = resolveExpression exp >>= checkIfDefinedForDefinition iden exp
+resolveVarDeclaration (VAR_DEF iden exp) meta = resolveExpression exp meta >>= checkIfDefinedForDefinition iden exp
+
+resolveBlock :: [DECLARATION] -> ResolverMeta -> IO ResolverMeta
+resolveBlock decs meta = do
+  newMeta <- resolveDeclarations decs meta{declarations=[]}
+  return meta{declarations=DEC_STMT (BLOCK_STMT (declarations newMeta)):declarations meta}
 
 
+resolveExpression :: EXPRESSION -> ResolverMeta -> IO ResolverMeta
+resolveExpression (EXP_LITERAL (IDENTIFIER_REFERENCE iden)) meta = checkIfReferenceForDefinition iden meta
+resolveExpression (EXP_LITERAL x) meta = return meta{newExpr= EXP_LITERAL x}
+resolveExpression (EXP_UNARY (UNARY_NEGATE exp)) meta = handleUnary UNARY_NEGATE exp meta
+resolveExpression (EXP_UNARY (UNARY_MINUS exp)) meta = handleUnary UNARY_MINUS exp meta
+resolveExpression (EXP_GROUPING (GROUP exp)) meta = handleGrouping GROUP exp meta
+
+resolveExpression _ meta = return meta
+
+
+handleUnary :: (EXPRESSION -> UNARY) -> EXPRESSION -> ResolverMeta -> IO ResolverMeta
+handleUnary fact = handleSingleExp (EXP_UNARY . fact)
+
+handleGrouping :: (EXPRESSION -> GROUPING) -> EXPRESSION -> ResolverMeta -> IO ResolverMeta
+handleGrouping fact = handleSingleExp (EXP_GROUPING . fact)
+
+handleSingleExp :: (EXPRESSION -> EXPRESSION) -> EXPRESSION -> ResolverMeta -> IO ResolverMeta
+handleSingleExp fact exp meta = do
+  newMeta <- resolveExpression exp meta
+  return meta{newExpr=fact (newExpr newMeta) }
 {-
 
 resolveProgram :: PROGRAM -> IO ResolverMeta

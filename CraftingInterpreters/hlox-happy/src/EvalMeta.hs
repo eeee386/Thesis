@@ -52,10 +52,8 @@ createGlobalMeta vector = do
   return META { isInFunction=False, isInLoop=True, variableValues=vector, globalVariableValues=createGlobalVector, closure=createStack }
 
 findValueInMeta :: ID -> META -> IO EVAL
-findValueInMeta (LOCAL_ID id) meta = return (variableValues meta V.! id)
-findValueInMeta (GLOBAL_ID id) meta = return (globalVariableValues meta V.! id)
-findValueInMeta NOT_READY _ = return EVAL_NIL
-findValueInMeta PARAM _ = return EVAL_NIL
+findValueInMeta id meta = return (variableValues meta V.! id)
+findValueInMeta id meta = return (globalVariableValues meta V.! id)
 
 findValueInFunction :: T.Text -> ID -> META -> IO EVAL
 findValueInFunction iden id meta = do
@@ -65,7 +63,7 @@ findValueInFunction iden id meta = do
      findValueInMeta id meta
 
 addUpdateValueToMeta :: ID -> EVAL -> META -> IO META
-addUpdateValueToMeta (LOCAL_ID id) eval meta = return meta{variableValues=V.update (variableValues meta) (V.singleton (id, eval))}
+addUpdateValueToMeta id eval meta = return meta{variableValues=V.update (variableValues meta) (V.singleton (id, eval))}
 
 addUpdateScopeInMeta :: T.Text -> EVAL -> META -> IO META
 addUpdateScopeInMeta iden eval meta = do

@@ -75,22 +75,23 @@ Grammar
 	literal -> 'true'                                  (65)
 	literal -> 'false'                                 (66)
 	literal -> 'nil'                                   (67)
-	grouping -> '(' expression ')'                     (68)
-	unary -> '-' expression                            (69)
-	unary -> '!' expression                            (70)
-	binary -> expression '==' expression               (71)
-	binary -> expression '!=' expression               (72)
-	binary -> expression '+' expression                (73)
-	binary -> expression '-' expression                (74)
-	binary -> expression '*' expression                (75)
-	binary -> expression '/' expression                (76)
-	binary -> expression '>' expression                (77)
-	binary -> expression '<' expression                (78)
-	binary -> expression '>=' expression               (79)
-	binary -> expression '<=' expression               (80)
-	binary -> expression 'and' expression              (81)
-	binary -> expression 'or' expression               (82)
-	ternary -> expression '?' expression ':' expression   (83)
+	literal -> IDENTIFIER                              (68)
+	grouping -> '(' expression ')'                     (69)
+	unary -> '-' expression                            (70)
+	unary -> '!' expression                            (71)
+	binary -> expression '==' expression               (72)
+	binary -> expression '!=' expression               (73)
+	binary -> expression '+' expression                (74)
+	binary -> expression '-' expression                (75)
+	binary -> expression '*' expression                (76)
+	binary -> expression '/' expression                (77)
+	binary -> expression '>' expression                (78)
+	binary -> expression '<' expression                (79)
+	binary -> expression '>=' expression               (80)
+	binary -> expression '<=' expression               (81)
+	binary -> expression 'and' expression              (82)
+	binary -> expression 'or' expression               (83)
+	ternary -> expression '?' expression ':' expression   (84)
 
 -----------------------------------------------------------------------------
 Terminals
@@ -163,11 +164,11 @@ Non-terminals
 	method_chain    rules 51, 52
 	arguments       rules 53, 54
 	expression      rules 55, 56, 57, 58, 59, 60, 61, 62
-	literal         rules 63, 64, 65, 66, 67
-	grouping        rule  68
-	unary           rules 69, 70
-	binary          rules 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82
-	ternary         rule  83
+	literal         rules 63, 64, 65, 66, 67, 68
+	grouping        rule  69
+	unary           rules 70, 71
+	binary          rules 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83
+	ternary         rule  84
 
 -----------------------------------------------------------------------------
 States
@@ -760,19 +761,19 @@ State 18
 State 19
 
 	expression_statement -> expression . ';'            (rule 15)
-	binary -> expression . '==' expression              (rule 71)
-	binary -> expression . '!=' expression              (rule 72)
-	binary -> expression . '+' expression               (rule 73)
-	binary -> expression . '-' expression               (rule 74)
-	binary -> expression . '*' expression               (rule 75)
-	binary -> expression . '/' expression               (rule 76)
-	binary -> expression . '>' expression               (rule 77)
-	binary -> expression . '<' expression               (rule 78)
-	binary -> expression . '>=' expression              (rule 79)
-	binary -> expression . '<=' expression              (rule 80)
-	binary -> expression . 'and' expression             (rule 81)
-	binary -> expression . 'or' expression              (rule 82)
-	ternary -> expression . '?' expression ':' expression    (rule 83)
+	binary -> expression . '==' expression              (rule 72)
+	binary -> expression . '!=' expression              (rule 73)
+	binary -> expression . '+' expression               (rule 74)
+	binary -> expression . '-' expression               (rule 75)
+	binary -> expression . '*' expression               (rule 76)
+	binary -> expression . '/' expression               (rule 77)
+	binary -> expression . '>' expression               (rule 78)
+	binary -> expression . '<' expression               (rule 79)
+	binary -> expression . '>=' expression              (rule 80)
+	binary -> expression . '<=' expression              (rule 81)
+	binary -> expression . 'and' expression             (rule 82)
+	binary -> expression . 'or' expression              (rule 83)
+	ternary -> expression . '?' expression ':' expression    (rule 84)
 
 	'+'            shift, and enter state 64
 	'-'            shift, and enter state 65
@@ -957,15 +958,30 @@ State 27
 	function_call -> IDENTIFIER . '(' arguments ')'     (rule 41)
 	chaining -> IDENTIFIER . '.' IDENTIFIER             (rule 44)
 	chaining -> IDENTIFIER . '.' method_chain           (rule 46)
+	literal -> IDENTIFIER .                             (rule 68)
 
 	'='            shift, and enter state 61
+	'+'            reduce using rule 68
+	'-'            reduce using rule 68
+	'*'            reduce using rule 68
+	'/'            reduce using rule 68
 	'('            shift, and enter state 62
+	'<'            reduce using rule 68
+	'>'            reduce using rule 68
+	'<='           reduce using rule 68
+	'>='           reduce using rule 68
+	'!='           reduce using rule 68
+	'=='           reduce using rule 68
+	'and'          reduce using rule 68
+	'or'           reduce using rule 68
+	';'            reduce using rule 68
+	'?'            reduce using rule 68
 	'.'            shift, and enter state 63
 
 
 State 28
 
-	unary -> '-' . expression                           (rule 69)
+	unary -> '-' . expression                           (rule 70)
 
 	NUMBER         shift, and enter state 25
 	STRING         shift, and enter state 26
@@ -993,7 +1009,7 @@ State 28
 
 State 29
 
-	grouping -> '(' . expression ')'                    (rule 68)
+	grouping -> '(' . expression ')'                    (rule 69)
 
 	NUMBER         shift, and enter state 25
 	STRING         shift, and enter state 26
@@ -1071,7 +1087,7 @@ State 30
 
 State 31
 
-	unary -> '!' . expression                           (rule 70)
+	unary -> '!' . expression                           (rule 71)
 
 	NUMBER         shift, and enter state 25
 	STRING         shift, and enter state 26
@@ -1381,19 +1397,19 @@ State 48
 State 49
 
 	return_statement -> 'return' expression . ';'       (rule 29)
-	binary -> expression . '==' expression              (rule 71)
-	binary -> expression . '!=' expression              (rule 72)
-	binary -> expression . '+' expression               (rule 73)
-	binary -> expression . '-' expression               (rule 74)
-	binary -> expression . '*' expression               (rule 75)
-	binary -> expression . '/' expression               (rule 76)
-	binary -> expression . '>' expression               (rule 77)
-	binary -> expression . '<' expression               (rule 78)
-	binary -> expression . '>=' expression              (rule 79)
-	binary -> expression . '<=' expression              (rule 80)
-	binary -> expression . 'and' expression             (rule 81)
-	binary -> expression . 'or' expression              (rule 82)
-	ternary -> expression . '?' expression ':' expression    (rule 83)
+	binary -> expression . '==' expression              (rule 72)
+	binary -> expression . '!=' expression              (rule 73)
+	binary -> expression . '+' expression               (rule 74)
+	binary -> expression . '-' expression               (rule 75)
+	binary -> expression . '*' expression               (rule 76)
+	binary -> expression . '/' expression               (rule 77)
+	binary -> expression . '>' expression               (rule 78)
+	binary -> expression . '<' expression               (rule 79)
+	binary -> expression . '>=' expression              (rule 80)
+	binary -> expression . '<=' expression              (rule 81)
+	binary -> expression . 'and' expression             (rule 82)
+	binary -> expression . 'or' expression              (rule 83)
+	ternary -> expression . '?' expression ':' expression    (rule 84)
 
 	'+'            shift, and enter state 64
 	'-'            shift, and enter state 65
@@ -1416,8 +1432,26 @@ State 50
 	function_call -> IDENTIFIER . '(' arguments ')'     (rule 41)
 	chaining -> IDENTIFIER . '.' IDENTIFIER             (rule 44)
 	chaining -> IDENTIFIER . '.' method_chain           (rule 46)
+	literal -> IDENTIFIER .                             (rule 68)
 
+	'+'            reduce using rule 68
+	'-'            reduce using rule 68
+	'*'            reduce using rule 68
+	'/'            reduce using rule 68
 	'('            shift, and enter state 62
+	')'            reduce using rule 68
+	'<'            reduce using rule 68
+	'>'            reduce using rule 68
+	'<='           reduce using rule 68
+	'>='           reduce using rule 68
+	'!='           reduce using rule 68
+	'=='           reduce using rule 68
+	'and'          reduce using rule 68
+	'or'           reduce using rule 68
+	';'            reduce using rule 68
+	','            reduce using rule 68
+	'?'            reduce using rule 68
+	':'            reduce using rule 68
 	'.'            shift, and enter state 63
 
 
@@ -1514,19 +1548,19 @@ State 55
 State 56
 
 	print_statement -> 'print' expression . ';'         (rule 16)
-	binary -> expression . '==' expression              (rule 71)
-	binary -> expression . '!=' expression              (rule 72)
-	binary -> expression . '+' expression               (rule 73)
-	binary -> expression . '-' expression               (rule 74)
-	binary -> expression . '*' expression               (rule 75)
-	binary -> expression . '/' expression               (rule 76)
-	binary -> expression . '>' expression               (rule 77)
-	binary -> expression . '<' expression               (rule 78)
-	binary -> expression . '>=' expression              (rule 79)
-	binary -> expression . '<=' expression              (rule 80)
-	binary -> expression . 'and' expression             (rule 81)
-	binary -> expression . 'or' expression              (rule 82)
-	ternary -> expression . '?' expression ':' expression    (rule 83)
+	binary -> expression . '==' expression              (rule 72)
+	binary -> expression . '!=' expression              (rule 73)
+	binary -> expression . '+' expression               (rule 74)
+	binary -> expression . '-' expression               (rule 75)
+	binary -> expression . '*' expression               (rule 76)
+	binary -> expression . '/' expression               (rule 77)
+	binary -> expression . '>' expression               (rule 78)
+	binary -> expression . '<' expression               (rule 79)
+	binary -> expression . '>=' expression              (rule 80)
+	binary -> expression . '<=' expression              (rule 81)
+	binary -> expression . 'and' expression             (rule 82)
+	binary -> expression . 'or' expression              (rule 83)
+	ternary -> expression . '?' expression ':' expression    (rule 84)
 
 	'+'            shift, and enter state 64
 	'-'            shift, and enter state 65
@@ -1546,38 +1580,38 @@ State 56
 
 State 57
 
-	unary -> '!' expression .                           (rule 70)
-	binary -> expression . '==' expression              (rule 71)
-	binary -> expression . '!=' expression              (rule 72)
-	binary -> expression . '+' expression               (rule 73)
-	binary -> expression . '-' expression               (rule 74)
-	binary -> expression . '*' expression               (rule 75)
-	binary -> expression . '/' expression               (rule 76)
-	binary -> expression . '>' expression               (rule 77)
-	binary -> expression . '<' expression               (rule 78)
-	binary -> expression . '>=' expression              (rule 79)
-	binary -> expression . '<=' expression              (rule 80)
-	binary -> expression . 'and' expression             (rule 81)
-	binary -> expression . 'or' expression              (rule 82)
-	ternary -> expression . '?' expression ':' expression    (rule 83)
+	unary -> '!' expression .                           (rule 71)
+	binary -> expression . '==' expression              (rule 72)
+	binary -> expression . '!=' expression              (rule 73)
+	binary -> expression . '+' expression               (rule 74)
+	binary -> expression . '-' expression               (rule 75)
+	binary -> expression . '*' expression               (rule 76)
+	binary -> expression . '/' expression               (rule 77)
+	binary -> expression . '>' expression               (rule 78)
+	binary -> expression . '<' expression               (rule 79)
+	binary -> expression . '>=' expression              (rule 80)
+	binary -> expression . '<=' expression              (rule 81)
+	binary -> expression . 'and' expression             (rule 82)
+	binary -> expression . 'or' expression              (rule 83)
+	ternary -> expression . '?' expression ':' expression    (rule 84)
 
-	'+'            reduce using rule 70
-	'-'            reduce using rule 70
-	'*'            reduce using rule 70
-	'/'            reduce using rule 70
-	')'            reduce using rule 70
-	'<'            reduce using rule 70
-	'>'            reduce using rule 70
-	'<='           reduce using rule 70
-	'>='           reduce using rule 70
-	'!='           reduce using rule 70
-	'=='           reduce using rule 70
-	'and'          reduce using rule 70
-	'or'           reduce using rule 70
-	';'            reduce using rule 70
-	','            reduce using rule 70
-	'?'            reduce using rule 70
-	':'            reduce using rule 70
+	'+'            reduce using rule 71
+	'-'            reduce using rule 71
+	'*'            reduce using rule 71
+	'/'            reduce using rule 71
+	')'            reduce using rule 71
+	'<'            reduce using rule 71
+	'>'            reduce using rule 71
+	'<='           reduce using rule 71
+	'>='           reduce using rule 71
+	'!='           reduce using rule 71
+	'=='           reduce using rule 71
+	'and'          reduce using rule 71
+	'or'           reduce using rule 71
+	';'            reduce using rule 71
+	','            reduce using rule 71
+	'?'            reduce using rule 71
+	':'            reduce using rule 71
 
 
 State 58
@@ -1633,20 +1667,20 @@ State 58
 
 State 59
 
-	grouping -> '(' expression . ')'                    (rule 68)
-	binary -> expression . '==' expression              (rule 71)
-	binary -> expression . '!=' expression              (rule 72)
-	binary -> expression . '+' expression               (rule 73)
-	binary -> expression . '-' expression               (rule 74)
-	binary -> expression . '*' expression               (rule 75)
-	binary -> expression . '/' expression               (rule 76)
-	binary -> expression . '>' expression               (rule 77)
-	binary -> expression . '<' expression               (rule 78)
-	binary -> expression . '>=' expression              (rule 79)
-	binary -> expression . '<=' expression              (rule 80)
-	binary -> expression . 'and' expression             (rule 81)
-	binary -> expression . 'or' expression              (rule 82)
-	ternary -> expression . '?' expression ':' expression    (rule 83)
+	grouping -> '(' expression . ')'                    (rule 69)
+	binary -> expression . '==' expression              (rule 72)
+	binary -> expression . '!=' expression              (rule 73)
+	binary -> expression . '+' expression               (rule 74)
+	binary -> expression . '-' expression               (rule 75)
+	binary -> expression . '*' expression               (rule 76)
+	binary -> expression . '/' expression               (rule 77)
+	binary -> expression . '>' expression               (rule 78)
+	binary -> expression . '<' expression               (rule 79)
+	binary -> expression . '>=' expression              (rule 80)
+	binary -> expression . '<=' expression              (rule 81)
+	binary -> expression . 'and' expression             (rule 82)
+	binary -> expression . 'or' expression              (rule 83)
+	ternary -> expression . '?' expression ':' expression    (rule 84)
 
 	'+'            shift, and enter state 64
 	'-'            shift, and enter state 65
@@ -1666,38 +1700,38 @@ State 59
 
 State 60
 
-	unary -> '-' expression .                           (rule 69)
-	binary -> expression . '==' expression              (rule 71)
-	binary -> expression . '!=' expression              (rule 72)
-	binary -> expression . '+' expression               (rule 73)
-	binary -> expression . '-' expression               (rule 74)
-	binary -> expression . '*' expression               (rule 75)
-	binary -> expression . '/' expression               (rule 76)
-	binary -> expression . '>' expression               (rule 77)
-	binary -> expression . '<' expression               (rule 78)
-	binary -> expression . '>=' expression              (rule 79)
-	binary -> expression . '<=' expression              (rule 80)
-	binary -> expression . 'and' expression             (rule 81)
-	binary -> expression . 'or' expression              (rule 82)
-	ternary -> expression . '?' expression ':' expression    (rule 83)
+	unary -> '-' expression .                           (rule 70)
+	binary -> expression . '==' expression              (rule 72)
+	binary -> expression . '!=' expression              (rule 73)
+	binary -> expression . '+' expression               (rule 74)
+	binary -> expression . '-' expression               (rule 75)
+	binary -> expression . '*' expression               (rule 76)
+	binary -> expression . '/' expression               (rule 77)
+	binary -> expression . '>' expression               (rule 78)
+	binary -> expression . '<' expression               (rule 79)
+	binary -> expression . '>=' expression              (rule 80)
+	binary -> expression . '<=' expression              (rule 81)
+	binary -> expression . 'and' expression             (rule 82)
+	binary -> expression . 'or' expression              (rule 83)
+	ternary -> expression . '?' expression ':' expression    (rule 84)
 
-	'+'            reduce using rule 69
-	'-'            reduce using rule 69
-	'*'            reduce using rule 69
-	'/'            reduce using rule 69
-	')'            reduce using rule 69
-	'<'            reduce using rule 69
-	'>'            reduce using rule 69
-	'<='           reduce using rule 69
-	'>='           reduce using rule 69
-	'!='           reduce using rule 69
-	'=='           reduce using rule 69
-	'and'          reduce using rule 69
-	'or'           reduce using rule 69
-	';'            reduce using rule 69
-	','            reduce using rule 69
-	'?'            reduce using rule 69
-	':'            reduce using rule 69
+	'+'            reduce using rule 70
+	'-'            reduce using rule 70
+	'*'            reduce using rule 70
+	'/'            reduce using rule 70
+	')'            reduce using rule 70
+	'<'            reduce using rule 70
+	'>'            reduce using rule 70
+	'<='           reduce using rule 70
+	'>='           reduce using rule 70
+	'!='           reduce using rule 70
+	'=='           reduce using rule 70
+	'and'          reduce using rule 70
+	'or'           reduce using rule 70
+	';'            reduce using rule 70
+	','            reduce using rule 70
+	'?'            reduce using rule 70
+	':'            reduce using rule 70
 
 
 State 61
@@ -1766,7 +1800,7 @@ State 63
 
 State 64
 
-	binary -> expression '+' . expression               (rule 73)
+	binary -> expression '+' . expression               (rule 74)
 
 	NUMBER         shift, and enter state 25
 	STRING         shift, and enter state 26
@@ -1794,7 +1828,7 @@ State 64
 
 State 65
 
-	binary -> expression '-' . expression               (rule 74)
+	binary -> expression '-' . expression               (rule 75)
 
 	NUMBER         shift, and enter state 25
 	STRING         shift, and enter state 26
@@ -1822,7 +1856,7 @@ State 65
 
 State 66
 
-	binary -> expression '*' . expression               (rule 75)
+	binary -> expression '*' . expression               (rule 76)
 
 	NUMBER         shift, and enter state 25
 	STRING         shift, and enter state 26
@@ -1850,7 +1884,7 @@ State 66
 
 State 67
 
-	binary -> expression '/' . expression               (rule 76)
+	binary -> expression '/' . expression               (rule 77)
 
 	NUMBER         shift, and enter state 25
 	STRING         shift, and enter state 26
@@ -1878,7 +1912,7 @@ State 67
 
 State 68
 
-	binary -> expression '<' . expression               (rule 78)
+	binary -> expression '<' . expression               (rule 79)
 
 	NUMBER         shift, and enter state 25
 	STRING         shift, and enter state 26
@@ -1906,7 +1940,7 @@ State 68
 
 State 69
 
-	binary -> expression '>' . expression               (rule 77)
+	binary -> expression '>' . expression               (rule 78)
 
 	NUMBER         shift, and enter state 25
 	STRING         shift, and enter state 26
@@ -1934,7 +1968,7 @@ State 69
 
 State 70
 
-	binary -> expression '<=' . expression              (rule 80)
+	binary -> expression '<=' . expression              (rule 81)
 
 	NUMBER         shift, and enter state 25
 	STRING         shift, and enter state 26
@@ -1962,7 +1996,7 @@ State 70
 
 State 71
 
-	binary -> expression '>=' . expression              (rule 79)
+	binary -> expression '>=' . expression              (rule 80)
 
 	NUMBER         shift, and enter state 25
 	STRING         shift, and enter state 26
@@ -1990,7 +2024,7 @@ State 71
 
 State 72
 
-	binary -> expression '!=' . expression              (rule 72)
+	binary -> expression '!=' . expression              (rule 73)
 
 	NUMBER         shift, and enter state 25
 	STRING         shift, and enter state 26
@@ -2018,7 +2052,7 @@ State 72
 
 State 73
 
-	binary -> expression '==' . expression              (rule 71)
+	binary -> expression '==' . expression              (rule 72)
 
 	NUMBER         shift, and enter state 25
 	STRING         shift, and enter state 26
@@ -2046,7 +2080,7 @@ State 73
 
 State 74
 
-	binary -> expression 'and' . expression             (rule 81)
+	binary -> expression 'and' . expression             (rule 82)
 
 	NUMBER         shift, and enter state 25
 	STRING         shift, and enter state 26
@@ -2074,7 +2108,7 @@ State 74
 
 State 75
 
-	binary -> expression 'or' . expression              (rule 82)
+	binary -> expression 'or' . expression              (rule 83)
 
 	NUMBER         shift, and enter state 25
 	STRING         shift, and enter state 26
@@ -2132,7 +2166,7 @@ State 76
 
 State 77
 
-	ternary -> expression '?' . expression ':' expression    (rule 83)
+	ternary -> expression '?' . expression ':' expression    (rule 84)
 
 	NUMBER         shift, and enter state 25
 	STRING         shift, and enter state 26
@@ -2267,20 +2301,20 @@ State 83
 
 State 84
 
-	binary -> expression . '==' expression              (rule 71)
-	binary -> expression . '!=' expression              (rule 72)
-	binary -> expression . '+' expression               (rule 73)
-	binary -> expression . '-' expression               (rule 74)
-	binary -> expression . '*' expression               (rule 75)
-	binary -> expression . '/' expression               (rule 76)
-	binary -> expression . '>' expression               (rule 77)
-	binary -> expression . '<' expression               (rule 78)
-	binary -> expression . '>=' expression              (rule 79)
-	binary -> expression . '<=' expression              (rule 80)
-	binary -> expression . 'and' expression             (rule 81)
-	binary -> expression . 'or' expression              (rule 82)
-	ternary -> expression . '?' expression ':' expression    (rule 83)
-	ternary -> expression '?' expression . ':' expression    (rule 83)
+	binary -> expression . '==' expression              (rule 72)
+	binary -> expression . '!=' expression              (rule 73)
+	binary -> expression . '+' expression               (rule 74)
+	binary -> expression . '-' expression               (rule 75)
+	binary -> expression . '*' expression               (rule 76)
+	binary -> expression . '/' expression               (rule 77)
+	binary -> expression . '>' expression               (rule 78)
+	binary -> expression . '<' expression               (rule 79)
+	binary -> expression . '>=' expression              (rule 80)
+	binary -> expression . '<=' expression              (rule 81)
+	binary -> expression . 'and' expression             (rule 82)
+	binary -> expression . 'or' expression              (rule 83)
+	ternary -> expression . '?' expression ':' expression    (rule 84)
+	ternary -> expression '?' expression . ':' expression    (rule 84)
 
 	'+'            shift, and enter state 64
 	'-'            shift, and enter state 65
@@ -2300,20 +2334,56 @@ State 84
 
 State 85
 
-	binary -> expression . '==' expression              (rule 71)
-	binary -> expression . '!=' expression              (rule 72)
-	binary -> expression . '+' expression               (rule 73)
-	binary -> expression . '-' expression               (rule 74)
-	binary -> expression . '*' expression               (rule 75)
-	binary -> expression . '/' expression               (rule 76)
-	binary -> expression . '>' expression               (rule 77)
-	binary -> expression . '<' expression               (rule 78)
-	binary -> expression . '>=' expression              (rule 79)
-	binary -> expression . '<=' expression              (rule 80)
-	binary -> expression . 'and' expression             (rule 81)
-	binary -> expression . 'or' expression              (rule 82)
-	binary -> expression 'or' expression .              (rule 82)
-	ternary -> expression . '?' expression ':' expression    (rule 83)
+	binary -> expression . '==' expression              (rule 72)
+	binary -> expression . '!=' expression              (rule 73)
+	binary -> expression . '+' expression               (rule 74)
+	binary -> expression . '-' expression               (rule 75)
+	binary -> expression . '*' expression               (rule 76)
+	binary -> expression . '/' expression               (rule 77)
+	binary -> expression . '>' expression               (rule 78)
+	binary -> expression . '<' expression               (rule 79)
+	binary -> expression . '>=' expression              (rule 80)
+	binary -> expression . '<=' expression              (rule 81)
+	binary -> expression . 'and' expression             (rule 82)
+	binary -> expression . 'or' expression              (rule 83)
+	binary -> expression 'or' expression .              (rule 83)
+	ternary -> expression . '?' expression ':' expression    (rule 84)
+
+	'+'            shift, and enter state 64
+	'-'            shift, and enter state 65
+	'*'            shift, and enter state 66
+	'/'            shift, and enter state 67
+	')'            reduce using rule 83
+	'<'            shift, and enter state 68
+	'>'            shift, and enter state 69
+	'<='           shift, and enter state 70
+	'>='           shift, and enter state 71
+	'!='           shift, and enter state 72
+	'=='           shift, and enter state 73
+	'and'          reduce using rule 83
+	'or'           reduce using rule 83
+	';'            reduce using rule 83
+	','            reduce using rule 83
+	'?'            reduce using rule 83
+	':'            reduce using rule 83
+
+
+State 86
+
+	binary -> expression . '==' expression              (rule 72)
+	binary -> expression . '!=' expression              (rule 73)
+	binary -> expression . '+' expression               (rule 74)
+	binary -> expression . '-' expression               (rule 75)
+	binary -> expression . '*' expression               (rule 76)
+	binary -> expression . '/' expression               (rule 77)
+	binary -> expression . '>' expression               (rule 78)
+	binary -> expression . '<' expression               (rule 79)
+	binary -> expression . '>=' expression              (rule 80)
+	binary -> expression . '<=' expression              (rule 81)
+	binary -> expression . 'and' expression             (rule 82)
+	binary -> expression 'and' expression .             (rule 82)
+	binary -> expression . 'or' expression              (rule 83)
+	ternary -> expression . '?' expression ':' expression    (rule 84)
 
 	'+'            shift, and enter state 64
 	'-'            shift, and enter state 65
@@ -2334,94 +2404,22 @@ State 85
 	':'            reduce using rule 82
 
 
-State 86
-
-	binary -> expression . '==' expression              (rule 71)
-	binary -> expression . '!=' expression              (rule 72)
-	binary -> expression . '+' expression               (rule 73)
-	binary -> expression . '-' expression               (rule 74)
-	binary -> expression . '*' expression               (rule 75)
-	binary -> expression . '/' expression               (rule 76)
-	binary -> expression . '>' expression               (rule 77)
-	binary -> expression . '<' expression               (rule 78)
-	binary -> expression . '>=' expression              (rule 79)
-	binary -> expression . '<=' expression              (rule 80)
-	binary -> expression . 'and' expression             (rule 81)
-	binary -> expression 'and' expression .             (rule 81)
-	binary -> expression . 'or' expression              (rule 82)
-	ternary -> expression . '?' expression ':' expression    (rule 83)
-
-	'+'            shift, and enter state 64
-	'-'            shift, and enter state 65
-	'*'            shift, and enter state 66
-	'/'            shift, and enter state 67
-	')'            reduce using rule 81
-	'<'            shift, and enter state 68
-	'>'            shift, and enter state 69
-	'<='           shift, and enter state 70
-	'>='           shift, and enter state 71
-	'!='           shift, and enter state 72
-	'=='           shift, and enter state 73
-	'and'          reduce using rule 81
-	'or'           reduce using rule 81
-	';'            reduce using rule 81
-	','            reduce using rule 81
-	'?'            reduce using rule 81
-	':'            reduce using rule 81
-
-
 State 87
 
-	binary -> expression . '==' expression              (rule 71)
-	binary -> expression '==' expression .              (rule 71)
-	binary -> expression . '!=' expression              (rule 72)
-	binary -> expression . '+' expression               (rule 73)
-	binary -> expression . '-' expression               (rule 74)
-	binary -> expression . '*' expression               (rule 75)
-	binary -> expression . '/' expression               (rule 76)
-	binary -> expression . '>' expression               (rule 77)
-	binary -> expression . '<' expression               (rule 78)
-	binary -> expression . '>=' expression              (rule 79)
-	binary -> expression . '<=' expression              (rule 80)
-	binary -> expression . 'and' expression             (rule 81)
-	binary -> expression . 'or' expression              (rule 82)
-	ternary -> expression . '?' expression ':' expression    (rule 83)
-
-	'+'            shift, and enter state 64
-	'-'            shift, and enter state 65
-	'*'            shift, and enter state 66
-	'/'            shift, and enter state 67
-	')'            reduce using rule 71
-	'<'            shift, and enter state 68
-	'>'            shift, and enter state 69
-	'<='           shift, and enter state 70
-	'>='           shift, and enter state 71
-	'!='           reduce using rule 71
-	'=='           reduce using rule 71
-	'and'          reduce using rule 71
-	'or'           reduce using rule 71
-	';'            reduce using rule 71
-	','            reduce using rule 71
-	'?'            reduce using rule 71
-	':'            reduce using rule 71
-
-
-State 88
-
-	binary -> expression . '==' expression              (rule 71)
-	binary -> expression . '!=' expression              (rule 72)
-	binary -> expression '!=' expression .              (rule 72)
-	binary -> expression . '+' expression               (rule 73)
-	binary -> expression . '-' expression               (rule 74)
-	binary -> expression . '*' expression               (rule 75)
-	binary -> expression . '/' expression               (rule 76)
-	binary -> expression . '>' expression               (rule 77)
-	binary -> expression . '<' expression               (rule 78)
-	binary -> expression . '>=' expression              (rule 79)
-	binary -> expression . '<=' expression              (rule 80)
-	binary -> expression . 'and' expression             (rule 81)
-	binary -> expression . 'or' expression              (rule 82)
-	ternary -> expression . '?' expression ':' expression    (rule 83)
+	binary -> expression . '==' expression              (rule 72)
+	binary -> expression '==' expression .              (rule 72)
+	binary -> expression . '!=' expression              (rule 73)
+	binary -> expression . '+' expression               (rule 74)
+	binary -> expression . '-' expression               (rule 75)
+	binary -> expression . '*' expression               (rule 76)
+	binary -> expression . '/' expression               (rule 77)
+	binary -> expression . '>' expression               (rule 78)
+	binary -> expression . '<' expression               (rule 79)
+	binary -> expression . '>=' expression              (rule 80)
+	binary -> expression . '<=' expression              (rule 81)
+	binary -> expression . 'and' expression             (rule 82)
+	binary -> expression . 'or' expression              (rule 83)
+	ternary -> expression . '?' expression ':' expression    (rule 84)
 
 	'+'            shift, and enter state 64
 	'-'            shift, and enter state 65
@@ -2442,58 +2440,58 @@ State 88
 	':'            reduce using rule 72
 
 
-State 89
+State 88
 
-	binary -> expression . '==' expression              (rule 71)
-	binary -> expression . '!=' expression              (rule 72)
-	binary -> expression . '+' expression               (rule 73)
-	binary -> expression . '-' expression               (rule 74)
-	binary -> expression . '*' expression               (rule 75)
-	binary -> expression . '/' expression               (rule 76)
-	binary -> expression . '>' expression               (rule 77)
-	binary -> expression . '<' expression               (rule 78)
-	binary -> expression . '>=' expression              (rule 79)
-	binary -> expression '>=' expression .              (rule 79)
-	binary -> expression . '<=' expression              (rule 80)
-	binary -> expression . 'and' expression             (rule 81)
-	binary -> expression . 'or' expression              (rule 82)
-	ternary -> expression . '?' expression ':' expression    (rule 83)
+	binary -> expression . '==' expression              (rule 72)
+	binary -> expression . '!=' expression              (rule 73)
+	binary -> expression '!=' expression .              (rule 73)
+	binary -> expression . '+' expression               (rule 74)
+	binary -> expression . '-' expression               (rule 75)
+	binary -> expression . '*' expression               (rule 76)
+	binary -> expression . '/' expression               (rule 77)
+	binary -> expression . '>' expression               (rule 78)
+	binary -> expression . '<' expression               (rule 79)
+	binary -> expression . '>=' expression              (rule 80)
+	binary -> expression . '<=' expression              (rule 81)
+	binary -> expression . 'and' expression             (rule 82)
+	binary -> expression . 'or' expression              (rule 83)
+	ternary -> expression . '?' expression ':' expression    (rule 84)
 
 	'+'            shift, and enter state 64
 	'-'            shift, and enter state 65
 	'*'            shift, and enter state 66
 	'/'            shift, and enter state 67
-	')'            reduce using rule 79
-	'<'            reduce using rule 79
-	'>'            reduce using rule 79
-	'<='           reduce using rule 79
-	'>='           reduce using rule 79
-	'!='           reduce using rule 79
-	'=='           reduce using rule 79
-	'and'          reduce using rule 79
-	'or'           reduce using rule 79
-	';'            reduce using rule 79
-	','            reduce using rule 79
-	'?'            reduce using rule 79
-	':'            reduce using rule 79
+	')'            reduce using rule 73
+	'<'            shift, and enter state 68
+	'>'            shift, and enter state 69
+	'<='           shift, and enter state 70
+	'>='           shift, and enter state 71
+	'!='           reduce using rule 73
+	'=='           reduce using rule 73
+	'and'          reduce using rule 73
+	'or'           reduce using rule 73
+	';'            reduce using rule 73
+	','            reduce using rule 73
+	'?'            reduce using rule 73
+	':'            reduce using rule 73
 
 
-State 90
+State 89
 
-	binary -> expression . '==' expression              (rule 71)
-	binary -> expression . '!=' expression              (rule 72)
-	binary -> expression . '+' expression               (rule 73)
-	binary -> expression . '-' expression               (rule 74)
-	binary -> expression . '*' expression               (rule 75)
-	binary -> expression . '/' expression               (rule 76)
-	binary -> expression . '>' expression               (rule 77)
-	binary -> expression . '<' expression               (rule 78)
-	binary -> expression . '>=' expression              (rule 79)
-	binary -> expression . '<=' expression              (rule 80)
-	binary -> expression '<=' expression .              (rule 80)
-	binary -> expression . 'and' expression             (rule 81)
-	binary -> expression . 'or' expression              (rule 82)
-	ternary -> expression . '?' expression ':' expression    (rule 83)
+	binary -> expression . '==' expression              (rule 72)
+	binary -> expression . '!=' expression              (rule 73)
+	binary -> expression . '+' expression               (rule 74)
+	binary -> expression . '-' expression               (rule 75)
+	binary -> expression . '*' expression               (rule 76)
+	binary -> expression . '/' expression               (rule 77)
+	binary -> expression . '>' expression               (rule 78)
+	binary -> expression . '<' expression               (rule 79)
+	binary -> expression . '>=' expression              (rule 80)
+	binary -> expression '>=' expression .              (rule 80)
+	binary -> expression . '<=' expression              (rule 81)
+	binary -> expression . 'and' expression             (rule 82)
+	binary -> expression . 'or' expression              (rule 83)
+	ternary -> expression . '?' expression ':' expression    (rule 84)
 
 	'+'            shift, and enter state 64
 	'-'            shift, and enter state 65
@@ -2514,58 +2512,58 @@ State 90
 	':'            reduce using rule 80
 
 
-State 91
+State 90
 
-	binary -> expression . '==' expression              (rule 71)
-	binary -> expression . '!=' expression              (rule 72)
-	binary -> expression . '+' expression               (rule 73)
-	binary -> expression . '-' expression               (rule 74)
-	binary -> expression . '*' expression               (rule 75)
-	binary -> expression . '/' expression               (rule 76)
-	binary -> expression . '>' expression               (rule 77)
-	binary -> expression '>' expression .               (rule 77)
-	binary -> expression . '<' expression               (rule 78)
-	binary -> expression . '>=' expression              (rule 79)
-	binary -> expression . '<=' expression              (rule 80)
-	binary -> expression . 'and' expression             (rule 81)
-	binary -> expression . 'or' expression              (rule 82)
-	ternary -> expression . '?' expression ':' expression    (rule 83)
+	binary -> expression . '==' expression              (rule 72)
+	binary -> expression . '!=' expression              (rule 73)
+	binary -> expression . '+' expression               (rule 74)
+	binary -> expression . '-' expression               (rule 75)
+	binary -> expression . '*' expression               (rule 76)
+	binary -> expression . '/' expression               (rule 77)
+	binary -> expression . '>' expression               (rule 78)
+	binary -> expression . '<' expression               (rule 79)
+	binary -> expression . '>=' expression              (rule 80)
+	binary -> expression . '<=' expression              (rule 81)
+	binary -> expression '<=' expression .              (rule 81)
+	binary -> expression . 'and' expression             (rule 82)
+	binary -> expression . 'or' expression              (rule 83)
+	ternary -> expression . '?' expression ':' expression    (rule 84)
 
 	'+'            shift, and enter state 64
 	'-'            shift, and enter state 65
 	'*'            shift, and enter state 66
 	'/'            shift, and enter state 67
-	')'            reduce using rule 77
-	'<'            reduce using rule 77
-	'>'            reduce using rule 77
-	'<='           reduce using rule 77
-	'>='           reduce using rule 77
-	'!='           reduce using rule 77
-	'=='           reduce using rule 77
-	'and'          reduce using rule 77
-	'or'           reduce using rule 77
-	';'            reduce using rule 77
-	','            reduce using rule 77
-	'?'            reduce using rule 77
-	':'            reduce using rule 77
+	')'            reduce using rule 81
+	'<'            reduce using rule 81
+	'>'            reduce using rule 81
+	'<='           reduce using rule 81
+	'>='           reduce using rule 81
+	'!='           reduce using rule 81
+	'=='           reduce using rule 81
+	'and'          reduce using rule 81
+	'or'           reduce using rule 81
+	';'            reduce using rule 81
+	','            reduce using rule 81
+	'?'            reduce using rule 81
+	':'            reduce using rule 81
 
 
-State 92
+State 91
 
-	binary -> expression . '==' expression              (rule 71)
-	binary -> expression . '!=' expression              (rule 72)
-	binary -> expression . '+' expression               (rule 73)
-	binary -> expression . '-' expression               (rule 74)
-	binary -> expression . '*' expression               (rule 75)
-	binary -> expression . '/' expression               (rule 76)
-	binary -> expression . '>' expression               (rule 77)
-	binary -> expression . '<' expression               (rule 78)
-	binary -> expression '<' expression .               (rule 78)
-	binary -> expression . '>=' expression              (rule 79)
-	binary -> expression . '<=' expression              (rule 80)
-	binary -> expression . 'and' expression             (rule 81)
-	binary -> expression . 'or' expression              (rule 82)
-	ternary -> expression . '?' expression ':' expression    (rule 83)
+	binary -> expression . '==' expression              (rule 72)
+	binary -> expression . '!=' expression              (rule 73)
+	binary -> expression . '+' expression               (rule 74)
+	binary -> expression . '-' expression               (rule 75)
+	binary -> expression . '*' expression               (rule 76)
+	binary -> expression . '/' expression               (rule 77)
+	binary -> expression . '>' expression               (rule 78)
+	binary -> expression '>' expression .               (rule 78)
+	binary -> expression . '<' expression               (rule 79)
+	binary -> expression . '>=' expression              (rule 80)
+	binary -> expression . '<=' expression              (rule 81)
+	binary -> expression . 'and' expression             (rule 82)
+	binary -> expression . 'or' expression              (rule 83)
+	ternary -> expression . '?' expression ':' expression    (rule 84)
 
 	'+'            shift, and enter state 64
 	'-'            shift, and enter state 65
@@ -2586,22 +2584,94 @@ State 92
 	':'            reduce using rule 78
 
 
+State 92
+
+	binary -> expression . '==' expression              (rule 72)
+	binary -> expression . '!=' expression              (rule 73)
+	binary -> expression . '+' expression               (rule 74)
+	binary -> expression . '-' expression               (rule 75)
+	binary -> expression . '*' expression               (rule 76)
+	binary -> expression . '/' expression               (rule 77)
+	binary -> expression . '>' expression               (rule 78)
+	binary -> expression . '<' expression               (rule 79)
+	binary -> expression '<' expression .               (rule 79)
+	binary -> expression . '>=' expression              (rule 80)
+	binary -> expression . '<=' expression              (rule 81)
+	binary -> expression . 'and' expression             (rule 82)
+	binary -> expression . 'or' expression              (rule 83)
+	ternary -> expression . '?' expression ':' expression    (rule 84)
+
+	'+'            shift, and enter state 64
+	'-'            shift, and enter state 65
+	'*'            shift, and enter state 66
+	'/'            shift, and enter state 67
+	')'            reduce using rule 79
+	'<'            reduce using rule 79
+	'>'            reduce using rule 79
+	'<='           reduce using rule 79
+	'>='           reduce using rule 79
+	'!='           reduce using rule 79
+	'=='           reduce using rule 79
+	'and'          reduce using rule 79
+	'or'           reduce using rule 79
+	';'            reduce using rule 79
+	','            reduce using rule 79
+	'?'            reduce using rule 79
+	':'            reduce using rule 79
+
+
 State 93
 
-	binary -> expression . '==' expression              (rule 71)
-	binary -> expression . '!=' expression              (rule 72)
-	binary -> expression . '+' expression               (rule 73)
-	binary -> expression . '-' expression               (rule 74)
-	binary -> expression . '*' expression               (rule 75)
-	binary -> expression . '/' expression               (rule 76)
-	binary -> expression '/' expression .               (rule 76)
-	binary -> expression . '>' expression               (rule 77)
-	binary -> expression . '<' expression               (rule 78)
-	binary -> expression . '>=' expression              (rule 79)
-	binary -> expression . '<=' expression              (rule 80)
-	binary -> expression . 'and' expression             (rule 81)
-	binary -> expression . 'or' expression              (rule 82)
-	ternary -> expression . '?' expression ':' expression    (rule 83)
+	binary -> expression . '==' expression              (rule 72)
+	binary -> expression . '!=' expression              (rule 73)
+	binary -> expression . '+' expression               (rule 74)
+	binary -> expression . '-' expression               (rule 75)
+	binary -> expression . '*' expression               (rule 76)
+	binary -> expression . '/' expression               (rule 77)
+	binary -> expression '/' expression .               (rule 77)
+	binary -> expression . '>' expression               (rule 78)
+	binary -> expression . '<' expression               (rule 79)
+	binary -> expression . '>=' expression              (rule 80)
+	binary -> expression . '<=' expression              (rule 81)
+	binary -> expression . 'and' expression             (rule 82)
+	binary -> expression . 'or' expression              (rule 83)
+	ternary -> expression . '?' expression ':' expression    (rule 84)
+
+	'+'            reduce using rule 77
+	'-'            reduce using rule 77
+	'*'            reduce using rule 77
+	'/'            reduce using rule 77
+	')'            reduce using rule 77
+	'<'            reduce using rule 77
+	'>'            reduce using rule 77
+	'<='           reduce using rule 77
+	'>='           reduce using rule 77
+	'!='           reduce using rule 77
+	'=='           reduce using rule 77
+	'and'          reduce using rule 77
+	'or'           reduce using rule 77
+	';'            reduce using rule 77
+	','            reduce using rule 77
+	'?'            reduce using rule 77
+	':'            reduce using rule 77
+
+
+State 94
+
+	binary -> expression . '==' expression              (rule 72)
+	binary -> expression . '!=' expression              (rule 73)
+	binary -> expression . '+' expression               (rule 74)
+	binary -> expression . '-' expression               (rule 75)
+	binary -> expression . '*' expression               (rule 76)
+	binary -> expression '*' expression .               (rule 76)
+	binary -> expression . '/' expression               (rule 77)
+	binary -> expression . '>' expression               (rule 78)
+	binary -> expression . '<' expression               (rule 79)
+	binary -> expression . '>=' expression              (rule 80)
+	binary -> expression . '<=' expression              (rule 81)
+	binary -> expression . 'and' expression             (rule 82)
+	binary -> expression . 'or' expression              (rule 83)
+	ternary -> expression . '?' expression ':' expression    (rule 84)
 
 	'+'            reduce using rule 76
 	'-'            reduce using rule 76
@@ -2622,27 +2692,27 @@ State 93
 	':'            reduce using rule 76
 
 
-State 94
+State 95
 
-	binary -> expression . '==' expression              (rule 71)
-	binary -> expression . '!=' expression              (rule 72)
-	binary -> expression . '+' expression               (rule 73)
-	binary -> expression . '-' expression               (rule 74)
-	binary -> expression . '*' expression               (rule 75)
-	binary -> expression '*' expression .               (rule 75)
-	binary -> expression . '/' expression               (rule 76)
-	binary -> expression . '>' expression               (rule 77)
-	binary -> expression . '<' expression               (rule 78)
-	binary -> expression . '>=' expression              (rule 79)
-	binary -> expression . '<=' expression              (rule 80)
-	binary -> expression . 'and' expression             (rule 81)
-	binary -> expression . 'or' expression              (rule 82)
-	ternary -> expression . '?' expression ':' expression    (rule 83)
+	binary -> expression . '==' expression              (rule 72)
+	binary -> expression . '!=' expression              (rule 73)
+	binary -> expression . '+' expression               (rule 74)
+	binary -> expression . '-' expression               (rule 75)
+	binary -> expression '-' expression .               (rule 75)
+	binary -> expression . '*' expression               (rule 76)
+	binary -> expression . '/' expression               (rule 77)
+	binary -> expression . '>' expression               (rule 78)
+	binary -> expression . '<' expression               (rule 79)
+	binary -> expression . '>=' expression              (rule 80)
+	binary -> expression . '<=' expression              (rule 81)
+	binary -> expression . 'and' expression             (rule 82)
+	binary -> expression . 'or' expression              (rule 83)
+	ternary -> expression . '?' expression ':' expression    (rule 84)
 
 	'+'            reduce using rule 75
 	'-'            reduce using rule 75
-	'*'            reduce using rule 75
-	'/'            reduce using rule 75
+	'*'            shift, and enter state 66
+	'/'            shift, and enter state 67
 	')'            reduce using rule 75
 	'<'            reduce using rule 75
 	'>'            reduce using rule 75
@@ -2658,22 +2728,22 @@ State 94
 	':'            reduce using rule 75
 
 
-State 95
+State 96
 
-	binary -> expression . '==' expression              (rule 71)
-	binary -> expression . '!=' expression              (rule 72)
-	binary -> expression . '+' expression               (rule 73)
-	binary -> expression . '-' expression               (rule 74)
-	binary -> expression '-' expression .               (rule 74)
-	binary -> expression . '*' expression               (rule 75)
-	binary -> expression . '/' expression               (rule 76)
-	binary -> expression . '>' expression               (rule 77)
-	binary -> expression . '<' expression               (rule 78)
-	binary -> expression . '>=' expression              (rule 79)
-	binary -> expression . '<=' expression              (rule 80)
-	binary -> expression . 'and' expression             (rule 81)
-	binary -> expression . 'or' expression              (rule 82)
-	ternary -> expression . '?' expression ':' expression    (rule 83)
+	binary -> expression . '==' expression              (rule 72)
+	binary -> expression . '!=' expression              (rule 73)
+	binary -> expression . '+' expression               (rule 74)
+	binary -> expression '+' expression .               (rule 74)
+	binary -> expression . '-' expression               (rule 75)
+	binary -> expression . '*' expression               (rule 76)
+	binary -> expression . '/' expression               (rule 77)
+	binary -> expression . '>' expression               (rule 78)
+	binary -> expression . '<' expression               (rule 79)
+	binary -> expression . '>=' expression              (rule 80)
+	binary -> expression . '<=' expression              (rule 81)
+	binary -> expression . 'and' expression             (rule 82)
+	binary -> expression . 'or' expression              (rule 83)
+	ternary -> expression . '?' expression ':' expression    (rule 84)
 
 	'+'            reduce using rule 74
 	'-'            reduce using rule 74
@@ -2692,42 +2762,6 @@ State 95
 	','            reduce using rule 74
 	'?'            reduce using rule 74
 	':'            reduce using rule 74
-
-
-State 96
-
-	binary -> expression . '==' expression              (rule 71)
-	binary -> expression . '!=' expression              (rule 72)
-	binary -> expression . '+' expression               (rule 73)
-	binary -> expression '+' expression .               (rule 73)
-	binary -> expression . '-' expression               (rule 74)
-	binary -> expression . '*' expression               (rule 75)
-	binary -> expression . '/' expression               (rule 76)
-	binary -> expression . '>' expression               (rule 77)
-	binary -> expression . '<' expression               (rule 78)
-	binary -> expression . '>=' expression              (rule 79)
-	binary -> expression . '<=' expression              (rule 80)
-	binary -> expression . 'and' expression             (rule 81)
-	binary -> expression . 'or' expression              (rule 82)
-	ternary -> expression . '?' expression ':' expression    (rule 83)
-
-	'+'            reduce using rule 73
-	'-'            reduce using rule 73
-	'*'            shift, and enter state 66
-	'/'            shift, and enter state 67
-	')'            reduce using rule 73
-	'<'            reduce using rule 73
-	'>'            reduce using rule 73
-	'<='           reduce using rule 73
-	'>='           reduce using rule 73
-	'!='           reduce using rule 73
-	'=='           reduce using rule 73
-	'and'          reduce using rule 73
-	'or'           reduce using rule 73
-	';'            reduce using rule 73
-	','            reduce using rule 73
-	'?'            reduce using rule 73
-	':'            reduce using rule 73
 
 
 State 97
@@ -2790,19 +2824,19 @@ State 99
 State 100
 
 	variable_declaration -> IDENTIFIER '=' expression . ';'    (rule 32)
-	binary -> expression . '==' expression              (rule 71)
-	binary -> expression . '!=' expression              (rule 72)
-	binary -> expression . '+' expression               (rule 73)
-	binary -> expression . '-' expression               (rule 74)
-	binary -> expression . '*' expression               (rule 75)
-	binary -> expression . '/' expression               (rule 76)
-	binary -> expression . '>' expression               (rule 77)
-	binary -> expression . '<' expression               (rule 78)
-	binary -> expression . '>=' expression              (rule 79)
-	binary -> expression . '<=' expression              (rule 80)
-	binary -> expression . 'and' expression             (rule 81)
-	binary -> expression . 'or' expression              (rule 82)
-	ternary -> expression . '?' expression ':' expression    (rule 83)
+	binary -> expression . '==' expression              (rule 72)
+	binary -> expression . '!=' expression              (rule 73)
+	binary -> expression . '+' expression               (rule 74)
+	binary -> expression . '-' expression               (rule 75)
+	binary -> expression . '*' expression               (rule 76)
+	binary -> expression . '/' expression               (rule 77)
+	binary -> expression . '>' expression               (rule 78)
+	binary -> expression . '<' expression               (rule 79)
+	binary -> expression . '>=' expression              (rule 80)
+	binary -> expression . '<=' expression              (rule 81)
+	binary -> expression . 'and' expression             (rule 82)
+	binary -> expression . 'or' expression              (rule 83)
+	ternary -> expression . '?' expression ':' expression    (rule 84)
 
 	'+'            shift, and enter state 64
 	'-'            shift, and enter state 65
@@ -2822,25 +2856,25 @@ State 100
 
 State 101
 
-	grouping -> '(' expression ')' .                    (rule 68)
+	grouping -> '(' expression ')' .                    (rule 69)
 
-	'+'            reduce using rule 68
-	'-'            reduce using rule 68
-	'*'            reduce using rule 68
-	'/'            reduce using rule 68
-	')'            reduce using rule 68
-	'<'            reduce using rule 68
-	'>'            reduce using rule 68
-	'<='           reduce using rule 68
-	'>='           reduce using rule 68
-	'!='           reduce using rule 68
-	'=='           reduce using rule 68
-	'and'          reduce using rule 68
-	'or'           reduce using rule 68
-	';'            reduce using rule 68
-	','            reduce using rule 68
-	'?'            reduce using rule 68
-	':'            reduce using rule 68
+	'+'            reduce using rule 69
+	'-'            reduce using rule 69
+	'*'            reduce using rule 69
+	'/'            reduce using rule 69
+	')'            reduce using rule 69
+	'<'            reduce using rule 69
+	'>'            reduce using rule 69
+	'<='           reduce using rule 69
+	'>='           reduce using rule 69
+	'!='           reduce using rule 69
+	'=='           reduce using rule 69
+	'and'          reduce using rule 69
+	'or'           reduce using rule 69
+	';'            reduce using rule 69
+	','            reduce using rule 69
+	'?'            reduce using rule 69
+	':'            reduce using rule 69
 
 
 State 102
@@ -2965,19 +2999,19 @@ State 106
 
 	conditional_statement -> 'if' '(' expression . ')' statement    (rule 18)
 	conditional_statement -> 'if' '(' expression . ')' statement 'else' statement    (rule 19)
-	binary -> expression . '==' expression              (rule 71)
-	binary -> expression . '!=' expression              (rule 72)
-	binary -> expression . '+' expression               (rule 73)
-	binary -> expression . '-' expression               (rule 74)
-	binary -> expression . '*' expression               (rule 75)
-	binary -> expression . '/' expression               (rule 76)
-	binary -> expression . '>' expression               (rule 77)
-	binary -> expression . '<' expression               (rule 78)
-	binary -> expression . '>=' expression              (rule 79)
-	binary -> expression . '<=' expression              (rule 80)
-	binary -> expression . 'and' expression             (rule 81)
-	binary -> expression . 'or' expression              (rule 82)
-	ternary -> expression . '?' expression ':' expression    (rule 83)
+	binary -> expression . '==' expression              (rule 72)
+	binary -> expression . '!=' expression              (rule 73)
+	binary -> expression . '+' expression               (rule 74)
+	binary -> expression . '-' expression               (rule 75)
+	binary -> expression . '*' expression               (rule 76)
+	binary -> expression . '/' expression               (rule 77)
+	binary -> expression . '>' expression               (rule 78)
+	binary -> expression . '<' expression               (rule 79)
+	binary -> expression . '>=' expression              (rule 80)
+	binary -> expression . '<=' expression              (rule 81)
+	binary -> expression . 'and' expression             (rule 82)
+	binary -> expression . 'or' expression              (rule 83)
+	ternary -> expression . '?' expression ':' expression    (rule 84)
 
 	'+'            shift, and enter state 64
 	'-'            shift, and enter state 65
@@ -2998,19 +3032,19 @@ State 106
 State 107
 
 	while_statement -> 'while' '(' expression . ')' statement    (rule 20)
-	binary -> expression . '==' expression              (rule 71)
-	binary -> expression . '!=' expression              (rule 72)
-	binary -> expression . '+' expression               (rule 73)
-	binary -> expression . '-' expression               (rule 74)
-	binary -> expression . '*' expression               (rule 75)
-	binary -> expression . '/' expression               (rule 76)
-	binary -> expression . '>' expression               (rule 77)
-	binary -> expression . '<' expression               (rule 78)
-	binary -> expression . '>=' expression              (rule 79)
-	binary -> expression . '<=' expression              (rule 80)
-	binary -> expression . 'and' expression             (rule 81)
-	binary -> expression . 'or' expression              (rule 82)
-	ternary -> expression . '?' expression ':' expression    (rule 83)
+	binary -> expression . '==' expression              (rule 72)
+	binary -> expression . '!=' expression              (rule 73)
+	binary -> expression . '+' expression               (rule 74)
+	binary -> expression . '-' expression               (rule 75)
+	binary -> expression . '*' expression               (rule 76)
+	binary -> expression . '/' expression               (rule 77)
+	binary -> expression . '>' expression               (rule 78)
+	binary -> expression . '<' expression               (rule 79)
+	binary -> expression . '>=' expression              (rule 80)
+	binary -> expression . '<=' expression              (rule 81)
+	binary -> expression . 'and' expression             (rule 82)
+	binary -> expression . 'or' expression              (rule 83)
+	ternary -> expression . '?' expression ':' expression    (rule 84)
 
 	'+'            shift, and enter state 64
 	'-'            shift, and enter state 65
@@ -3266,19 +3300,19 @@ State 123
 
 	for_statement -> 'for' '(' ';' expression . ';' ')' statement    (rule 23)
 	for_statement -> 'for' '(' ';' expression . ';' expression ')' statement    (rule 27)
-	binary -> expression . '==' expression              (rule 71)
-	binary -> expression . '!=' expression              (rule 72)
-	binary -> expression . '+' expression               (rule 73)
-	binary -> expression . '-' expression               (rule 74)
-	binary -> expression . '*' expression               (rule 75)
-	binary -> expression . '/' expression               (rule 76)
-	binary -> expression . '>' expression               (rule 77)
-	binary -> expression . '<' expression               (rule 78)
-	binary -> expression . '>=' expression              (rule 79)
-	binary -> expression . '<=' expression              (rule 80)
-	binary -> expression . 'and' expression             (rule 81)
-	binary -> expression . 'or' expression              (rule 82)
-	ternary -> expression . '?' expression ':' expression    (rule 83)
+	binary -> expression . '==' expression              (rule 72)
+	binary -> expression . '!=' expression              (rule 73)
+	binary -> expression . '+' expression               (rule 74)
+	binary -> expression . '-' expression               (rule 75)
+	binary -> expression . '*' expression               (rule 76)
+	binary -> expression . '/' expression               (rule 77)
+	binary -> expression . '>' expression               (rule 78)
+	binary -> expression . '<' expression               (rule 79)
+	binary -> expression . '>=' expression              (rule 80)
+	binary -> expression . '<=' expression              (rule 81)
+	binary -> expression . 'and' expression             (rule 82)
+	binary -> expression . 'or' expression              (rule 83)
+	ternary -> expression . '?' expression ':' expression    (rule 84)
 
 	'+'            shift, and enter state 64
 	'-'            shift, and enter state 65
@@ -3446,19 +3480,19 @@ State 127
 State 128
 
 	variable_declaration -> 'var' IDENTIFIER '=' expression . ';'    (rule 30)
-	binary -> expression . '==' expression              (rule 71)
-	binary -> expression . '!=' expression              (rule 72)
-	binary -> expression . '+' expression               (rule 73)
-	binary -> expression . '-' expression               (rule 74)
-	binary -> expression . '*' expression               (rule 75)
-	binary -> expression . '/' expression               (rule 76)
-	binary -> expression . '>' expression               (rule 77)
-	binary -> expression . '<' expression               (rule 78)
-	binary -> expression . '>=' expression              (rule 79)
-	binary -> expression . '<=' expression              (rule 80)
-	binary -> expression . 'and' expression             (rule 81)
-	binary -> expression . 'or' expression              (rule 82)
-	ternary -> expression . '?' expression ':' expression    (rule 83)
+	binary -> expression . '==' expression              (rule 72)
+	binary -> expression . '!=' expression              (rule 73)
+	binary -> expression . '+' expression               (rule 74)
+	binary -> expression . '-' expression               (rule 75)
+	binary -> expression . '*' expression               (rule 76)
+	binary -> expression . '/' expression               (rule 77)
+	binary -> expression . '>' expression               (rule 78)
+	binary -> expression . '<' expression               (rule 79)
+	binary -> expression . '>=' expression              (rule 80)
+	binary -> expression . '<=' expression              (rule 81)
+	binary -> expression . 'and' expression             (rule 82)
+	binary -> expression . 'or' expression              (rule 83)
+	ternary -> expression . '?' expression ':' expression    (rule 84)
 
 	'+'            shift, and enter state 64
 	'-'            shift, and enter state 65
@@ -3561,7 +3595,7 @@ State 131
 
 State 132
 
-	ternary -> expression '?' expression ':' . expression    (rule 83)
+	ternary -> expression '?' expression ':' . expression    (rule 84)
 
 	NUMBER         shift, and enter state 25
 	STRING         shift, and enter state 26
@@ -3614,26 +3648,26 @@ State 133
 
 State 134
 
-	binary -> expression . '==' expression              (rule 71)
-	binary -> expression . '!=' expression              (rule 72)
-	binary -> expression . '+' expression               (rule 73)
-	binary -> expression . '-' expression               (rule 74)
-	binary -> expression . '*' expression               (rule 75)
-	binary -> expression . '/' expression               (rule 76)
-	binary -> expression . '>' expression               (rule 77)
-	binary -> expression . '<' expression               (rule 78)
-	binary -> expression . '>=' expression              (rule 79)
-	binary -> expression . '<=' expression              (rule 80)
-	binary -> expression . 'and' expression             (rule 81)
-	binary -> expression . 'or' expression              (rule 82)
-	ternary -> expression . '?' expression ':' expression    (rule 83)
-	ternary -> expression '?' expression ':' expression .    (rule 83)
+	binary -> expression . '==' expression              (rule 72)
+	binary -> expression . '!=' expression              (rule 73)
+	binary -> expression . '+' expression               (rule 74)
+	binary -> expression . '-' expression               (rule 75)
+	binary -> expression . '*' expression               (rule 76)
+	binary -> expression . '/' expression               (rule 77)
+	binary -> expression . '>' expression               (rule 78)
+	binary -> expression . '<' expression               (rule 79)
+	binary -> expression . '>=' expression              (rule 80)
+	binary -> expression . '<=' expression              (rule 81)
+	binary -> expression . 'and' expression             (rule 82)
+	binary -> expression . 'or' expression              (rule 83)
+	ternary -> expression . '?' expression ':' expression    (rule 84)
+	ternary -> expression '?' expression ':' expression .    (rule 84)
 
 	'+'            shift, and enter state 64
 	'-'            shift, and enter state 65
 	'*'            shift, and enter state 66
 	'/'            shift, and enter state 67
-	')'            reduce using rule 83
+	')'            reduce using rule 84
 	'<'            shift, and enter state 68
 	'>'            shift, and enter state 69
 	'<='           shift, and enter state 70
@@ -3642,28 +3676,28 @@ State 134
 	'=='           shift, and enter state 73
 	'and'          shift, and enter state 74
 	'or'           shift, and enter state 75
-	';'            reduce using rule 83
-	','            reduce using rule 83
+	';'            reduce using rule 84
+	','            reduce using rule 84
 	'?'            fail
-	':'            reduce using rule 83
+	':'            reduce using rule 84
 
 
 State 135
 
 	arguments -> arguments ',' expression .             (rule 53)
-	binary -> expression . '==' expression              (rule 71)
-	binary -> expression . '!=' expression              (rule 72)
-	binary -> expression . '+' expression               (rule 73)
-	binary -> expression . '-' expression               (rule 74)
-	binary -> expression . '*' expression               (rule 75)
-	binary -> expression . '/' expression               (rule 76)
-	binary -> expression . '>' expression               (rule 77)
-	binary -> expression . '<' expression               (rule 78)
-	binary -> expression . '>=' expression              (rule 79)
-	binary -> expression . '<=' expression              (rule 80)
-	binary -> expression . 'and' expression             (rule 81)
-	binary -> expression . 'or' expression              (rule 82)
-	ternary -> expression . '?' expression ':' expression    (rule 83)
+	binary -> expression . '==' expression              (rule 72)
+	binary -> expression . '!=' expression              (rule 73)
+	binary -> expression . '+' expression               (rule 74)
+	binary -> expression . '-' expression               (rule 75)
+	binary -> expression . '*' expression               (rule 76)
+	binary -> expression . '/' expression               (rule 77)
+	binary -> expression . '>' expression               (rule 78)
+	binary -> expression . '<' expression               (rule 79)
+	binary -> expression . '>=' expression              (rule 80)
+	binary -> expression . '<=' expression              (rule 81)
+	binary -> expression . 'and' expression             (rule 82)
+	binary -> expression . 'or' expression              (rule 83)
+	ternary -> expression . '?' expression ':' expression    (rule 84)
 
 	'+'            shift, and enter state 64
 	'-'            shift, and enter state 65
@@ -3779,19 +3813,19 @@ State 139
 
 	for_statement -> 'for' '(' variable_declaration ';' expression . ';' ')' statement    (rule 25)
 	for_statement -> 'for' '(' variable_declaration ';' expression . ';' expression ')' statement    (rule 28)
-	binary -> expression . '==' expression              (rule 71)
-	binary -> expression . '!=' expression              (rule 72)
-	binary -> expression . '+' expression               (rule 73)
-	binary -> expression . '-' expression               (rule 74)
-	binary -> expression . '*' expression               (rule 75)
-	binary -> expression . '/' expression               (rule 76)
-	binary -> expression . '>' expression               (rule 77)
-	binary -> expression . '<' expression               (rule 78)
-	binary -> expression . '>=' expression              (rule 79)
-	binary -> expression . '<=' expression              (rule 80)
-	binary -> expression . 'and' expression             (rule 81)
-	binary -> expression . 'or' expression              (rule 82)
-	ternary -> expression . '?' expression ':' expression    (rule 83)
+	binary -> expression . '==' expression              (rule 72)
+	binary -> expression . '!=' expression              (rule 73)
+	binary -> expression . '+' expression               (rule 74)
+	binary -> expression . '-' expression               (rule 75)
+	binary -> expression . '*' expression               (rule 76)
+	binary -> expression . '/' expression               (rule 77)
+	binary -> expression . '>' expression               (rule 78)
+	binary -> expression . '<' expression               (rule 79)
+	binary -> expression . '>=' expression              (rule 80)
+	binary -> expression . '<=' expression              (rule 81)
+	binary -> expression . 'and' expression             (rule 82)
+	binary -> expression . 'or' expression              (rule 83)
+	ternary -> expression . '?' expression ':' expression    (rule 84)
 
 	'+'            shift, and enter state 64
 	'-'            shift, and enter state 65
@@ -3842,19 +3876,19 @@ State 140
 State 141
 
 	for_statement -> 'for' '(' ';' ';' expression . ')' statement    (rule 24)
-	binary -> expression . '==' expression              (rule 71)
-	binary -> expression . '!=' expression              (rule 72)
-	binary -> expression . '+' expression               (rule 73)
-	binary -> expression . '-' expression               (rule 74)
-	binary -> expression . '*' expression               (rule 75)
-	binary -> expression . '/' expression               (rule 76)
-	binary -> expression . '>' expression               (rule 77)
-	binary -> expression . '<' expression               (rule 78)
-	binary -> expression . '>=' expression              (rule 79)
-	binary -> expression . '<=' expression              (rule 80)
-	binary -> expression . 'and' expression             (rule 81)
-	binary -> expression . 'or' expression              (rule 82)
-	ternary -> expression . '?' expression ':' expression    (rule 83)
+	binary -> expression . '==' expression              (rule 72)
+	binary -> expression . '!=' expression              (rule 73)
+	binary -> expression . '+' expression               (rule 74)
+	binary -> expression . '-' expression               (rule 75)
+	binary -> expression . '*' expression               (rule 76)
+	binary -> expression . '/' expression               (rule 77)
+	binary -> expression . '>' expression               (rule 78)
+	binary -> expression . '<' expression               (rule 79)
+	binary -> expression . '>=' expression              (rule 80)
+	binary -> expression . '<=' expression              (rule 81)
+	binary -> expression . 'and' expression             (rule 82)
+	binary -> expression . 'or' expression              (rule 83)
+	ternary -> expression . '?' expression ':' expression    (rule 84)
 
 	'+'            shift, and enter state 64
 	'-'            shift, and enter state 65
@@ -4078,19 +4112,19 @@ State 154
 State 155
 
 	for_statement -> 'for' '(' ';' expression ';' expression . ')' statement    (rule 27)
-	binary -> expression . '==' expression              (rule 71)
-	binary -> expression . '!=' expression              (rule 72)
-	binary -> expression . '+' expression               (rule 73)
-	binary -> expression . '-' expression               (rule 74)
-	binary -> expression . '*' expression               (rule 75)
-	binary -> expression . '/' expression               (rule 76)
-	binary -> expression . '>' expression               (rule 77)
-	binary -> expression . '<' expression               (rule 78)
-	binary -> expression . '>=' expression              (rule 79)
-	binary -> expression . '<=' expression              (rule 80)
-	binary -> expression . 'and' expression             (rule 81)
-	binary -> expression . 'or' expression              (rule 82)
-	ternary -> expression . '?' expression ':' expression    (rule 83)
+	binary -> expression . '==' expression              (rule 72)
+	binary -> expression . '!=' expression              (rule 73)
+	binary -> expression . '+' expression               (rule 74)
+	binary -> expression . '-' expression               (rule 75)
+	binary -> expression . '*' expression               (rule 76)
+	binary -> expression . '/' expression               (rule 77)
+	binary -> expression . '>' expression               (rule 78)
+	binary -> expression . '<' expression               (rule 79)
+	binary -> expression . '>=' expression              (rule 80)
+	binary -> expression . '<=' expression              (rule 81)
+	binary -> expression . 'and' expression             (rule 82)
+	binary -> expression . 'or' expression              (rule 83)
+	ternary -> expression . '?' expression ':' expression    (rule 84)
 
 	'+'            shift, and enter state 64
 	'-'            shift, and enter state 65
@@ -4225,19 +4259,19 @@ State 158
 State 159
 
 	for_statement -> 'for' '(' variable_declaration ';' ';' expression . ')' statement    (rule 26)
-	binary -> expression . '==' expression              (rule 71)
-	binary -> expression . '!=' expression              (rule 72)
-	binary -> expression . '+' expression               (rule 73)
-	binary -> expression . '-' expression               (rule 74)
-	binary -> expression . '*' expression               (rule 75)
-	binary -> expression . '/' expression               (rule 76)
-	binary -> expression . '>' expression               (rule 77)
-	binary -> expression . '<' expression               (rule 78)
-	binary -> expression . '>=' expression              (rule 79)
-	binary -> expression . '<=' expression              (rule 80)
-	binary -> expression . 'and' expression             (rule 81)
-	binary -> expression . 'or' expression              (rule 82)
-	ternary -> expression . '?' expression ':' expression    (rule 83)
+	binary -> expression . '==' expression              (rule 72)
+	binary -> expression . '!=' expression              (rule 73)
+	binary -> expression . '+' expression               (rule 74)
+	binary -> expression . '-' expression               (rule 75)
+	binary -> expression . '*' expression               (rule 76)
+	binary -> expression . '/' expression               (rule 77)
+	binary -> expression . '>' expression               (rule 78)
+	binary -> expression . '<' expression               (rule 79)
+	binary -> expression . '>=' expression              (rule 80)
+	binary -> expression . '<=' expression              (rule 81)
+	binary -> expression . 'and' expression             (rule 82)
+	binary -> expression . 'or' expression              (rule 83)
+	ternary -> expression . '?' expression ':' expression    (rule 84)
 
 	'+'            shift, and enter state 64
 	'-'            shift, and enter state 65
@@ -4402,19 +4436,19 @@ State 163
 State 164
 
 	for_statement -> 'for' '(' variable_declaration ';' expression ';' expression . ')' statement    (rule 28)
-	binary -> expression . '==' expression              (rule 71)
-	binary -> expression . '!=' expression              (rule 72)
-	binary -> expression . '+' expression               (rule 73)
-	binary -> expression . '-' expression               (rule 74)
-	binary -> expression . '*' expression               (rule 75)
-	binary -> expression . '/' expression               (rule 76)
-	binary -> expression . '>' expression               (rule 77)
-	binary -> expression . '<' expression               (rule 78)
-	binary -> expression . '>=' expression              (rule 79)
-	binary -> expression . '<=' expression              (rule 80)
-	binary -> expression . 'and' expression             (rule 81)
-	binary -> expression . 'or' expression              (rule 82)
-	ternary -> expression . '?' expression ':' expression    (rule 83)
+	binary -> expression . '==' expression              (rule 72)
+	binary -> expression . '!=' expression              (rule 73)
+	binary -> expression . '+' expression               (rule 74)
+	binary -> expression . '-' expression               (rule 75)
+	binary -> expression . '*' expression               (rule 76)
+	binary -> expression . '/' expression               (rule 77)
+	binary -> expression . '>' expression               (rule 78)
+	binary -> expression . '<' expression               (rule 79)
+	binary -> expression . '>=' expression              (rule 80)
+	binary -> expression . '<=' expression              (rule 81)
+	binary -> expression . 'and' expression             (rule 82)
+	binary -> expression . 'or' expression              (rule 83)
+	ternary -> expression . '?' expression ':' expression    (rule 84)
 
 	'+'            shift, and enter state 64
 	'-'            shift, and enter state 65
@@ -4867,7 +4901,7 @@ State 179
 -----------------------------------------------------------------------------
 Grammar Totals
 -----------------------------------------------------------------------------
-Number of rules: 84
+Number of rules: 85
 Number of terminals: 40
 Number of non-terminals: 29
 Number of states: 180

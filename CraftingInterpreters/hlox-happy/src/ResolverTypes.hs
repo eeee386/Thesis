@@ -21,6 +21,7 @@ data ResolverMeta = ResolverMeta {
   , declarations :: [DECLARATION]
   , currentVariableInDeclaration :: Maybe TextType
   , resolverErrors :: [TextType]
+  , newExpr :: EXPRESSION
 } 
 
 createNewMeta :: IO ResolverMeta
@@ -33,6 +34,7 @@ createNewMeta = do
   , declarations=[]
   , currentVariableInDeclaration=Nothing
   , resolverErrors=[]
+  , newExpr = NON_EXP
   }
   
 createResolverBlockEnvironment :: IO ResolverBlockEnvironment
@@ -85,6 +87,17 @@ checkIfDefinedForDefinition iden exp meta = do
     return meta{declarations=(R_DEC_VAR (R_VAR_DEF iden exp (fromJust maybeId)):(declarations meta)), currentVariableId=currentVariableId meta+1}
   else 
     return meta{resolverErrors="Value is not in scope":(resolverErrors meta)}
+
+checkIfReferenceForDefinition :: TextType -> ResolverMeta -> IO ResolverMeta
+checkIfReferenceForDefinition iden meta = do
+  let (currentResEnv:_) = resolverEnv meta
+  maybeId <- getIdOfIden iden currentResEnv
+  if isJust maybeId then
+    return meta{newExpr=EXP_LITERAL (R_IDENTIFIER_REFERENCE iden (fromJust maybeId))}
+  else
+    return meta{resolverErrors="Value is not in scope":(resolverErrors meta)}
+   
+                          
 {-
 -- ResolverError
 data ResolverError = RESOLVER_ERROR T.Text (S.Seq TH.Token) deriving Show

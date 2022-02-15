@@ -106,6 +106,7 @@ data EXPRESSION = EXP_LITERAL LITERAL
                 | EXP_CALL CALL
                 | EXP_CHAIN CHAIN
                 | EXP_THIS
+                | NON_EXP
                 deriving Eq
 
 instance Show EXPRESSION where 
@@ -117,15 +118,18 @@ instance Show EXPRESSION where
   show (EXP_CALL x) = mconcat ["Function: ", show x]
   show (EXP_CHAIN x) = show x
   show EXP_THIS = "this"
+  show NON_EXP = ""
 
-data LITERAL = NUMBER Double | STRING TextType | TRUE | FALSE | NIL | IDENTIFIER TextType ID deriving Eq
+data LITERAL = NUMBER Double | STRING TextType | TRUE | FALSE | NIL | IDENTIFIER_REFERENCE TextType | R_IDENTIFIER_REFERENCE TextType ID deriving Eq
 instance Show LITERAL where 
   show (NUMBER x) = show x
   show (STRING x) = T.unpack (T.concat [T.pack "\"", x, T.pack "\""])
   show TRUE = "true"
   show FALSE = "false"
   show NIL = "nil"
-  show (IDENTIFIER x id) = show x ++ show id
+  show (IDENTIFIER_REFERENCE x) = show x
+  show (R_IDENTIFIER_REFERENCE x id) = show x ++ show id
+
 
 
 newtype GROUPING = GROUP EXPRESSION deriving Eq

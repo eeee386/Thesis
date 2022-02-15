@@ -12,4 +12,4 @@ Rewrite of the hlox but using happy parser
 - stack build --exec hlox-happy-exe
 
 ### Generate HappyParser file
-- happy src/HappyParser.y
+- happy src/HappyParser.y -i

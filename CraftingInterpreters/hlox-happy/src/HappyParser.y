@@ -145,6 +145,7 @@ literal        : NUMBER         {AST.NUMBER $1}
                | 'true'         {AST.TRUE}
                | 'false'        {AST.FALSE}
                | 'nil'          {AST.NIL}
+               | IDENTIFIER     {IDENTIFIER_REFERENCE $1}
 
 grouping       : '(' expression ')'              {GROUP $2}
 unary          : '-' expression %prec UN         {UNARY_MINUS $2}

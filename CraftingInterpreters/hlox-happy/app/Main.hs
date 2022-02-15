@@ -9,7 +9,7 @@ import AST
 
 main :: IO ()
 main = do
-  let (PROG decs) = H.happyParser "5 and 6; 3+2; var a = 6;"
+  let (PROG decs) = H.happyParser "6+a;"
   print decs
   --startFromTerminal
 
