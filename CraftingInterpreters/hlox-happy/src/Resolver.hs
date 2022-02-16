@@ -12,7 +12,8 @@ resolveProgram :: PROGRAM -> IO ResolverMeta
 resolveProgram (PROG decs) = createNewMeta >>= resolveDeclarations decs
 
 resolveDeclarations :: [DECLARATION] -> ResolverMeta -> IO ResolverMeta
-resolveDeclarations (x:xs) meta = resolveDeclaration x meta >>= resolveDeclarations xs
+resolveDeclarations [] meta = return meta
+resolveDeclarations (x:xs) meta = resolveDeclaration x meta >>= resolveDeclarations xs >>= reverseDeclarations
 
 resolveDeclaration :: DECLARATION -> ResolverMeta -> IO ResolverMeta 
 resolveDeclaration (DEC_VAR x) meta = resolveVarDeclaration x meta
@@ -20,9 +21,9 @@ resolveDeclaration (DEC_STMT (BLOCK_STMT x)) meta = resolveBlock x meta
 resolveDeclaration x meta = return meta{declarations=x:declarations meta}
 
 resolveVarDeclaration :: VARIABLE_DECLARATION -> ResolverMeta -> IO ResolverMeta
-resolveVarDeclaration (VAR_DEC_DEF iden exp) meta = resolveExpression exp meta >>= checkIfDefinedForDeclaration iden (R_VAR_DEC_DEF iden exp)
+resolveVarDeclaration (VAR_DEC_DEF iden exp) meta = resolveExpression exp meta >>= checkIfDefinedForDeclarationAndDefinition iden (R_VAR_DEC_DEF iden)
 resolveVarDeclaration (VAR_DEC iden) meta = checkIfDefinedForDeclaration iden (R_VAR_DEC iden) meta
-resolveVarDeclaration (VAR_DEF iden exp) meta = resolveExpression exp meta >>= checkIfDefinedForDefinition iden exp
+resolveVarDeclaration (VAR_DEF iden exp) meta = resolveExpression exp meta >>= checkIfDefinedForDefinition iden
 
 resolveBlock :: [DECLARATION] -> ResolverMeta -> IO ResolverMeta
 resolveBlock decs meta = do
@@ -36,7 +37,23 @@ resolveExpression (EXP_LITERAL x) meta = return meta{newExpr= EXP_LITERAL x}
 resolveExpression (EXP_UNARY (UNARY_NEGATE exp)) meta = handleUnary UNARY_NEGATE exp meta
 resolveExpression (EXP_UNARY (UNARY_MINUS exp)) meta = handleUnary UNARY_MINUS exp meta
 resolveExpression (EXP_GROUPING (GROUP exp)) meta = handleGrouping GROUP exp meta
-
+resolveExpression (EXP_BINARY (BIN_ADD left right)) meta = handleBinaryExp BIN_ADD left right meta 
+resolveExpression (EXP_BINARY (BIN_SUB left right)) meta = handleBinaryExp BIN_SUB left right meta 
+resolveExpression (EXP_BINARY (BIN_MUL left right)) meta = handleBinaryExp BIN_MUL left right meta 
+resolveExpression (EXP_BINARY (BIN_DIV left right)) meta = handleBinaryExp BIN_DIV left right meta 
+resolveExpression (EXP_BINARY (BIN_EQ left right)) meta = handleBinaryExp BIN_EQ left right meta 
+resolveExpression (EXP_BINARY (BIN_NOT_EQ left right)) meta = handleBinaryExp BIN_NOT_EQ left right meta 
+resolveExpression (EXP_BINARY (BIN_COMP_LESS left right)) meta = handleBinaryExp BIN_COMP_LESS left right meta 
+resolveExpression (EXP_BINARY (BIN_COMP_LESS_EQ left right)) meta = handleBinaryExp BIN_COMP_LESS_EQ left right meta 
+resolveExpression (EXP_BINARY (BIN_COMP_GREATER left right)) meta = handleBinaryExp BIN_COMP_GREATER left right meta 
+resolveExpression (EXP_BINARY (BIN_COMP_GREATER_EQ left right)) meta = handleBinaryExp BIN_COMP_GREATER_EQ left right meta 
+resolveExpression (EXP_BINARY (BIN_AND left right)) meta = handleBinaryExp BIN_AND left right meta 
+resolveExpression (EXP_BINARY (BIN_OR left right)) meta = handleBinaryExp BIN_OR left right meta 
+resolveExpression (EXP_TERNARY (TERNARY pred tExp fExp)) meta = do
+  predMeta <- resolveExpression pred meta
+  trueMeta <- resolveExpression tExp meta
+  falseMeta <- resolveExpression fExp meta
+  return meta{newExpr= EXP_TERNARY (TERNARY (newExpr predMeta) (newExpr trueMeta) (newExpr falseMeta)) }  
 resolveExpression _ meta = return meta
 
 
@@ -50,6 +67,12 @@ handleSingleExp :: (EXPRESSION -> EXPRESSION) -> EXPRESSION -> ResolverMeta -> I
 handleSingleExp fact exp meta = do
   newMeta <- resolveExpression exp meta
   return meta{newExpr=fact (newExpr newMeta) }
+
+handleBinaryExp :: (EXPRESSION -> EXPRESSION -> BINARY) -> EXPRESSION -> EXPRESSION -> ResolverMeta -> IO ResolverMeta
+handleBinaryExp fact left right meta = do
+  leftMeta <- resolveExpression left meta
+  rightMeta <- resolveExpression right meta
+  return meta{newExpr= EXP_BINARY (fact (newExpr leftMeta) (newExpr rightMeta)) }
 {-
 
 resolveProgram :: PROGRAM -> IO ResolverMeta

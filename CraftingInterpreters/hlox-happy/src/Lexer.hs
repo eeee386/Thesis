@@ -37,12 +37,15 @@ lexer ('*':cs) = STAR : lexer cs
 lexer ('/':cs) = SLASH : lexer cs
 lexer ('(':cs) = LEFT_PAREN : lexer cs
 lexer (')':cs) = RIGHT_PAREN : lexer cs
+lexer ('{':cs) = LEFT_BRACE : lexer cs
+lexer ('}':cs) = RIGHT_BRACE : lexer cs
 lexer ('<': cs) = LESS : lexer cs
 lexer ('>': cs) = GREATER : lexer cs
 lexer (';': cs) = SEMICOLON : lexer cs
 lexer (':': cs) = COLON : lexer cs
 lexer ('.': cs) = DOT : lexer cs
 lexer ('\"': cs) = lexString cs
+lexer (_:cs) = lexer cs
 lexer [] = []
 
 lexNum :: String -> [Token]
@@ -76,7 +79,9 @@ lexString cs = STRING (T.pack str) : lexer rest
         (_:rest) = restWithQuoteSign
 
 lexHandleEqual :: String -> [Token]
+lexHandleEqual [] = [EQUAL]
 lexHandleEqual (c:cs) = if c == '=' then EQUAL_EQUAL : lexer cs else EQUAL : lexer (c:cs)
 
 lexHandleBang :: String -> [Token]
+lexHandleBang [] = [BANG]
 lexHandleBang (c:cs) = if c == '=' then BANG_EQUAL : lexer cs else BANG : lexer (c:cs)

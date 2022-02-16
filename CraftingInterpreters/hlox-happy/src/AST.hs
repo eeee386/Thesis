@@ -18,6 +18,7 @@ data DECLARATION = DEC_STMT STATEMENT | DEC_VAR VARIABLE_DECLARATION | R_DEC_VAR
 instance Show DECLARATION where
   show (DEC_STMT x) = show x
   show (DEC_VAR x) = show x
+  show (R_DEC_VAR x) = show x
   show (DEC_FUNC x) = "function: " ++ show x
   show (DEC_CLASS x) = "class: " ++ show x
 
@@ -96,8 +97,6 @@ instance Show FOR_LOOP where
 
 
 -- EXPRESSION
-
--- Tokens only needed in operator expression because there are some, that cannot be evaluated, and we want to show why
 data EXPRESSION = EXP_LITERAL LITERAL 
                 | EXP_UNARY UNARY
                 | EXP_BINARY BINARY
