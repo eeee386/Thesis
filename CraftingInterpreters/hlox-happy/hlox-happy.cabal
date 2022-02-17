@@ -45,7 +45,8 @@ library
   hs-source-dirs:
       src
   build-depends:
-      array
+      Unique
+    , array
     , base >=4.7 && <5
     , bytestring
     , clock
@@ -65,7 +66,8 @@ executable hlox-happy-exe
       app
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      array
+      Unique
+    , array
     , base >=4.7 && <5
     , bytestring
     , clock
@@ -87,7 +89,8 @@ test-suite hlox-happy-test
       test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      array
+      Unique
+    , array
     , base >=4.7 && <5
     , bytestring
     , clock

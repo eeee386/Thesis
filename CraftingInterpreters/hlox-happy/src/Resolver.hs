@@ -5,15 +5,16 @@ module Resolver where
 import ResolverTypes
 import AST
 import Data.Maybe
+import Data.HashTable.IO as HT
+import Utils
+import Data.List.Unique as U
 
-
-  
 resolveProgram :: PROGRAM -> IO ResolverMeta
 resolveProgram (PROG decs) = createNewMeta >>= resolveDeclarations decs
 
 resolveDeclarations :: [DECLARATION] -> ResolverMeta -> IO ResolverMeta
 resolveDeclarations [] meta = return meta
-resolveDeclarations (x:xs) meta = resolveDeclaration x meta >>= resolveDeclarations xs >>= reverseDeclarations
+resolveDeclarations (x:xs) meta = resolveDeclaration x meta >>= resolveDeclarations xs >>= reverseDeclarationsAndErrors
 
 resolveDeclaration :: DECLARATION -> ResolverMeta -> IO ResolverMeta 
 resolveDeclaration (DEC_VAR x) meta = resolveVarDeclaration x meta
@@ -25,10 +26,18 @@ resolveVarDeclaration (VAR_DEC_DEF iden exp) meta = resolveExpression exp meta >
 resolveVarDeclaration (VAR_DEC iden) meta = checkIfDefinedForDeclaration iden (R_VAR_DEC iden) meta
 resolveVarDeclaration (VAR_DEF iden exp) meta = resolveExpression exp meta >>= checkIfDefinedForDefinition iden
 
+resolveFunctionDeclaration :: FUNCTION_DECLARATION -> ResolverMeta -> IO ResolverMeta
+resolveFunctionDeclaration (FUNC_DEC iden params (BLOCK_STMT decs)) meta = do
+  newBlockMeta <- addBlockToMeta meta
+  let isUniqueParamNames = U.allUnique params
+  newMeta <- resolveDeclarations decs newBlockMeta{resolverErrors = if isUniqueParamNames then resolverErrors newBlockMeta else "Parameter names are not unique": resolverErrors newBlockMeta}
+  deleteBlockFromMeta (newMeta{declarations=DEC_FUNC (R_FUNC_DEC iden params (BLOCK_STMT (declarations newMeta))(currentVariableId meta)) :declarations meta, currentVariableId=currentVariableId meta+1})
+
 resolveBlock :: [DECLARATION] -> ResolverMeta -> IO ResolverMeta
 resolveBlock decs meta = do
-  newMeta <- resolveDeclarations decs meta{declarations=[]}
-  return meta{declarations=DEC_STMT (BLOCK_STMT (declarations newMeta)):declarations meta}
+  newBlockMeta <- addBlockToMeta meta
+  newMeta <- resolveDeclarations decs newBlockMeta{declarations=[]}
+  deleteBlockFromMeta (newMeta{declarations=DEC_STMT (BLOCK_STMT (declarations newMeta)):declarations meta})
 
 
 resolveExpression :: EXPRESSION -> ResolverMeta -> IO ResolverMeta
@@ -51,9 +60,18 @@ resolveExpression (EXP_BINARY (BIN_AND left right)) meta = handleBinaryExp BIN_A
 resolveExpression (EXP_BINARY (BIN_OR left right)) meta = handleBinaryExp BIN_OR left right meta 
 resolveExpression (EXP_TERNARY (TERNARY pred tExp fExp)) meta = do
   predMeta <- resolveExpression pred meta
-  trueMeta <- resolveExpression tExp meta
-  falseMeta <- resolveExpression fExp meta
-  return meta{newExpr= EXP_TERNARY (TERNARY (newExpr predMeta) (newExpr trueMeta) (newExpr falseMeta)) }  
+  let predExpr = newExpr predMeta
+  trueMeta <- resolveExpression tExp predMeta
+  let trueExpr = newExpr trueMeta
+  falseMeta <- resolveExpression fExp trueMeta
+  let falseExpr = newExpr falseMeta
+  return falseMeta{newExpr= EXP_TERNARY (TERNARY predExpr trueExpr falseExpr) }
+resolveExpression (EXP_CALL (CALL iden args)) meta = handleCall iden args meta
+resolveExpression (EXP_CALL (CALL_MULTI call multiArgs)) meta = do
+  (newMultiArgs, newResErrs) <- handleArguments multiArgs meta
+  (EXP_CALL newCall) <- newExpr <$> resolveExpression (EXP_CALL call) meta
+  return meta{newExpr=EXP_CALL (CALL_MULTI newCall newMultiArgs), resolverErrors=mconcat [newResErrs, (resolverErrors meta)]}
+
 resolveExpression _ meta = return meta
 
 
@@ -71,8 +89,27 @@ handleSingleExp fact exp meta = do
 handleBinaryExp :: (EXPRESSION -> EXPRESSION -> BINARY) -> EXPRESSION -> EXPRESSION -> ResolverMeta -> IO ResolverMeta
 handleBinaryExp fact left right meta = do
   leftMeta <- resolveExpression left meta
-  rightMeta <- resolveExpression right meta
-  return meta{newExpr= EXP_BINARY (fact (newExpr leftMeta) (newExpr rightMeta)) }
+  let leftExpr = newExpr leftMeta
+  rightMeta <- resolveExpression right leftMeta
+  let rightExpr = newExpr rightMeta
+  return meta{newExpr=EXP_BINARY (fact leftExpr rightExpr) }
+
+handleCall :: TextType -> [ARGUMENT] -> ResolverMeta -> IO ResolverMeta
+handleCall iden args meta = do
+  maybeId <- findIdInVariables iden meta
+  vals <- (mapM HT.toList (resolverEnv meta))
+  (newArgs, newResErrs) <- handleArguments args meta
+  if isJust maybeId then
+    return meta{newExpr=EXP_CALL (R_CALL iden newArgs (fromJust maybeId)), resolverErrors= mconcat [newResErrs, (resolverErrors meta)]}
+  else
+    return meta{resolverErrors="Value is not in scope":resolverErrors meta}
+
+handleArguments :: [ARGUMENT] -> ResolverMeta -> IO ([ARGUMENT], [TextType])
+handleArguments args meta = do
+    newMetas <- mapM (`resolveExpression` meta{resolverErrors=[]}) args
+    let newArgs = map newExpr newMetas
+    let newResolverErrors = mconcat (map resolverErrors newMetas)
+    return (newArgs, newResolverErrors)
 {-
 
 resolveProgram :: PROGRAM -> IO ResolverMeta

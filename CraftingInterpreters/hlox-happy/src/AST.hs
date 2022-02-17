@@ -25,13 +25,15 @@ instance Show DECLARATION where
 type IDENTIFIER = TextType
 type PARAMETER = TextType
 
-data VARIABLE_DECLARATION = VAR_DEC_DEF IDENTIFIER EXPRESSION | VAR_DEC IDENTIFIER | VAR_DEF IDENTIFIER EXPRESSION  deriving Eq
+data VARIABLE_DECLARATION = VAR_DEC_DEF IDENTIFIER EXPRESSION | VAR_DEC IDENTIFIER | VAR_DEF IDENTIFIER EXPRESSION deriving Eq
 instance Show VARIABLE_DECLARATION where
   show (VAR_DEC_DEF iden expr) = mconcat ["var", " ", show iden, " = ", show expr]
   show (VAR_DEC iden) = mconcat ["var", " ", show iden]
   show (VAR_DEF iden expr) = mconcat [show iden, " = ", show expr]
+
   
 data FUNCTION_DECLARATION = FUNC_DEC IDENTIFIER [PARAMETER] STATEMENT
+                          | R_FUNC_DEC IDENTIFIER [PARAMETER] STATEMENT ID
                           | METHOD_DEC IDENTIFIER [PARAMETER] STATEMENT
                           deriving Eq
 
@@ -43,11 +45,12 @@ data CLASS_DECLARATION = CLASS_DEC IDENTIFIER [FUNCTION_DECLARATION] | SUB_CLASS
 instance Show CLASS_DECLARATION where 
   show (CLASS_DEC i methods) = mconcat ["class name: ", show i, "  methods: ", show methods]
   
-data RESOLVED_VARIABLE_DECLARATION = R_VAR_DEC_DEF IDENTIFIER EXPRESSION ID | R_VAR_DEC IDENTIFIER ID | R_VAR_DEF IDENTIFIER EXPRESSION ID  deriving Eq
+data RESOLVED_VARIABLE_DECLARATION = R_VAR_DEC_DEF IDENTIFIER EXPRESSION ID | R_VAR_DEC IDENTIFIER ID | R_VAR_DEF IDENTIFIER EXPRESSION ID deriving Eq
 instance Show RESOLVED_VARIABLE_DECLARATION where
   show (R_VAR_DEC_DEF iden expr _) = mconcat ["var", " ", show iden, " = ", show expr]
   show (R_VAR_DEC iden _) = mconcat ["var", " ", show iden]
   show (R_VAR_DEF iden expr _) = mconcat [show iden, " = ", show expr]
+
 
 
 
@@ -137,7 +140,7 @@ instance Show GROUPING where
 
 type ARGUMENT = EXPRESSION
 
-data CALL = CALL IDENTIFIER [ARGUMENT] | CALL_MULTI CALL [ARGUMENT] deriving Eq
+data CALL = CALL IDENTIFIER [ARGUMENT] | R_CALL IDENTIFIER [ARGUMENT] ID | CALL_MULTI CALL [ARGUMENT] deriving Eq
 instance Show CALL where
   show (CALL lit args) = mconcat [show lit, "(", show args, ")"]
   show (CALL_MULTI call args) = mconcat [ show call, "(", show args, ")"]

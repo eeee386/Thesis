@@ -62,6 +62,14 @@ updateBlockInResEnv iden id resEnv  = do
 getIdOfIden :: T.Text -> ResolverBlockEnvironment -> IO (Maybe ID)
 getIdOfIden iden resEnv = HT.lookup resEnv iden
   
+addBlockToMeta :: ResolverMeta -> IO ResolverMeta
+addBlockToMeta meta = do
+  newEnv <- addNewBlockToResEnv (resolverEnv meta)
+  return meta{resolverEnv=newEnv}  
+
+deleteBlockFromMeta :: ResolverMeta -> IO ResolverMeta
+deleteBlockFromMeta meta = return meta{resolverEnv=(deleteBlockFromResEnv (resolverEnv meta))}
+
 updateBlockInMeta :: ID -> T.Text -> ResolverMeta -> IO ResolverMeta
 updateBlockInMeta id iden meta = do
   newEnv <- updateBlockInResEnv iden id (resolverEnv meta)
@@ -81,8 +89,8 @@ findIdenInMeta :: T.Text -> ResolverMeta -> IO Bool
 findIdenInMeta iden meta = isJust <$> findIdInVariables iden meta
   
 
-reverseDeclarations :: ResolverMeta -> IO ResolverMeta
-reverseDeclarations meta = return meta{declarations=reverse (declarations meta)} 
+reverseDeclarationsAndErrors :: ResolverMeta -> IO ResolverMeta
+reverseDeclarationsAndErrors meta = return meta{declarations=reverse (declarations meta), resolverErrors=reverse (resolverErrors meta)} 
 
 
 checkIfDefinedForDeclaration :: TextType -> (Int -> RESOLVED_VARIABLE_DECLARATION) -> ResolverMeta -> IO ResolverMeta
@@ -91,9 +99,9 @@ checkIfDefinedForDeclaration iden fact meta = do
   maybeId <- getIdOfIden iden currentResEnv
   if isNothing maybeId then do
     uMeta <- updateBlockInMeta (currentVariableId meta) iden meta
-    return uMeta{declarations=(R_DEC_VAR (fact (currentVariableId meta))):(declarations meta), currentVariableId=currentVariableId meta+1}
+    return uMeta{declarations=(R_DEC_VAR (fact (currentVariableId meta))):(declarations meta), currentVariableId=currentVariableId meta+1, variableVector= V.snoc (variableVector meta) EVAL_NIL}
   else 
-    return meta{resolverErrors="Value already defined in scope":(resolverErrors meta)}
+    return meta{resolverErrors="Variable already declared in scope":(resolverErrors meta)}
     
 checkIfDefinedForDeclarationAndDefinition :: TextType -> (EXPRESSION -> Int -> RESOLVED_VARIABLE_DECLARATION) -> ResolverMeta -> IO ResolverMeta
 checkIfDefinedForDeclarationAndDefinition iden fact meta = checkIfDefinedForDeclaration iden (fact exp) meta
@@ -107,18 +115,18 @@ checkIfDefinedForDefinition iden meta = do
   if isJust maybeId then 
     return meta{declarations=(R_DEC_VAR (R_VAR_DEF iden exp (fromJust maybeId)):(declarations meta))}
   else 
-    return meta{resolverErrors="Value is not in scope":resolverErrors meta}
+    return meta{resolverErrors="Variable is not in scope":resolverErrors meta}
 
 checkIfReferenceForDefinition :: TextType -> ResolverMeta -> IO ResolverMeta
 checkIfReferenceForDefinition iden meta = do
   maybeId <- findIdInVariables iden meta
   vals <- (mapM HT.toList (resolverEnv meta))
-  print vals
-  print maybeId
   if isJust maybeId then
     return meta{newExpr=EXP_LITERAL (R_IDENTIFIER_REFERENCE iden (fromJust maybeId))}
   else
     return meta{resolverErrors="Value is not in scope":resolverErrors meta}
+    
+
    
                           
 {-

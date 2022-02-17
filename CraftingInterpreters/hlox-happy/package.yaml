@@ -30,6 +30,7 @@ dependencies:
 - hashtables
 - clock
 - array
+- Unique
 
 library:
   source-dirs: src
