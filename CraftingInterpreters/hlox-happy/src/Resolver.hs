@@ -29,13 +29,15 @@ resolveDeclaration (DEC_STMT (WHILE_STMT exp (BLOCK_STMT decs))) meta = do
   resMeta <- resolveExpression exp meta
   let resExp = newExpr resMeta
   resBlockMeta <- resolveBlock decs resMeta{declarations=[], isInLoop=True}
-  return resBlockMeta{declarations=DEC_STMT (LOOP resExp (BLOCK_STMT (declarations resBlockMeta))):declarations meta, isInLoop=isInLoop meta}
+  let (DEC_STMT resBlockStmt) = head (declarations resBlockMeta)
+  return resBlockMeta{declarations=DEC_STMT (LOOP resExp resBlockStmt):declarations meta, isInLoop=isInLoop meta}
 resolveDeclaration (DEC_STMT (FOR_STMT (DEC_VAR varDec) exp1 varAss (BLOCK_STMT decs))) meta = do
   varMeta <- resolveVarDeclaration varDec meta
   resExpMeta <- resolveExpression exp1 varMeta
   let resExp = newExpr resExpMeta
   resBlockMeta <- resolveBlock ((reverse . (:) varAss . reverse) decs ) resExpMeta{declarations=[], isInLoop=True}
-  return resBlockMeta{declarations=DEC_STMT (LOOP resExp (BLOCK_STMT (declarations resBlockMeta))):declarations varMeta, isInLoop=isInLoop meta}
+  let (DEC_STMT resBlockStmt) = head (declarations resBlockMeta)
+  return resBlockMeta{declarations=DEC_STMT (LOOP resExp resBlockStmt):declarations varMeta, isInLoop=isInLoop meta}
 resolveDeclaration (DEC_STMT (IF_STMT exp (BLOCK_STMT decs))) meta = do
   resMeta <- resolveExpression exp meta
   let resExp = newExpr resMeta
