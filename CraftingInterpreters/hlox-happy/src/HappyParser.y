@@ -61,6 +61,8 @@ import Lexer as L
       'class'         { L.CLASS }
       'this'          { L.THIS }
       'super'         { L.SUPER }
+      'continue'      { L.CONTINUE }
+      'break'         { L.BREAK }
 
 %%
 
@@ -81,6 +83,8 @@ statement      : expression_statement              { $1 }
                | while_statement                   { $1 }
                | for_statement                     { $1 }
                | return_statement                  { $1 }
+               | break_statement                   { $1 }
+               | continue_statement                { $1 }
 
 expression_statement  : expression ';'                    { EXPR_STMT $1 }
 print_statement       : 'print' expression ';'            { PRINT_STMT $2 }
@@ -97,6 +101,8 @@ for_statement         : 'for' '(' ';'  ';' ')' statement                        
                       | 'for' '(' ';' expression ';' variable_assignment ')' statement             { FOR_STMT EMPTY_DEC $4 (DEC_VAR $6) $8 }
                       | 'for' '(' variable_declaration ';' expression ';' variable_assignment ')' statement    { FOR_STMT (DEC_VAR $3) $5 (DEC_VAR $7) $9 }
 return_statement      : 'return' expression ';'                                                       { AST.RETURN $2 }
+break_statement       : 'break' ';'                              { AST.BREAK }
+continue_statement    : 'continue' ';'                            { AST.CONTINUE }
 
 variable_declaration_assignment       : variable_declaration                 { $1 }
                                       | variable_assignment                  { $1 }

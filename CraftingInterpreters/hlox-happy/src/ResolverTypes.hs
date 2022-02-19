@@ -25,6 +25,7 @@ data ResolverMeta = ResolverMeta {
   , newExpr :: EXPRESSION
   , isInFunction :: Bool
   , isInClass :: Bool
+  , isInLoop :: Bool
 } 
 
 createNewMeta :: IO ResolverMeta
@@ -40,6 +41,7 @@ createNewMeta = do
   , newExpr = EMPTY_EXP
   , isInFunction = False
   , isInClass = False
+  , isInLoop = False
   }
   
 createResolverBlockEnvironment :: IO ResolverBlockEnvironment
@@ -51,17 +53,17 @@ addNewBlockToResEnv resEnv = do
   return (block:resEnv)
 
 createNewResEnv ::  IO ResolverEnvironment
-createNewResEnv = addNewBlockToResEnv createStack
+createNewResEnv = addNewBlockToResEnv []
 
 deleteBlockFromResEnv :: ResolverEnvironment -> ResolverEnvironment
 deleteBlockFromResEnv resEnv = newResEnv
-  where (_,newResEnv) = pop resEnv 
+  where (_:newResEnv) = resEnv 
   
 updateBlockInResEnv :: T.Text -> ID ->  ResolverEnvironment -> IO ResolverEnvironment
 updateBlockInResEnv iden id resEnv  = do
-  let (last, delResEnv) = pop resEnv 
+  let (last:delResEnv) = resEnv 
   HT.insert last iden id
-  return (push last delResEnv)
+  return (last:delResEnv)
   
 getIdOfIden :: T.Text -> ResolverBlockEnvironment -> IO (Maybe ID)
 getIdOfIden iden resEnv = HT.lookup resEnv iden
@@ -150,3 +152,6 @@ checkIfFunctionOrClassIsDefined iden meta = do
     updateBlockInMeta (currentVariableId meta) iden meta
   else
     return meta{resolverErrors="Variable already declared in scope":resolverErrors meta}
+    
+updateResolverErrorsByPredicate :: Bool -> TextType -> ResolverMeta -> ResolverMeta
+updateResolverErrorsByPredicate predicate message meta = meta{resolverErrors=if predicate then (resolverErrors meta) else message:resolverErrors meta}

@@ -78,6 +78,8 @@ data STATEMENT = EXPR_STMT EXPRESSION
                | WHILE_STMT EXPRESSION STATEMENT
                | FOR_STMT DECLARATION EXPRESSION DECLARATION STATEMENT
                | LOOP EXPRESSION STATEMENT
+               | BREAK
+               | CONTINUE
                | RETURN EXPRESSION deriving Eq
 
 instance Show STATEMENT where 
@@ -89,6 +91,8 @@ instance Show STATEMENT where
   show (WHILE_STMT expr stmt) = mconcat ["while (", show expr, ")", show stmt]
   show (FOR_STMT x y z stmt) = mconcat ["for(", show x, ";", show y, ";", show z, ";", show stmt]
   show (LOOP expr stmt) = mconcat ["loop ", show expr, " ", show stmt]
+  show BREAK = "break"
+  show CONTINUE = "continue"
   show (RETURN x) = "return " ++ show x
 
 

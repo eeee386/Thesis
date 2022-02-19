@@ -6,7 +6,7 @@ fun count(n) {while (n < 5) {print n; n = n + 1;}} print count(1);
 
 fun count(n) {for (var i = 0; i < 5; i = i+1){ print i;}} count(1);
 
-var a = 0; while(a < 5) {if(a == 3) {print a;} a=a+1; }
+var a = 0; while(a < 5) {if(a == 3) {print a; break;} a=a+1; }
 
 for (var i = 0; i < 5; i = i+1){ print i;}
 

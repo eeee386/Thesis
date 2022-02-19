@@ -18,7 +18,7 @@ data Token =  LEFT_PAREN | RIGHT_PAREN | LEFT_BRACE | RIGHT_BRACE |
                        IDENTIFIER TextType | STRING TextType | NUMBER Double |
 
                        AND | CLASS | ELSE | FALSE | FUN | FOR | IF | NIL | OR |
-                       PRINT | RETURN | SUPER | THIS | TRUE | VAR | WHILE |
+                       PRINT | RETURN | SUPER | THIS | TRUE | VAR | WHILE | BREAK | CONTINUE |
 
                        COMMENT | BLOCK_COMMENT | WHITE_SPACE |
 
@@ -72,6 +72,8 @@ lexKeyword cs =
       ("class", rest) -> CLASS : lexer rest
       ("this", rest) -> THIS : lexer rest
       ("super", rest) -> SUPER : lexer rest
+      ("break", rest) -> BREAK : lexer rest
+      ("continue", rest) -> CONTINUE : lexer rest
       (var,rest)   -> IDENTIFIER (T.pack var) : lexer rest
 
 lexString :: String -> [Token]

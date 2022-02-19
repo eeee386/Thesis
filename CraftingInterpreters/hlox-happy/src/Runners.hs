@@ -2,9 +2,6 @@
 
 module Runners where
 
-import Scanner
-import TokenHelper
-
 {-
 import System.Environment
 import qualified Data.Text.IO as TIO

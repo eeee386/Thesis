@@ -37,8 +37,6 @@ library
       Resolver
       ResolverTypes
       Runners
-      Scanner
-      TokenHelper
       Utils
   other-modules:
       Paths_hlox_happy
