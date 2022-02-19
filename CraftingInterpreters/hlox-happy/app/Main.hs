@@ -10,7 +10,7 @@ import Resolver
 
 main :: IO ()
 main = do
-  meta <- resolveProgram (H.happyParser "var a = 6; {var b = 2; c = 7; var c = b + 6;} a = 8;")
+  meta <- resolveProgram (H.happyParser "var a = 0;fun b(){print a;}")
   let decs = declarations meta
   print decs
   print (resolverErrors meta)

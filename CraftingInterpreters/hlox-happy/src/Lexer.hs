@@ -44,6 +44,7 @@ lexer ('>': cs) = GREATER : lexer cs
 lexer (';': cs) = SEMICOLON : lexer cs
 lexer (':': cs) = COLON : lexer cs
 lexer ('.': cs) = DOT : lexer cs
+lexer (',': cs) = COMMA : lexer cs
 lexer ('\"': cs) = lexString cs
 lexer (_:cs) = lexer cs
 lexer [] = []

@@ -13,7 +13,7 @@ instance Show PROGRAM where
 
 -- DECLARATION
 
-data DECLARATION = DEC_STMT STATEMENT | DEC_VAR VARIABLE_DECLARATION | R_DEC_VAR RESOLVED_VARIABLE_DECLARATION | DEC_FUNC FUNCTION_DECLARATION | DEC_CLASS CLASS_DECLARATION deriving Eq
+data DECLARATION = DEC_STMT STATEMENT | DEC_VAR VARIABLE_DECLARATION | R_DEC_VAR RESOLVED_VARIABLE_DECLARATION | DEC_FUNC FUNCTION_DECLARATION | DEC_CLASS CLASS_DECLARATION | R_DEC_CLASS RESOLVED_CLASS_DECLARATION | EMPTY_DEC deriving Eq
 
 instance Show DECLARATION where
   show (DEC_STMT x) = show x
@@ -21,6 +21,9 @@ instance Show DECLARATION where
   show (R_DEC_VAR x) = show x
   show (DEC_FUNC x) = "function: " ++ show x
   show (DEC_CLASS x) = "class: " ++ show x
+  show (R_DEC_CLASS x) = "class: " ++ show x
+  show EMPTY_DEC = ""
+
 
 type IDENTIFIER = TextType
 type PARAMETER = TextType
@@ -39,11 +42,21 @@ data FUNCTION_DECLARATION = FUNC_DEC IDENTIFIER [PARAMETER] STATEMENT
 
 instance Show FUNCTION_DECLARATION where
   show (FUNC_DEC i p s) = mconcat ["function name: ", show i,"params: " , show p, "statements: ", show s]
+  show (R_FUNC_DEC i p s _) = mconcat ["function name: ", show i,"params: " , show p, "statements: ", show s]
   show (METHOD_DEC i p s) = mconcat ["method name: ", show i,"params: " , show p, "statements: ", show s]
 
-data CLASS_DECLARATION = CLASS_DEC IDENTIFIER [FUNCTION_DECLARATION] | SUB_CLASS_DEC IDENTIFIER IDENTIFIER [FUNCTION_DECLARATION] deriving Eq
+
+type PARENT_ID = ID
+
+data CLASS_DECLARATION = CLASS_DEC IDENTIFIER [DECLARATION] | SUB_CLASS_DEC IDENTIFIER IDENTIFIER [DECLARATION] deriving Eq
 instance Show CLASS_DECLARATION where 
   show (CLASS_DEC i methods) = mconcat ["class name: ", show i, "  methods: ", show methods]
+  show (SUB_CLASS_DEC iden parentIden methods) = mconcat ["class name: ", show iden, ", parent: ", show parentIden, ",  methods: ", show methods]
+
+data RESOLVED_CLASS_DECLARATION = R_CLASS_DEC IDENTIFIER [DECLARATION] ID | R_SUB_CLASS_DEC IDENTIFIER IDENTIFIER [DECLARATION] ID PARENT_ID deriving Eq
+instance Show RESOLVED_CLASS_DECLARATION where
+  show (R_CLASS_DEC i methods _) = mconcat ["class name: ", show i, "  methods: ", show methods]
+  show (R_SUB_CLASS_DEC iden parentIden methods _ _) = mconcat ["class name: ", show iden, ", parent: ", show parentIden, ",  methods: ", show methods]
   
 data RESOLVED_VARIABLE_DECLARATION = R_VAR_DEC_DEF IDENTIFIER EXPRESSION ID | R_VAR_DEC IDENTIFIER ID | R_VAR_DEF IDENTIFIER EXPRESSION ID deriving Eq
 instance Show RESOLVED_VARIABLE_DECLARATION where
@@ -63,8 +76,8 @@ data STATEMENT = EXPR_STMT EXPRESSION
                | IF_STMT EXPRESSION STATEMENT 
                | IF_ELSE_STMT EXPRESSION STATEMENT STATEMENT
                | WHILE_STMT EXPRESSION STATEMENT
-               | FOR_STMT FOR_LOOP
-               | LOOP EXPRESSION DECLARATION STATEMENT
+               | FOR_STMT DECLARATION EXPRESSION DECLARATION STATEMENT
+               | LOOP EXPRESSION STATEMENT
                | RETURN EXPRESSION deriving Eq
 
 instance Show STATEMENT where 
@@ -74,29 +87,9 @@ instance Show STATEMENT where
   show (IF_STMT expr stmt) = mconcat ["if (", show expr, ")", show stmt]
   show (IF_ELSE_STMT expr ifStmt elseStmt) = mconcat ["if (", show expr, ") ", show ifStmt, " else ", show elseStmt]
   show (WHILE_STMT expr stmt) = mconcat ["while (", show expr, ")", show stmt]
-  show (FOR_STMT x) = show x
-  show (LOOP expr1 expr2 stmt) = mconcat ["loop ", show expr1, " ", show expr2, " ", show stmt]
+  show (FOR_STMT x y z stmt) = mconcat ["for(", show x, ";", show y, ";", show z, ";", show stmt]
+  show (LOOP expr stmt) = mconcat ["loop ", show expr, " ", show stmt]
   show (RETURN x) = "return " ++ show x
-  
-data FOR_LOOP = FOR_EMPTY STATEMENT
-              | FOR_DEC VARIABLE_DECLARATION STATEMENT
-              | FOR_MID EXPRESSION STATEMENT
-              | FOR_END EXPRESSION STATEMENT
-              | FOR_DEC_MID VARIABLE_DECLARATION EXPRESSION STATEMENT
-              | FOR_DEC_END VARIABLE_DECLARATION EXPRESSION STATEMENT
-              | FOR_MID_END EXPRESSION EXPRESSION STATEMENT
-              | FOR_ALL VARIABLE_DECLARATION EXPRESSION EXPRESSION STATEMENT
-              deriving Eq
-
-instance Show FOR_LOOP where
-  show (FOR_EMPTY x) = mconcat ["for(;;)", show x]
-  show (FOR_DEC x y) = mconcat ["for(", show x, ";;)", show y]
-  show (FOR_MID x y) = mconcat ["for(;", show x, ";)", show y]
-  show (FOR_END x y) = mconcat ["for(;;", show x, ")", show y]
-  show (FOR_DEC_MID x y z) = mconcat ["for(", show x, ";", show y, ";)", show z]
-  show (FOR_DEC_END x y z) = mconcat ["for(;", show x, ";", show y, ")", show z]
-  show (FOR_MID_END x y z) = mconcat ["for(;", show x, ";", show y, ")", show z]
-  show (FOR_ALL w x y z) = mconcat ["for(", show w , ";", show x, ";", show y, ")", show z]
 
 
 -- EXPRESSION
@@ -108,7 +101,7 @@ data EXPRESSION = EXP_LITERAL LITERAL
                 | EXP_CALL CALL
                 | EXP_CHAIN CHAIN
                 | EXP_THIS
-                | NON_EXP
+                | EMPTY_EXP
                 deriving Eq
 
 instance Show EXPRESSION where 
@@ -120,7 +113,7 @@ instance Show EXPRESSION where
   show (EXP_CALL x) = mconcat ["Function: ", show x]
   show (EXP_CHAIN x) = show x
   show EXP_THIS = "this"
-  show NON_EXP = ""
+  show EMPTY_EXP = ""
 
 data LITERAL = NUMBER Double | STRING TextType | TRUE | FALSE | NIL | IDENTIFIER_REFERENCE TextType | R_IDENTIFIER_REFERENCE TextType ID deriving Eq
 instance Show LITERAL where 
@@ -196,3 +189,9 @@ instance Show BINARY where
 data TERNARY = TERNARY EXPRESSION EXPRESSION EXPRESSION deriving Eq
 instance Show TERNARY where 
   show (TERNARY x y z) = mconcat [show x, show y, show z]
+
+
+-- TODO: Maybe not the best solution
+getIdentifierFromMethod :: DECLARATION -> TextType
+getIdentifierFromMethod (DEC_FUNC (METHOD_DEC iden _ _)) = iden
+getIdentifierFromMethod _ = T.pack ""

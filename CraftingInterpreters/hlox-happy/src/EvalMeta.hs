@@ -1,3 +1,6 @@
+module EvalMeta where
+
+{-
 {-# LANGUAGE OverloadedStrings #-}
 
 module EvalMeta where
@@ -74,3 +77,4 @@ addNewScopeToMeta :: META -> IO META
 addNewScopeToMeta meta = do
   clos <- addNewScopeToClosure (closure meta)
   return meta{closure=clos}
+-}

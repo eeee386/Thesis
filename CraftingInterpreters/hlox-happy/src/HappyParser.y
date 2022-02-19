@@ -69,10 +69,10 @@ program        : declarations                 { PROG (reverse $1) }
 declarations   : declarations declaration     { $2 : $1 }
                | declaration                  { [$1] }
 
-declaration    : statement                    { DEC_STMT $1 }
-               | variable_declaration         { DEC_VAR $1 }
-               | function_declaration         { DEC_FUNC $1 }
-               | class_declaration            { DEC_CLASS $1 }
+declaration    : statement                               { DEC_STMT $1 }
+               | variable_declaration_assignment ';'     { DEC_VAR $1 }
+               | function_declaration                    { DEC_FUNC $1 }
+               | class_declaration                       { DEC_CLASS $1 }
 
 statement      : expression_statement              { $1 }
                | print_statement                   { $1 }
@@ -88,30 +88,36 @@ block_statement       : '{' declarations '}'              { BLOCK_STMT (reverse 
 conditional_statement : 'if' '(' expression ')' statement                         { IF_STMT $3 $5}
                       | 'if' '(' expression ')' statement 'else' statement        { IF_ELSE_STMT $3 $5 $7 }
 while_statement       : 'while' '(' expression ')' statement                      { WHILE_STMT $3 $5 }
-for_statement         : 'for' '(' ';'  ';' ')' statement                                  { FOR_STMT (FOR_EMPTY $6) }
-                      | 'for' '(' variable_declaration ';' ';' ')' statement              { FOR_STMT (FOR_DEC $3 $7) }
-                      | 'for' '(' ';' expression ';' ')' statement                        { FOR_STMT (FOR_MID $4 $7) }
-                      | 'for' '(' ';' ';' expression ')' statement                        { FOR_STMT (FOR_END $5 $7) }
-                      | 'for' '(' variable_declaration ';' expression ';' ')' statement               { FOR_STMT (FOR_DEC_MID $3 $5 $8) }
-                      | 'for' '(' variable_declaration ';' ';' expression ')' statement               { FOR_STMT (FOR_DEC_END $3 $6 $8) }
-                      | 'for' '(' ';' expression ';' expression ')' statement             { FOR_STMT (FOR_MID_END $4 $6 $8) }
-                      | 'for' '(' variable_declaration ';' expression ';' expression ')' statement    { FOR_STMT (FOR_ALL $3 $5 $7 $9) }
+for_statement         : 'for' '(' ';'  ';' ')' statement                                  { FOR_STMT EMPTY_DEC EMPTY_EXP EMPTY_DEC $6 }
+                      | 'for' '(' variable_declaration ';' ';' ')' statement              { FOR_STMT (DEC_VAR $3) EMPTY_EXP EMPTY_DEC $7 }
+                      | 'for' '(' ';' expression ';' ')' statement                        { FOR_STMT EMPTY_DEC $4 EMPTY_DEC $7 }
+                      | 'for' '(' ';' ';' variable_assignment ')' statement                        { FOR_STMT EMPTY_DEC EMPTY_EXP (DEC_VAR $5) $7 }
+                      | 'for' '(' variable_declaration ';' expression ';' ')' statement               { FOR_STMT (DEC_VAR $3) $5 EMPTY_DEC $8 }
+                      | 'for' '(' variable_declaration ';' ';' variable_assignment ')' statement               { FOR_STMT (DEC_VAR $3) EMPTY_EXP (DEC_VAR $6) $8 }
+                      | 'for' '(' ';' expression ';' variable_assignment ')' statement             { FOR_STMT EMPTY_DEC $4 (DEC_VAR $6) $8 }
+                      | 'for' '(' variable_declaration ';' expression ';' variable_assignment ')' statement    { FOR_STMT (DEC_VAR $3) $5 (DEC_VAR $7) $9 }
 return_statement      : 'return' expression ';'                                                       { AST.RETURN $2 }
 
-variable_declaration       : 'var' IDENTIFIER '=' expression ';'  { VAR_DEC_DEF $2 $4 }
-                           | 'var' IDENTIFIER ';'                 { VAR_DEC $2 }
-                           | IDENTIFIER '=' expression ';'        { VAR_DEF $1 $3 }
+variable_declaration_assignment       : variable_declaration                 { $1 }
+                                      | variable_assignment                  { $1 }
 
-class_declaration          : 'class' IDENTIFIER '{' methods '}'   { CLASS_DEC $2 (reverse $4) }
-                           | 'class' IDENTIFIER '<' IDENTIFIER '{' methods '}' { SUB_CLASS_DEC $2 $4 $6 }
+
+variable_declaration                  : 'var' IDENTIFIER '=' expression   { VAR_DEC_DEF $2 $4 }
+                                      | 'var' IDENTIFIER                  { VAR_DEC $2 }
+variable_assignment                   : IDENTIFIER '=' expression         { VAR_DEF $1 $3 }
+
+class_declaration          : 'class' IDENTIFIER '{' methods '}'   { CLASS_DEC $2 (map (DEC_FUNC) (reverse $4)) }
+                           | 'class' IDENTIFIER '<' IDENTIFIER '{' methods '}' { SUB_CLASS_DEC $2 $4 (map (DEC_FUNC) (reverse $6)) }
 methods                    : {- empty -}                          { [] }
                            | methods method_declaration           { $2 : $1 }
 
 function_declaration       : 'fun' IDENTIFIER '(' parameters ')' block_statement     { FUNC_DEC $2 (reverse $4) $6 }
+                           | 'fun' IDENTIFIER '(' ')' block_statement                { FUNC_DEC $2 [] $5 }
 method_declaration         : IDENTIFIER '(' parameters ')' block_statement           { METHOD_DEC $1 (reverse $3) $5 }
+                           | IDENTIFIER '(' ')' block_statement                      { METHOD_DEC $1 [] $4 }
 
 parameters                 : parameters ',' IDENTIFIER            { $3 : $1 }
-                           | {- empty -}                          { [] }
+                           | IDENTIFIER                           { [$1] }
 
 function_call  : IDENTIFIER '(' arguments ')'         { CALL $1 (reverse $3) }
                | function_call '(' arguments ')'      { CALL_MULTI $1 (reverse $3) }
@@ -129,7 +135,7 @@ method_chain   : method_chain '.' function_call      { (LINK_CALL $3) : $1 }
                | {- empty -}                          { [] }
 
 arguments      : arguments ',' expression             { $3 : $1 }
-               | {- empty -}                          { [] }
+               | expression                           { [$1] }
 
 expression     : literal        {EXP_LITERAL $1}
                | unary          {EXP_UNARY $1}
