@@ -1,10 +1,6 @@
 module AST where
 
 import qualified Data.Text as T
-import Lexer (Token)
-import qualified Data.Sequence as S
-import Data.Maybe
-import NativeFunctionTypes
 import Utils
 
 newtype PROGRAM = PROG [DECLARATION]
