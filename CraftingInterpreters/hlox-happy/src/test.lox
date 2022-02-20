@@ -56,3 +56,18 @@ var a=5; {var a = 3; a = a+1;} print a;
 
 
 class Breakfast {cook() {print \"Eggs a-fryin'!\";} serve(who) {print \"Enjoy your breakfast + \" + who + \".\";}}
+
+
+// together
+fun v(a) {
+    fun w() {print a;}
+    return w;
+}
+
+fun x(){
+    var y = v(5);
+    var z = v(4);
+    y();
+}
+
+// why should write out 5;

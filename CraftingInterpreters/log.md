@@ -6,6 +6,7 @@
     - Talk about Sequences and finger trees
     - Why not Vectors (mutability)
     - Why did I use strict instead of lazy -> again performace issues (list concatenation, backwards traversal, indexing... etc)
+    - Data.Set
 - Parser Types and Recursive Descent Parser
 - Error Handling
 - States (variables,scopes...) in a stateless side-effectless programming languages (will see how it turns out)
@@ -26,7 +27,8 @@ and will return a new value if you call it. But you have to call it with an (Int
 
 - Interesting stuff to talk about:
   - how conditionals, functions, blocks, environments are implemented
-  
+  - Closure is a environment inside an environment
+  - Why Arity check is in Eval (we only check ids in resolver, not the actual value, that only happens in Eval)
   
 - The structure seems weird. Haskell projects to look at for ideas:
   - Aura

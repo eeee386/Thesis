@@ -58,8 +58,8 @@ resolveDeclaration EMPTY_DEC meta = return meta
 resolveDeclaration x meta = return meta{declarations=x:declarations meta}
 
 resolveVarDeclaration :: VARIABLE_DECLARATION -> ResolverMeta -> IO ResolverMeta
-resolveVarDeclaration (VAR_DEC_DEF iden exp) meta = resolveExpression exp meta >>= checkIfDefinedForDeclarationAndDefinition iden (R_VAR_DEC_DEF iden)
-resolveVarDeclaration (VAR_DEC iden) meta = checkIfDefinedForDeclaration iden (R_VAR_DEC iden) meta
+resolveVarDeclaration (VAR_DEC_DEF iden exp) meta = resolveExpression exp meta >>= checkIfDefinedForDeclarationAndDefinition iden (R_VAR_DEC_DEF iden) (RC_VAR_DEC_DEF iden)
+resolveVarDeclaration (VAR_DEC iden) meta = checkIfDefinedForDeclaration iden (R_VAR_DEC iden) (RC_VAR_DEC iden) meta
 resolveVarDeclaration (VAR_DEF iden exp) meta = resolveExpression exp meta >>= checkIfDefinedForDefinition iden
 
 resolveFunctionDeclaration :: FUNCTION_DECLARATION -> ResolverMeta -> IO ResolverMeta
@@ -68,13 +68,14 @@ resolveFunctionDeclaration (METHOD_DEC iden params (BLOCK_STMT decs)) meta = res
 
 resolveFunctionDeclarationHelper :: TextType -> [PARAMETER] -> [DECLARATION] -> (TextType -> [PARAMETER] -> ResolverMeta -> ResolverMeta -> IO ResolverMeta) -> ResolverMeta -> IO ResolverMeta
 resolveFunctionDeclarationHelper iden params decs changer meta = do
-  newBlockMeta <- checkIfFunctionOrClassIsDefined iden meta >>= addBlockToMeta
+  newBlockMeta <- checkIfFunctionOrClassIsDefined iden meta >>= addBlockToMeta >>= addClosureToMeta
   let isUniqueParamNames = U.allUnique params
+  let updatedParams = handleParams params newBlockMeta 
   newMeta <- resolveDeclarations decs (updateResolverErrorsByPredicate isUniqueParamNames "Parameter names are not unique" (newBlockMeta{
                                        isInFunction = True
                                        , declarations=[]
   })) >>= reverseDeclarationsAndErrors
-  deleteBlockFromMeta newMeta >>= changer iden params meta
+  deleteBlockFromMeta newMeta >>= deleteClosureFromMeta >>= changer iden params meta
 
 functionMetaChanger :: TextType -> [PARAMETER] -> ResolverMeta -> ResolverMeta -> IO ResolverMeta
 functionMetaChanger iden params meta newMeta = updateCurrentVariableInMeta (newMeta{
@@ -172,7 +173,6 @@ handleBinaryExp fact left right meta = do
 handleCall :: TextType -> [ARGUMENT] -> ResolverMeta -> IO ResolverMeta
 handleCall iden args meta = do
   maybeId <- findIdInVariables iden meta
-  vals <- mapM HT.toList (resolverEnv meta)
   (newArgs, newResErrs) <- handleArguments args meta
   if isJust maybeId then
     return meta{
@@ -188,3 +188,7 @@ handleArguments args meta = do
     let newArgs = map newExpr newMetas
     let newResolverErrors = mconcat (map resolverErrors newMetas)
     return (newArgs, newResolverErrors)
+    
+handleParams :: [PARAMETER] -> ResolverMeta -> ResolverMeta
+handleParams (p:params) meta = handleParams params newMeta
+  where newMeta = meta{closure=updateClosure p (closure meta)}

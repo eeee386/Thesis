@@ -4,11 +4,15 @@ import AST
 import qualified Data.Sequence as S
 import NativeFunctionTypes
 import Utils
+import qualified Data.HashTable.IO as HT
+
 
 -- Types
 type Arity = Int
 type Name = TextType
 type ErrorMessage = TextType
+type Scope = HT.BasicHashTable TextType EVAL
+type Closure = [Scope]
 
 data EVAL = EVAL_NUMBER Double
           | EVAL_STRING TextType
@@ -17,10 +21,11 @@ data EVAL = EVAL_NUMBER Double
           | RUNTIME_ERROR ErrorMessage
           | SKIP_EVAL
           | DEC_EVAL Name EVAL ID
-          | FUNC_DEC_EVAL Name Arity [PARAMETER] STATEMENT
+          | FUNC_DEC_EVAL Name Arity [PARAMETER] STATEMENT Closure ID
           | NATIVE_FUNC_DEC_EVAL Name Arity [PARAMETER] NATIVE_FUNCTION_TYPES
           | RETURN_EVAL EVAL
-          deriving Eq
+          | BREAK_EVAL
+          | CONTINUE_EVAL
 
 
 instance Show EVAL where
@@ -31,7 +36,7 @@ instance Show EVAL where
   show (RUNTIME_ERROR x) = mconcat ["RuntimeError: ", show x]
   show (DEC_EVAL x y _) = mconcat [show x, " = ",show y]
   show SKIP_EVAL = "skip"
-  show (FUNC_DEC_EVAL iden arity params stmt) = mconcat ["Function ", show iden, ", arity: ", show arity, ", params: ", show params, ", statement: ", show stmt]
+  show (FUNC_DEC_EVAL iden arity params stmt _ _) = mconcat ["Function ", show iden, ", arity: ", show arity, ", params: ", show params, ", statement: ", show stmt]
   show (NATIVE_FUNC_DEC_EVAL iden arity params _) = mconcat ["<<native>> Function ", show iden, ", arity: ", show arity, ", params: ", show params]
   show (RETURN_EVAL x) = "return: " ++ show x
 
@@ -49,6 +54,17 @@ isRuntimeError _ = False
 isReturn :: EVAL -> Bool
 isReturn (RETURN_EVAL x) = True
 isReturn _ = False
+
+isBreak :: EVAL -> Bool
+isBreak BREAK_EVAL = True
+isBreak _ = False
+
+isContinue :: EVAL -> Bool
+isContinue CONTINUE_EVAL = True
+isContinue _ = False
+
+isBreakOrContinue :: EVAL -> Bool
+isBreakOrContinue eval = isBreak eval || isContinue eval
 
 getValueFromReturn :: EVAL -> EVAL
 getValueFromReturn (RETURN_EVAL x) = x

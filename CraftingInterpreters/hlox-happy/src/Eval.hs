@@ -2,6 +2,220 @@
 
 
 module Eval where
+import EvalTypes
+import EvalMeta
+import Utils
+import Data.Text as T
+import Data.Maybe
+import AST
+import Data.Vector as V
+import Data.List as L
+
+evalProgram :: PROGRAM -> V.Vector EVAL -> IO META
+evalProgram (PROG x) vector = createGlobalMeta vector >>= evalDeclarations x
+
+evalBlock :: [DECLARATION]  -> META -> IO META
+evalBlock = evalDeclarations
+
+evalDeclarations :: [DECLARATION] -> META -> IO META
+evalDeclarations decs meta = do
+  if L.null decs then do
+    return meta
+  else do
+    let (current:rest) = decs
+    newMeta <- evalDeclaration current meta
+    let ev = eval newMeta
+    if isReturn ev || isBreakOrContinue ev
+      then do return meta{eval=ev}
+      else do
+        if isRuntimeError ev
+          then do
+            return meta{eval=ev}
+          else do
+            evalDeclarations rest newMeta
+
+
+evalDeclaration :: DECLARATION -> META -> IO META
+evalDeclaration (DEC_STMT (PRINT_STMT x)) meta = do
+  newMeta <- evalExpression x meta
+  print (eval newMeta)
+  return newMeta
+evalDeclaration (DEC_STMT (EXPR_STMT x)) meta = do
+  evalExpression x meta
+evalDeclaration (R_DEC_VAR (R_VAR_DEC_DEF iden expr id)) meta = do
+  newMeta <- evalExpression expr meta
+  handleVarDefinition iden id newMeta
+evalDeclaration (R_DEC_VAR (R_VAR_DEC iden id)) meta = return meta{eval=DEC_EVAL iden EVAL_NIL id}
+evalDeclaration (R_DEC_VAR (R_VAR_DEF iden expr id)) meta = do
+  newMeta <- evalExpression expr meta
+  handleVarDefinition iden id newMeta
+
+evalDeclaration (R_DEC_VAR (RC_VAR_DEC_DEF iden expr)) meta = evalExpression expr meta >>= addUpdateScopeInMeta iden
+evalDeclaration (R_DEC_VAR (RC_VAR_DEC iden)) meta = addUpdateScopeInMeta iden meta{eval=EVAL_NIL}
+evalDeclaration (R_DEC_VAR (RC_VAR_DEF iden expr)) meta = evalExpression expr meta >>= addUpdateScopeInMeta iden
+
+evalDeclaration (DEC_STMT (BLOCK_STMT x)) meta = evalBlock x meta
+evalDeclaration (DEC_STMT (IF_STMT expr stmt)) meta = do
+  newMeta <- evalExpression expr meta
+  if maybeEvalTruthy (eval newMeta) == Just True then evalDeclaration (createDecFromStatement stmt) newMeta else return newMeta
+evalDeclaration (DEC_STMT (IF_ELSE_STMT expr stmt1 stmt2)) meta = do
+  newMeta  <- evalExpression expr meta
+  if
+    maybeEvalTruthy (eval newMeta) == Just True
+  then evalDeclaration (createDecFromStatement stmt1) newMeta
+  else evalDeclaration (createDecFromStatement stmt2) newMeta
+evalDeclaration (DEC_STMT (LOOP expr stmt)) meta = do
+  let lastEval = eval meta
+  newMeta <- evalExpression expr meta
+  if maybeEvalTruthy (eval newMeta) == Just True && not (isBreak lastEval) then do
+    evalDeclaration (createDecFromStatement stmt) newMeta >>= evalDeclaration (DEC_STMT (LOOP expr stmt))
+  else
+    return newMeta
+evalDeclaration (DEC_FUNC (R_FUNC_DEC iden params stmt id)) meta = do
+  let evalFunc = FUNC_DEC_EVAL iden (L.length params) params stmt (closure meta) id
+  newMeta <- addUpdateValueToMeta id evalFunc meta
+  return newMeta{eval=evalFunc}
+
+
+
+
+evalExpression :: EXPRESSION -> META -> IO META
+evalExpression (EXP_LITERAL (NUMBER x)) meta = return meta{eval=EVAL_NUMBER x}
+evalExpression (EXP_LITERAL (STRING x)) meta = return meta{eval=EVAL_STRING x}
+evalExpression (EXP_LITERAL FALSE) meta = return meta{eval=EVAL_BOOL False}
+evalExpression (EXP_LITERAL TRUE) meta = return meta{eval=EVAL_BOOL True}
+evalExpression (EXP_LITERAL NIL) meta = return meta{eval=EVAL_NIL}
+evalExpression (EXP_LITERAL (R_IDENTIFIER_REFERENCE _ id)) meta = do
+  val <- findValueInMeta id meta
+  return meta{eval=val}
+evalExpression (EXP_LITERAL (R_REFERENCE_IN_CLOSURE iden)) meta = do
+  val <- findValueInFunction iden meta
+  return meta{eval=val}
+
+evalExpression (EXP_GROUPING (GROUP x)) meta = evalExpression x meta
+
+evalExpression (EXP_UNARY (UNARY_MINUS x)) meta = do
+  newMeta <- evalExpression x meta
+  let num = maybeEvalNumber (eval newMeta)
+  if isJust num then return newMeta{eval=EVAL_NUMBER (-(fromJust num))} else return newMeta{eval=RUNTIME_ERROR "Unary minus can only be used on numbers"}
+evalExpression (EXP_UNARY (UNARY_NEGATE x)) meta = do
+  newMeta <- evalExpression x meta
+  let bool = maybeEvalTruthy (eval newMeta)
+  if isJust bool then return newMeta{eval=EVAL_BOOL (not (fromJust bool))} else return newMeta{eval=RUNTIME_ERROR "Can only negate truthy values (bool, string, number)"}
+
+evalExpression (EXP_BINARY (BIN_ADD left right)) meta = do
+  leftMeta <- evalExpression left meta
+  let evaledLeft = eval leftMeta
+  rightMeta <- evalExpression right leftMeta
+  let evaledRight = eval rightMeta
+  return (addHelper evaledLeft evaledRight rightMeta)
+evalExpression (EXP_BINARY (BIN_SUB left right)) meta = binaryNumericHelper left right EVAL_NUMBER (-) meta
+evalExpression (EXP_BINARY (BIN_MUL left right)) meta = binaryNumericHelper left right EVAL_NUMBER (*) meta
+evalExpression (EXP_BINARY (BIN_DIV left right)) meta = binaryNumericHelper left right EVAL_NUMBER (/) meta
+evalExpression (EXP_BINARY (BIN_COMP_LESS left right)) meta = binaryNumericHelper left right EVAL_BOOL (<) meta
+evalExpression (EXP_BINARY (BIN_COMP_LESS_EQ left right)) meta = binaryNumericHelper left right EVAL_BOOL (<=) meta
+evalExpression (EXP_BINARY (BIN_COMP_GREATER left right)) meta = binaryNumericHelper left right EVAL_BOOL (>) meta
+evalExpression (EXP_BINARY (BIN_COMP_GREATER_EQ left right)) meta = binaryNumericHelper left right EVAL_BOOL (>=) meta
+evalExpression (EXP_BINARY (BIN_EQ left right)) meta = binaryBoolHelper left right (createEquality id) meta
+evalExpression (EXP_BINARY (BIN_NOT_EQ left right)) meta = binaryBoolHelper left right (createEquality not) meta
+evalExpression (EXP_BINARY (BIN_AND left right)) meta = binaryBoolHelper left right createAnd meta
+evalExpression (EXP_BINARY (BIN_OR left right)) meta = binaryBoolHelper left right createOr meta
+
+evalExpression (EXP_TERNARY (TERNARY predi trueRes falseRes)) meta = evalExpression predi meta >>= evalTernary trueRes falseRes
+evalExpression (EXP_CALL (R_CALL call_iden args id)) meta = do
+  (FUNC_DEC_EVAL dec_iden arity params stmt clos id) <- findValueInMeta id meta
+  if arity /= L.length args then return meta{eval=RUNTIME_ERROR "Expression cannot be evaluated"} else do
+    updatedClosMeta <- addNewScopeToMeta meta
+    evaledArgsMetas <- Prelude.mapM (`evalExpression` updatedClosMeta) args
+    if L.any (isRuntimeError . eval) evaledArgsMetas then return meta{eval=fromJust (L.find isRuntimeError (L.map eval evaledArgsMetas))} else do
+      handleArgumentsEval params (L.map eval evaledArgsMetas) updatedClosMeta >>= evalDeclaration (createDecFromStatement stmt)
+      
+
+evalExpression _ meta = return meta{eval=RUNTIME_ERROR "Expression cannot be evaluated"}
+
+handleArgumentsEval :: [PARAMETER] -> [EVAL] ->  META -> IO META
+handleArgumentsEval (p:params) (e:evals) meta = do
+  newMeta <- addUpdateScopeInMetaWithEval p e meta
+  handleArgumentsEval params evals newMeta
+handleArgumentsEval [] [] meta = return meta
+-- Helpers for operations
+maybeEvalNumber :: EVAL -> Maybe Double
+maybeEvalNumber (EVAL_NUMBER x) = Just x
+maybeEvalNumber _ = Nothing
+
+maybeEvalTruthy :: EVAL -> Maybe Bool
+maybeEvalTruthy (EVAL_BOOL False) = Just False
+maybeEvalTruthy (EVAL_BOOL True) = Just True
+maybeEvalTruthy (EVAL_NUMBER _) = Just True
+maybeEvalTruthy (EVAL_STRING _) = Just True
+maybeEvalTruthy _ = Nothing
+
+maybeEvalString :: EVAL -> Maybe TextType
+maybeEvalString (EVAL_STRING x) = Just x
+maybeEvalString _ = Nothing
+
+concatTwoString :: TextType -> TextType -> EVAL
+concatTwoString l r = EVAL_STRING (T.concat [l,r])
+
+createMathOp :: (a -> EVAL)-> Maybe Double -> Maybe Double -> (Double -> Double -> a)  -> EVAL
+createMathOp x l r f = if isJust l && isJust r then x (f (fromJust l) (fromJust r)) else RUNTIME_ERROR "Operands must be numbers"
+
+createOr :: EVAL -> EVAL -> EVAL
+createOr l r = if maybeEvalTruthy l == Just True then l else r
+
+createAnd :: EVAL -> EVAL -> EVAL
+createAnd l r = if maybeEvalTruthy l == Just False then l else r
+
+equalityHelper :: (Eq a) =>  (Bool -> Bool) -> a -> a -> EVAL
+equalityHelper ch l r  = if l == r then EVAL_BOOL (ch True) else EVAL_BOOL (ch False)
+
+createEquality :: (Bool -> Bool) -> EVAL -> EVAL -> EVAL
+createEquality ch (EVAL_NUMBER l) (EVAL_NUMBER r) = equalityHelper ch l r
+createEquality ch (EVAL_STRING l) (EVAL_STRING r) = equalityHelper ch l r
+createEquality ch (EVAL_BOOL l) (EVAL_BOOL r) = equalityHelper ch l r
+createEquality ch EVAL_NIL EVAL_NIL = EVAL_BOOL (ch True)
+createEquality ch _ _ = EVAL_BOOL (ch False)
+
+addHelper :: EVAL -> EVAL -> META -> META
+addHelper left right meta
+  | isJust maybeLeftNum && isJust maybeRightNum = meta{eval=EVAL_NUMBER (fromJust maybeLeftNum + fromJust maybeRightNum)}
+  | isJust maybeLeftString && isJust maybeRightString = meta{eval=concatTwoString (fromJust maybeLeftString) (fromJust maybeRightString)}
+  | otherwise = meta{eval=RUNTIME_ERROR "Type error: use only strings or only numbers as operands"}
+  where maybeLeftNum = maybeEvalNumber left
+        maybeRightNum = maybeEvalNumber right
+        maybeLeftString = maybeEvalString left
+        maybeRightString = maybeEvalString right
+
+binaryNumericHelper :: EXPRESSION -> EXPRESSION -> (a -> EVAL) -> (Double -> Double -> a) -> META -> IO META
+binaryNumericHelper left right fact op meta = do
+  leftMeta <- evalExpression left meta
+  let maybeLeftNum = maybeEvalNumber(eval leftMeta)
+  rightMeta <- evalExpression right leftMeta
+  let maybeRightNum = maybeEvalNumber (eval rightMeta)
+  return rightMeta{eval=createMathOp fact maybeLeftNum maybeRightNum op}
+
+binaryBoolHelper :: EXPRESSION -> EXPRESSION -> (EVAL -> EVAL -> EVAL) ->  META -> IO META
+binaryBoolHelper left right handler meta = do
+  leftMeta <- evalExpression left meta
+  let leftEval = eval leftMeta
+  rightMeta <- evalExpression right leftMeta
+  let rightEval = eval rightMeta
+  return rightMeta{eval=handler leftEval rightEval}
+
+
+evalTernary :: EXPRESSION -> EXPRESSION -> META -> IO META
+evalTernary trueRes falseRes meta
+  | preppedPred == Just True = evalExpression trueRes meta
+  | preppedPred == Just False = evalExpression falseRes meta
+  | otherwise = return meta{eval=RUNTIME_ERROR "Ternary operator failed"}
+  where preppedPred = maybeEvalTruthy (eval meta)
+
+
+-- Variable helpers
+handleVarDefinition :: TextType -> ID -> META -> IO META
+handleVarDefinition iden id meta = do
+  newMeta <- addUpdateValueToMeta id (eval meta) meta
+  return newMeta{eval=DEC_EVAL iden (eval newMeta) id}
 {-
 import AST
 import qualified Data.Text as T

@@ -53,12 +53,22 @@ data RESOLVED_CLASS_DECLARATION = R_CLASS_DEC IDENTIFIER [DECLARATION] ID | R_SU
 instance Show RESOLVED_CLASS_DECLARATION where
   show (R_CLASS_DEC i methods _) = mconcat ["class name: ", show i, "  methods: ", show methods]
   show (R_SUB_CLASS_DEC iden parentIden methods _ _) = mconcat ["class name: ", show iden, ", parent: ", show parentIden, ",  methods: ", show methods]
-  
-data RESOLVED_VARIABLE_DECLARATION = R_VAR_DEC_DEF IDENTIFIER EXPRESSION ID | R_VAR_DEC IDENTIFIER ID | R_VAR_DEF IDENTIFIER EXPRESSION ID deriving Eq
+
+-- RC: in closure
+data RESOLVED_VARIABLE_DECLARATION = R_VAR_DEC_DEF IDENTIFIER EXPRESSION ID 
+                                   | R_VAR_DEC IDENTIFIER ID 
+                                   | R_VAR_DEF IDENTIFIER EXPRESSION ID 
+                                   | RC_VAR_DEC_DEF IDENTIFIER EXPRESSION
+                                   | RC_VAR_DEC IDENTIFIER
+                                   | RC_VAR_DEF IDENTIFIER EXPRESSION
+                                   deriving Eq
 instance Show RESOLVED_VARIABLE_DECLARATION where
   show (R_VAR_DEC_DEF iden expr _) = mconcat ["var", " ", show iden, " = ", show expr]
   show (R_VAR_DEC iden _) = mconcat ["var", " ", show iden]
   show (R_VAR_DEF iden expr _) = mconcat [show iden, " = ", show expr]
+  show (RC_VAR_DEC_DEF iden expr) = mconcat ["var", " ", show iden, " = ", show expr]
+  show (RC_VAR_DEC iden) = mconcat ["var", " ", show iden]
+  show (RC_VAR_DEF iden expr) = mconcat [show iden, " = ", show expr]
 
 
 
@@ -115,7 +125,7 @@ instance Show EXPRESSION where
   show EXP_THIS = "this"
   show EMPTY_EXP = ""
 
-data LITERAL = NUMBER Double | STRING TextType | TRUE | FALSE | NIL | IDENTIFIER_REFERENCE TextType | R_IDENTIFIER_REFERENCE TextType ID deriving Eq
+data LITERAL = NUMBER Double | STRING TextType | TRUE | FALSE | NIL | IDENTIFIER_REFERENCE TextType | R_IDENTIFIER_REFERENCE TextType ID | R_REFERENCE_IN_CLOSURE TextType deriving Eq
 instance Show LITERAL where 
   show (NUMBER x) = show x
   show (STRING x) = T.unpack (T.concat [T.pack "\"", x, T.pack "\""])
@@ -124,6 +134,7 @@ instance Show LITERAL where
   show NIL = "nil"
   show (IDENTIFIER_REFERENCE x) = show x
   show (R_IDENTIFIER_REFERENCE x id) = show x ++ show id
+  show (R_REFERENCE_IN_CLOSURE x) = show x
 
 
 
@@ -195,3 +206,6 @@ instance Show TERNARY where
 getIdentifierFromMethod :: DECLARATION -> TextType
 getIdentifierFromMethod (DEC_FUNC (METHOD_DEC iden _ _)) = iden
 getIdentifierFromMethod _ = T.pack ""
+
+createDecFromStatement :: STATEMENT -> DECLARATION
+createDecFromStatement = DEC_STMT

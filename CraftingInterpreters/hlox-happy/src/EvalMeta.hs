@@ -1,6 +1,3 @@
-module EvalMeta where
-
-{-
 {-# LANGUAGE OverloadedStrings #-}
 
 module EvalMeta where
@@ -17,24 +14,20 @@ import qualified Data.Text as T
 import Data.Maybe
 import Data.List
 
-type Scope = HT.BasicHashTable T.Text EVAL
-
-type Closure = Stack Scope
-
 addNewScopeToClosure :: Closure -> IO Closure
 addNewScopeToClosure closure = do
   scope <- HT.new
-  return (push scope closure)
+  return (scope:closure)
 
 deleteScopeFromClosure :: Closure -> Closure
 deleteScopeFromClosure resEnv = newResEnv
-  where (_,newResEnv) = pop resEnv
+  where (_:newResEnv) = resEnv
 
 updateScopeInClosure :: T.Text -> EVAL -> Closure -> IO Closure
 updateScopeInClosure iden eval closure  = do
-  let (last, delClos) = pop closure
+  let (last:delClos) = closure
   HT.insert last iden eval
-  return (push last delClos)
+  return (last:delClos)
 
 getEvalByIden :: T.Text -> Scope -> IO (Maybe EVAL)
 getEvalByIden iden scope = HT.lookup scope iden
@@ -42,39 +35,40 @@ getEvalByIden iden scope = HT.lookup scope iden
 
 -- META
 data META = META {
-  isInFunction :: Bool
-  , isInLoop :: Bool
-  , variableValues :: V.Vector EVAL
-  , globalVariableValues :: V.Vector EVAL
+  variableValues :: V.Vector EVAL
   , closure :: Closure
+  , eval :: EVAL
                  } deriving Show
 
 
 createGlobalMeta ::  V.Vector EVAL -> IO META
 createGlobalMeta vector = do
-  return META { isInFunction=False, isInLoop=True, variableValues=vector, globalVariableValues=createGlobalVector, closure=createStack }
+  return META { variableValues=vector, EvalMeta.closure=[], eval=SKIP_EVAL }
 
 findValueInMeta :: ID -> META -> IO EVAL
 findValueInMeta id meta = return (variableValues meta V.! id)
-findValueInMeta id meta = return (globalVariableValues meta V.! id)
 
-findValueInFunction :: T.Text -> ID -> META -> IO EVAL
-findValueInFunction iden id meta = do
-  values <- mapM (getEvalByIden iden) (closure meta)
+findValueInFunction :: T.Text -> META -> IO EVAL
+findValueInFunction iden meta = do
+  values <- mapM (getEvalByIden iden) (EvalMeta.closure meta)
   let val = find isJust values
-  if isJust val then return (fromJust (fromJust val)) else do
-     findValueInMeta id meta
+  return (fromJust (fromJust val))
+     
 
 addUpdateValueToMeta :: ID -> EVAL -> META -> IO META
-addUpdateValueToMeta id eval meta = return meta{variableValues=V.update (variableValues meta) (V.singleton (id, eval))}
+addUpdateValueToMeta id ev meta = return meta{variableValues=V.update (variableValues meta) (V.singleton (id, ev))}
 
-addUpdateScopeInMeta :: T.Text -> EVAL -> META -> IO META
-addUpdateScopeInMeta iden eval meta = do
-  clos <- updateScopeInClosure iden eval (closure meta)
-  return meta{closure=clos}
+addUpdateScopeInMeta :: T.Text -> META -> IO META
+addUpdateScopeInMeta iden meta = do
+  clos <- updateScopeInClosure iden (eval meta) (EvalMeta.closure meta)
+  return meta{EvalMeta.closure=clos}
+  
+addUpdateScopeInMetaWithEval :: T.Text -> EVAL -> META -> IO META
+addUpdateScopeInMetaWithEval iden eval meta = do
+  clos <- updateScopeInClosure iden eval (EvalMeta.closure meta)
+  return meta{EvalMeta.closure=clos}
 
 addNewScopeToMeta :: META -> IO META
 addNewScopeToMeta meta = do
-  clos <- addNewScopeToClosure (closure meta)
-  return meta{closure=clos}
--}
+  clos <- addNewScopeToClosure (EvalMeta.closure meta)
+  return meta{EvalMeta.closure=clos}
