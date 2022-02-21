@@ -33,12 +33,14 @@ instance Show VARIABLE_DECLARATION where
   
 data FUNCTION_DECLARATION = FUNC_DEC IDENTIFIER [PARAMETER] STATEMENT
                           | R_FUNC_DEC IDENTIFIER [PARAMETER] STATEMENT ID
+                          | RC_FUNC_DEC IDENTIFIER [PARAMETER] STATEMENT
                           | METHOD_DEC IDENTIFIER [PARAMETER] STATEMENT
                           deriving Eq
 
 instance Show FUNCTION_DECLARATION where
   show (FUNC_DEC i p s) = mconcat ["function name: ", show i,"params: " , show p, "statements: ", show s]
   show (R_FUNC_DEC i p s _) = mconcat ["function name: ", show i,"params: " , show p, "statements: ", show s]
+  show (RC_FUNC_DEC i p s) = mconcat ["function name: ", show i,"params: " , show p, "statements: ", show s]
   show (METHOD_DEC i p s) = mconcat ["method name: ", show i,"params: " , show p, "statements: ", show s]
 
 
@@ -49,10 +51,17 @@ instance Show CLASS_DECLARATION where
   show (CLASS_DEC i methods) = mconcat ["class name: ", show i, "  methods: ", show methods]
   show (SUB_CLASS_DEC iden parentIden methods) = mconcat ["class name: ", show iden, ", parent: ", show parentIden, ",  methods: ", show methods]
 
-data RESOLVED_CLASS_DECLARATION = R_CLASS_DEC IDENTIFIER [DECLARATION] ID | R_SUB_CLASS_DEC IDENTIFIER IDENTIFIER [DECLARATION] ID PARENT_ID deriving Eq
+-- I keep the PARENT_ID on the RC_SUB_CLASS as it can be child of a class not in the closure
+data RESOLVED_CLASS_DECLARATION = R_CLASS_DEC IDENTIFIER [DECLARATION] ID 
+                                | R_SUB_CLASS_DEC IDENTIFIER IDENTIFIER [DECLARATION] ID PARENT_ID
+                                | RC_CLASS_DEC IDENTIFIER [DECLARATION] 
+                                | RC_SUB_CLASS_DEC IDENTIFIER IDENTIFIER [DECLARATION] PARENT_ID 
+                                deriving Eq
 instance Show RESOLVED_CLASS_DECLARATION where
   show (R_CLASS_DEC i methods _) = mconcat ["class name: ", show i, "  methods: ", show methods]
   show (R_SUB_CLASS_DEC iden parentIden methods _ _) = mconcat ["class name: ", show iden, ", parent: ", show parentIden, ",  methods: ", show methods]
+  show (RC_CLASS_DEC i methods) = mconcat ["class name: ", show i, "  methods: ", show methods]
+  show (RC_SUB_CLASS_DEC iden parentIden methods _) = mconcat ["class name: ", show iden, ", parent: ", show parentIden, ",  methods: ", show methods]
 
 -- RC: in closure
 data RESOLVED_VARIABLE_DECLARATION = R_VAR_DEC_DEF IDENTIFIER EXPRESSION ID 
@@ -144,9 +153,11 @@ instance Show GROUPING where
 
 type ARGUMENT = EXPRESSION
 
-data CALL = CALL IDENTIFIER [ARGUMENT] | R_CALL IDENTIFIER [ARGUMENT] ID | CALL_MULTI CALL [ARGUMENT] deriving Eq
+data CALL = CALL IDENTIFIER [ARGUMENT] | R_CALL IDENTIFIER [ARGUMENT] ID | RC_CALL IDENTIFIER [ARGUMENT] | CALL_MULTI CALL [ARGUMENT] deriving Eq
 instance Show CALL where
   show (CALL lit args) = mconcat [show lit, "(", show args, ")"]
+  show (R_CALL lit args _) = mconcat [show lit, "(", show args, ")"]
+  show (RC_CALL lit args) = mconcat [show lit, "(", show args, ")"]
   show (CALL_MULTI call args) = mconcat [ show call, "(", show args, ")"]
   
 -- CHAIN data structure: list but the first and last element CAN be IDENTIFIERs, and this and super can only be first 

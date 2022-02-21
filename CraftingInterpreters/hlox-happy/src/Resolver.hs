@@ -78,10 +78,17 @@ resolveFunctionDeclarationHelper iden params decs changer meta = do
   deleteBlockFromMeta newMeta >>= deleteClosureFromMeta >>= changer iden params meta
 
 functionMetaChanger :: TextType -> [PARAMETER] -> ResolverMeta -> ResolverMeta -> IO ResolverMeta
-functionMetaChanger iden params meta newMeta = updateCurrentVariableInMeta (newMeta{
-                                              declarations=DEC_FUNC (R_FUNC_DEC iden params (BLOCK_STMT (declarations newMeta))(currentVariableId meta)):declarations meta
-                                              , isInFunction = isInFunction meta
-                                            })
+functionMetaChanger iden params meta newMeta = do
+  if isInFunction meta then do
+    return newMeta{
+      declarations=DEC_FUNC (RC_FUNC_DEC iden params (BLOCK_STMT (declarations newMeta))):declarations meta
+      , isInFunction = isInFunction meta
+    }
+  else do   
+    updateCurrentVariableInMeta (newMeta{
+      declarations=DEC_FUNC (R_FUNC_DEC iden params (BLOCK_STMT (declarations newMeta))(currentVariableId meta)):declarations meta
+      , isInFunction = isInFunction meta
+    })
 
 methodMetaChanger :: TextType -> [PARAMETER] -> ResolverMeta -> ResolverMeta -> IO ResolverMeta
 methodMetaChanger iden params meta newMeta = return newMeta{declarations=DEC_FUNC (METHOD_DEC iden params (BLOCK_STMT (declarations newMeta))):declarations meta}
@@ -114,7 +121,7 @@ resolveBlock decs meta = do
 
 
 resolveExpression :: EXPRESSION -> ResolverMeta -> IO ResolverMeta
-resolveExpression (EXP_LITERAL (IDENTIFIER_REFERENCE iden)) meta = checkIfReferenceForDefinition iden meta
+resolveExpression (EXP_LITERAL (IDENTIFIER_REFERENCE iden)) meta = checkIfReferenceForDefinition iden (EXP_LITERAL . R_IDENTIFIER_REFERENCE iden) (EXP_LITERAL (R_REFERENCE_IN_CLOSURE iden)) meta
 resolveExpression (EXP_LITERAL x) meta = return meta{newExpr= EXP_LITERAL x}
 resolveExpression (EXP_UNARY (UNARY_NEGATE exp)) meta = handleUnary UNARY_NEGATE exp meta
 resolveExpression (EXP_UNARY (UNARY_MINUS exp)) meta = handleUnary UNARY_MINUS exp meta
@@ -170,17 +177,11 @@ handleBinaryExp fact left right meta = do
   let rightExpr = newExpr rightMeta
   return meta{newExpr=EXP_BINARY (fact leftExpr rightExpr) }
 
+-- TODO: add check that it really calls a function, and relagate the arity check here
 handleCall :: TextType -> [ARGUMENT] -> ResolverMeta -> IO ResolverMeta
 handleCall iden args meta = do
-  maybeId <- findIdInVariables iden meta
   (newArgs, newResErrs) <- handleArguments args meta
-  if isJust maybeId then
-    return meta{
-      newExpr=EXP_CALL (R_CALL iden newArgs (fromJust maybeId))
-      , resolverErrors= mconcat [newResErrs, (resolverErrors meta)]
-    }
-  else
-    return meta{resolverErrors="Value is not in scope":resolverErrors meta}
+  checkIfReferenceForDefinition iden (EXP_CALL . R_CALL iden newArgs) (EXP_CALL (RC_CALL iden newArgs)) meta{resolverErrors=mconcat [newResErrs, resolverErrors meta]}
 
 handleArguments :: [ARGUMENT] -> ResolverMeta -> IO ([ARGUMENT], [TextType])
 handleArguments args meta = do

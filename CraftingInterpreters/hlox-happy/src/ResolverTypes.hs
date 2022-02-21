@@ -152,29 +152,32 @@ checkIfDefinedForDefinition iden meta = do
         , declarations=R_DEC_VAR (R_VAR_DEF iden exp (-1)):declarations meta
       }
 
-checkIfReferenceForDefinition :: TextType -> ResolverMeta -> IO ResolverMeta
-checkIfReferenceForDefinition iden meta = do
+-- Here I only check but I don't create it
+checkIfReferenceForDefinition :: TextType -> (Int -> EXPRESSION) -> EXPRESSION -> ResolverMeta -> IO ResolverMeta
+checkIfReferenceForDefinition iden factExp funcExp meta = do
   if isInFunction meta && any ((== True) . member iden) (closure meta) then do
-    return meta{newExpr=EXP_LITERAL (R_REFERENCE_IN_CLOSURE iden)}
+    return meta{closure=updateClosure iden (closure meta)}
   else do
     maybeId <- findIdInVariables iden meta
     if isJust maybeId then
-      return meta{newExpr=EXP_LITERAL (R_IDENTIFIER_REFERENCE iden (fromJust maybeId))}
+      return meta{newExpr=factExp (fromJust maybeId)}
     else do
       return meta{
         resolverErrors="Variable is not in scope":resolverErrors meta
-        , newExpr=EXP_LITERAL (R_IDENTIFIER_REFERENCE iden (-1))}
+        , newExpr=factExp (-1)}
   
 
--- I don't check is InFunction for functions and classes because their declarations cannot be rewritten
 checkIfFunctionOrClassIsDefined :: TextType -> ResolverMeta -> IO ResolverMeta
-checkIfFunctionOrClassIsDefined iden meta = do  
-  let (currentResEnv:_) = resolverEnv meta
-  maybeId <- getIdOfIden iden currentResEnv
-  if isNothing maybeId then do
-    updateBlockInMeta (currentVariableId meta) iden meta
-  else
-    return meta{resolverErrors="Variable already declared in scope":resolverErrors meta}
+checkIfFunctionOrClassIsDefined iden meta = do
+  if isInFunction meta && any ((== True) . member iden) (closure meta) then do
+    return meta{newExpr=}
+  else do
+    let (currentResEnv:_) = resolverEnv meta
+    maybeId <- getIdOfIden iden currentResEnv
+    if isNothing maybeId then do
+      updateBlockInMeta (currentVariableId meta) iden meta
+    else
+      return meta{resolverErrors="Variable already declared in scope":resolverErrors meta}
     
 updateResolverErrorsByPredicate :: Bool -> TextType -> ResolverMeta -> ResolverMeta
 updateResolverErrorsByPredicate predicate message meta = meta{resolverErrors=if predicate then (resolverErrors meta) else message:resolverErrors meta}

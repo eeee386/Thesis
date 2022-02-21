@@ -59,6 +59,7 @@ class Breakfast {cook() {print \"Eggs a-fryin'!\";} serve(who) {print \"Enjoy yo
 
 
 // together
+// Function declarations were originally ID based but realized this edge case, where I realized the z would redeclare w and overwrite y's w declaration
 fun v(a) {
     fun w() {print a;}
     return w;
@@ -70,4 +71,21 @@ fun x(){
     y();
 }
 
-// why should write out 5;
+// w should write out 5;
+
+
+//
+fun a(b, c){
+    class Animal{
+        hello() {
+          print b;
+        }
+    }
+    return new Animal;
+}
+//
+
+//
+var a;
+a();
+//

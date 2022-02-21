@@ -122,22 +122,33 @@ evalExpression (EXP_BINARY (BIN_AND left right)) meta = binaryBoolHelper left ri
 evalExpression (EXP_BINARY (BIN_OR left right)) meta = binaryBoolHelper left right createOr meta
 
 evalExpression (EXP_TERNARY (TERNARY predi trueRes falseRes)) meta = evalExpression predi meta >>= evalTernary trueRes falseRes
-evalExpression (EXP_CALL (R_CALL call_iden args id)) meta = do
-  (FUNC_DEC_EVAL dec_iden arity params stmt clos id) <- findValueInMeta id meta
+evalExpression (EXP_CALL (R_CALL _ args id)) meta = handleCallEval args (findValueInMeta id) meta
+evalExpression (EXP_CALL (RC_CALL call_iden args)) meta = handleCallEval args (findValueInFunction call_iden) meta
+evalExpression (EXP_CALL (CALL_MULTI call args)) meta = evalExpression (EXP_CALL call) meta >>= handleCallEval args multiCallGetFunc
+
+      
+
+evalExpression _ meta = return meta{eval=RUNTIME_ERROR "Expression cannot be evaluated"}
+
+handleCallEval :: [ARGUMENT] -> (META -> IO EVAL) -> META -> IO META
+handleCallEval args findFunc meta = do
+  (FUNC_DEC_EVAL dec_iden arity params stmt clos _) <- findFunc meta
   if arity /= L.length args then return meta{eval=RUNTIME_ERROR "Expression cannot be evaluated"} else do
     updatedClosMeta <- addNewScopeToMeta meta
     evaledArgsMetas <- Prelude.mapM (`evalExpression` updatedClosMeta) args
     if L.any (isRuntimeError . eval) evaledArgsMetas then return meta{eval=fromJust (L.find isRuntimeError (L.map eval evaledArgsMetas))} else do
       handleArgumentsEval params (L.map eval evaledArgsMetas) updatedClosMeta >>= evalDeclaration (createDecFromStatement stmt)
       
-
-evalExpression _ meta = return meta{eval=RUNTIME_ERROR "Expression cannot be evaluated"}
+multiCallGetFunc :: META -> IO EVAL
+multiCallGetFunc meta = return (eval meta)  
 
 handleArgumentsEval :: [PARAMETER] -> [EVAL] ->  META -> IO META
 handleArgumentsEval (p:params) (e:evals) meta = do
   newMeta <- addUpdateScopeInMetaWithEval p e meta
   handleArgumentsEval params evals newMeta
 handleArgumentsEval [] [] meta = return meta
+
+
 -- Helpers for operations
 maybeEvalNumber :: EVAL -> Maybe Double
 maybeEvalNumber (EVAL_NUMBER x) = Just x
