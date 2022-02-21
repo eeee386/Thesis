@@ -75,6 +75,10 @@ evalDeclaration (DEC_FUNC (R_FUNC_DEC iden params stmt id)) meta = do
   let evalFunc = FUNC_DEC_EVAL iden (L.length params) params stmt (closure meta) id
   newMeta <- addUpdateValueToMeta id evalFunc meta
   return newMeta{eval=evalFunc}
+evalDeclaration (DEC_FUNC (RC_FUNC_DEC iden params stmt)) meta = do
+  let evalFunc = FUNC_DEC_EVAL iden (L.length params) params stmt (closure meta) id
+  newMeta <- addUpdateScopeInMeta iden meta
+  return newMeta{eval=evalFunc}
 
 
 
