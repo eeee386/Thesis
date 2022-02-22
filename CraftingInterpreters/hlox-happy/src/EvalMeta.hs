@@ -20,8 +20,8 @@ addNewScopeToClosure closure = do
   return (scope:closure)
 
 deleteScopeFromClosure :: Closure -> Closure
-deleteScopeFromClosure resEnv = newResEnv
-  where (_:newResEnv) = resEnv
+deleteScopeFromClosure closure = newClosure
+  where (_:newClosure) = closure
 
 updateScopeInClosure :: T.Text -> EVAL -> Closure -> IO Closure
 updateScopeInClosure iden eval closure  = do
@@ -55,8 +55,8 @@ findValueInFunction iden meta = do
   return (fromJust (fromJust val))
      
 
-addUpdateValueToMeta :: ID -> EVAL -> META -> IO META
-addUpdateValueToMeta id ev meta = return meta{variableValues=V.update (variableValues meta) (V.singleton (id, ev))}
+addUpdateValueToMeta :: ID -> META -> IO META
+addUpdateValueToMeta id meta = return meta{variableValues=V.update (variableValues meta) (V.singleton (id, eval meta))}
 
 addUpdateScopeInMeta :: T.Text -> META -> IO META
 addUpdateScopeInMeta iden meta = do
@@ -72,3 +72,14 @@ addNewScopeToMeta :: META -> IO META
 addNewScopeToMeta meta = do
   clos <- addNewScopeToClosure (EvalMeta.closure meta)
   return meta{EvalMeta.closure=clos}
+
+deleteScopeFromMeta :: META -> IO META
+deleteScopeFromMeta meta = do
+    let clos = deleteScopeFromClosure (EvalMeta.closure meta)
+    return meta{EvalMeta.closure=clos}
+
+addSavedClosure :: Closure -> META -> IO META
+addSavedClosure clos meta = return meta{EvalMeta.closure=mconcat [clos, EvalMeta.closure meta]}
+
+deleteSavedClosure :: Int -> META -> IO META
+deleteSavedClosure numberOfClos meta = return meta{EvalMeta.closure= drop numberOfClos (EvalMeta.closure meta)}

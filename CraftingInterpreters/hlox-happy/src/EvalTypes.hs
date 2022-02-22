@@ -10,6 +10,7 @@ import qualified Data.HashTable.IO as HT
 -- Types
 type Arity = Int
 type Name = TextType
+type ParentName = TextType
 type ErrorMessage = TextType
 type Scope = HT.BasicHashTable TextType EVAL
 type Closure = [Scope]
@@ -23,6 +24,8 @@ data EVAL = EVAL_NUMBER Double
           | DEC_EVAL Name EVAL ID
           | FUNC_DEC_EVAL Name Arity [PARAMETER] STATEMENT Closure ID
           | NATIVE_FUNC_DEC_EVAL Name Arity [PARAMETER] NATIVE_FUNCTION_TYPES
+          | CLASS_DEC_EVAL Name [EVAL] Closure ID
+          | SUB_CLASS_DEC_EVAL Name ParentName [EVAL] Closure ID PARENT_ID
           | RETURN_EVAL EVAL
           | BREAK_EVAL
           | CONTINUE_EVAL

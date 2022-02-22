@@ -71,17 +71,36 @@ evalDeclaration (DEC_STMT (LOOP expr stmt)) meta = do
     evalDeclaration (createDecFromStatement stmt) newMeta >>= evalDeclaration (DEC_STMT (LOOP expr stmt))
   else
     return newMeta
-evalDeclaration (DEC_FUNC (R_FUNC_DEC iden params stmt id)) meta = do
-  let evalFunc = FUNC_DEC_EVAL iden (L.length params) params stmt (closure meta) id
-  newMeta <- addUpdateValueToMeta id evalFunc meta
-  return newMeta{eval=evalFunc}
-evalDeclaration (DEC_FUNC (RC_FUNC_DEC iden params stmt)) meta = do
-  let evalFunc = FUNC_DEC_EVAL iden (L.length params) params stmt (closure meta) id
-  newMeta <- addUpdateScopeInMeta iden meta
-  return newMeta{eval=evalFunc}
+-- closure meta will be an empty list, so it could be an [] as well
+evalDeclaration (DEC_FUNC (R_FUNC_DEC iden params stmt id)) meta = functionDecEvalHelper (addUpdateValueToMeta id) iden params stmt id meta
+evalDeclaration (DEC_FUNC (RC_FUNC_DEC iden params stmt)) meta = functionDecEvalHelper (addUpdateScopeInMeta iden) iden params stmt (-1) meta
+evalDeclaration (DEC_FUNC (METHOD_DEC iden params stmt)) meta = functionDecEvalHelper (addUpdateScopeInMeta iden) iden params stmt (-1) meta
+evalDeclaration (R_DEC_CLASS (R_CLASS_DEC iden decs id)) meta = do
+  (evals, newMeta) <- classMethodsEvalHelper decs [] meta
+  addUpdateValueToMeta id newMeta{eval=CLASS_DEC_EVAL iden evals [] id}
+evalDeclaration (R_DEC_CLASS (RC_CLASS_DEC iden decs)) meta = do
+  (evals, newMeta) <- classMethodsEvalHelper decs [] meta
+  addUpdateScopeInMeta iden newMeta{eval=CLASS_DEC_EVAL iden evals (closure meta) (-1)}
+evalDeclaration (R_DEC_CLASS (R_SUB_CLASS_DEC iden parentIden decs id parentId)) meta = do
+  (evals, newMeta) <- classMethodsEvalHelper decs [] meta
+  addUpdateValueToMeta id newMeta{eval=SUB_CLASS_DEC_EVAL iden parentIden evals (closure meta) id parentId}
+evalDeclaration (R_DEC_CLASS (RC_SUB_CLASS_DEC iden parentIden decs parentId)) meta = do
+  (evals, newMeta) <- classMethodsEvalHelper decs [] meta
+  addUpdateScopeInMeta iden newMeta{eval=SUB_CLASS_DEC_EVAL iden parentIden evals (closure meta) (-1) parentId}
 
 
+classMethodsEvalHelper :: [DECLARATION] -> [EVAL] -> META -> IO ([EVAL], META)
+classMethodsEvalHelper (dec:decs) evals meta = do
+  newMeta <- evalDeclaration dec meta
+  let newEval = eval newMeta   
+  classMethodsEvalHelper decs (newEval:evals) newMeta
+classMethodsEvalHelper [] evals meta = return (evals, meta)
 
+functionDecEvalHelper :: (META -> IO META) -> TextType -> [PARAMETER] -> STATEMENT -> ID -> META -> IO META
+functionDecEvalHelper addUpdateFunc iden params stmt id meta = do
+    let evalFunc = FUNC_DEC_EVAL iden (L.length params) params stmt (closure meta) id
+    newMeta <- addUpdateFunc meta
+    return newMeta{eval=evalFunc}
 
 evalExpression :: EXPRESSION -> META -> IO META
 evalExpression (EXP_LITERAL (NUMBER x)) meta = return meta{eval=EVAL_NUMBER x}
@@ -134,15 +153,36 @@ evalExpression (EXP_CALL (CALL_MULTI call args)) meta = evalExpression (EXP_CALL
 
 evalExpression _ meta = return meta{eval=RUNTIME_ERROR "Expression cannot be evaluated"}
 
+
+-- Resolver already adds the init function to the  
 handleCallEval :: [ARGUMENT] -> (META -> IO EVAL) -> META -> IO META
-handleCallEval args findFunc meta = do
-  (FUNC_DEC_EVAL dec_iden arity params stmt clos _) <- findFunc meta
-  if arity /= L.length args then return meta{eval=RUNTIME_ERROR "Expression cannot be evaluated"} else do
-    updatedClosMeta <- addNewScopeToMeta meta
+handleCallEval args findDec meta = do
+  ev <- findDec meta
+  case ev of 
+    FUNC_DEC_EVAL {} -> handleFunctionCall args ev meta
+    CLASS_DEC_EVAL _ evals _ _ -> do
+      let maybeInit = L.find matchInit evals
+      handleFunctionCall args (fromJust maybeInit) meta
+    SUB_CLASS_DEC_EVAL _ _ evals _ _ _ -> do 
+      let maybeInit = L.find matchInit evals
+      handleFunctionCall args (fromJust maybeInit) meta
+
+
+matchInit :: EVAL -> Bool
+matchInit (FUNC_DEC_EVAL "init" _ _ _ _ _) = True
+matchInit _ = False
+
+
+handleFunctionCall :: [ARGUMENT] -> EVAL -> META -> IO META
+handleFunctionCall args ev meta = do
+  let (FUNC_DEC_EVAL _ arity params stmt clos _) = ev
+  if arity /= L.length args then return meta{eval=RUNTIME_ERROR "Arity is not the same"} else do
+    let numberOfClos = L.length clos
+    updatedClosMeta <- addSavedClosure clos meta >>= addNewScopeToMeta
     evaledArgsMetas <- Prelude.mapM (`evalExpression` updatedClosMeta) args
     if L.any (isRuntimeError . eval) evaledArgsMetas then return meta{eval=fromJust (L.find isRuntimeError (L.map eval evaledArgsMetas))} else do
-      handleArgumentsEval params (L.map eval evaledArgsMetas) updatedClosMeta >>= evalDeclaration (createDecFromStatement stmt)
-      
+      handleArgumentsEval params (L.map eval evaledArgsMetas) updatedClosMeta >>= evalDeclaration (createDecFromStatement stmt) >>= deleteScopeFromMeta >>= deleteSavedClosure numberOfClos
+
 multiCallGetFunc :: META -> IO EVAL
 multiCallGetFunc meta = return (eval meta)  
 
@@ -229,7 +269,7 @@ evalTernary trueRes falseRes meta
 -- Variable helpers
 handleVarDefinition :: TextType -> ID -> META -> IO META
 handleVarDefinition iden id meta = do
-  newMeta <- addUpdateValueToMeta id (eval meta) meta
+  newMeta <- addUpdateValueToMeta id meta
   return newMeta{eval=DEC_EVAL iden (eval newMeta) id}
 {-
 import AST

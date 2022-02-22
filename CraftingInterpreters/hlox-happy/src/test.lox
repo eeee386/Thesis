@@ -89,3 +89,16 @@ fun a(b, c){
 var a;
 a();
 //
+
+//
+var a = 1;
+
+class B(){
+  fun changeA(){
+    a = a + 1;
+  }
+}
+
+var c = B();
+c.changeA();
+//

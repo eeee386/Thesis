@@ -134,11 +134,10 @@ chaining       : IDENTIFIER '.' IDENTIFIER            { [(LINK_IDENTIFIER $3), (
                | IDENTIFIER '.' method_chain          { mconcat [$3, [(LINK_IDENTIFIER $1)]] }
                | 'this' '.' method_chain              { mconcat [$3, [LINK_THIS]] }
                | 'super' '.' method_chain             { mconcat [$3, [LINK_SUPER]] }
-               | 'super' '.' IDENTIFIER               { [(LINK_IDENTIFIER $3), LINK_SUPER] }
                | method_chain '.' IDENTIFIER          { (LINK_IDENTIFIER $3) : $1 }
 
-method_chain   : method_chain '.' function_call      { (LINK_CALL $3) : $1 }
-               | {- empty -}                          { [] }
+method_chain   : method_chain '.' function_call        { (LINK_CALL $3) : $1 }
+               | function_call                         { [$1] }
 
 arguments      : arguments ',' expression             { $3 : $1 }
                | expression                           { [$1] }
