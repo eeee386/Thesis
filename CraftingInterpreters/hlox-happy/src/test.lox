@@ -102,3 +102,10 @@ class B(){
 var c = B();
 c.changeA();
 //
+
+
+//
+fun a() {}
+
+a = 5;
+//

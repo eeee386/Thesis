@@ -122,8 +122,8 @@ function_declaration       : 'fun' IDENTIFIER '(' parameters ')' block_statement
 method_declaration         : IDENTIFIER '(' parameters ')' block_statement           { METHOD_DEC $1 (reverse $3) $5 }
                            | IDENTIFIER '(' ')' block_statement                      { METHOD_DEC $1 [] $4 }
 
-parameters                 : parameters ',' IDENTIFIER            { $3 : $1 }
-                           | IDENTIFIER                           { [$1] }
+parameters                 : parameters ',' IDENTIFIER            { (DEC_VAR (PARAM $3)) : $1 }
+                           | IDENTIFIER                           { [(DEC_VAR (PARAM $1))] }
 
 function_call  : IDENTIFIER '(' arguments ')'         { CALL $1 (reverse $3) }
                | function_call '(' arguments ')'      { CALL_MULTI $1 (reverse $3) }
@@ -137,7 +137,7 @@ chaining       : IDENTIFIER '.' IDENTIFIER            { [(LINK_IDENTIFIER $3), (
                | method_chain '.' IDENTIFIER          { (LINK_IDENTIFIER $3) : $1 }
 
 method_chain   : method_chain '.' function_call        { (LINK_CALL $3) : $1 }
-               | function_call                         { [$1] }
+               | function_call                         { [LINK_CALL $1] }
 
 arguments      : arguments ',' expression             { $3 : $1 }
                | expression                           { [$1] }

@@ -24,17 +24,18 @@ instance Show DECLARATION where
 type IDENTIFIER = TextType
 type PARAMETER = TextType
 
-data VARIABLE_DECLARATION = VAR_DEC_DEF IDENTIFIER EXPRESSION | VAR_DEC IDENTIFIER | VAR_DEF IDENTIFIER EXPRESSION deriving Eq
+data VARIABLE_DECLARATION = VAR_DEC_DEF IDENTIFIER EXPRESSION | VAR_DEC IDENTIFIER | VAR_DEF IDENTIFIER EXPRESSION | PARAM IDENTIFIER deriving Eq
 instance Show VARIABLE_DECLARATION where
   show (VAR_DEC_DEF iden expr) = mconcat ["var", " ", show iden, " = ", show expr]
   show (VAR_DEC iden) = mconcat ["var", " ", show iden]
   show (VAR_DEF iden expr) = mconcat [show iden, " = ", show expr]
+  show (PARAM iden) = show iden
 
   
-data FUNCTION_DECLARATION = FUNC_DEC IDENTIFIER [PARAMETER] STATEMENT
-                          | R_FUNC_DEC IDENTIFIER [PARAMETER] STATEMENT ID
-                          | RC_FUNC_DEC IDENTIFIER [PARAMETER] STATEMENT
-                          | METHOD_DEC IDENTIFIER [PARAMETER] STATEMENT
+data FUNCTION_DECLARATION = FUNC_DEC IDENTIFIER [DECLARATION] STATEMENT
+                          | R_FUNC_DEC IDENTIFIER [DECLARATION] STATEMENT ID
+                          | RC_FUNC_DEC IDENTIFIER [DECLARATION] STATEMENT
+                          | METHOD_DEC IDENTIFIER [DECLARATION] STATEMENT
                           deriving Eq
 
 instance Show FUNCTION_DECLARATION where
@@ -78,6 +79,7 @@ instance Show RESOLVED_VARIABLE_DECLARATION where
   show (RC_VAR_DEC_DEF iden expr) = mconcat ["var", " ", show iden, " = ", show expr]
   show (RC_VAR_DEC iden) = mconcat ["var", " ", show iden]
   show (RC_VAR_DEF iden expr) = mconcat [show iden, " = ", show expr]
+
 
 
 
@@ -220,3 +222,12 @@ getIdentifierFromMethod _ = T.pack ""
 
 createDecFromStatement :: STATEMENT -> DECLARATION
 createDecFromStatement = DEC_STMT
+
+getIdentifierFromParams :: DECLARATION -> TextType
+getIdentifierFromParams (DEC_VAR (PARAM iden)) = iden
+getIdentifierFromParams _ = T.pack ""
+
+isVariableDeclaration :: DECLARATION -> Bool
+isVariableDeclaration (DEC_VAR _) = True
+isVariableDeclaration (R_DEC_VAR _) = True
+isVariableDeclaration _ = False

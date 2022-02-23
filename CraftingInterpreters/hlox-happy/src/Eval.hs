@@ -96,7 +96,7 @@ classMethodsEvalHelper (dec:decs) evals meta = do
   classMethodsEvalHelper decs (newEval:evals) newMeta
 classMethodsEvalHelper [] evals meta = return (evals, meta)
 
-functionDecEvalHelper :: (META -> IO META) -> TextType -> [PARAMETER] -> STATEMENT -> ID -> META -> IO META
+functionDecEvalHelper :: (META -> IO META) -> TextType -> [DECLARATION] -> STATEMENT -> ID -> META -> IO META
 functionDecEvalHelper addUpdateFunc iden params stmt id meta = do
     let evalFunc = FUNC_DEC_EVAL iden (L.length params) params stmt (closure meta) id
     newMeta <- addUpdateFunc meta
@@ -149,8 +149,6 @@ evalExpression (EXP_CALL (R_CALL _ args id)) meta = handleCallEval args (findVal
 evalExpression (EXP_CALL (RC_CALL call_iden args)) meta = handleCallEval args (findValueInFunction call_iden) meta
 evalExpression (EXP_CALL (CALL_MULTI call args)) meta = evalExpression (EXP_CALL call) meta >>= handleCallEval args multiCallGetFunc
 
-      
-
 evalExpression _ meta = return meta{eval=RUNTIME_ERROR "Expression cannot be evaluated"}
 
 
@@ -186,9 +184,10 @@ handleFunctionCall args ev meta = do
 multiCallGetFunc :: META -> IO EVAL
 multiCallGetFunc meta = return (eval meta)  
 
-handleArgumentsEval :: [PARAMETER] -> [EVAL] ->  META -> IO META
+handleArgumentsEval :: [DECLARATION] -> [EVAL] ->  META -> IO META
 handleArgumentsEval (p:params) (e:evals) meta = do
-  newMeta <- addUpdateScopeInMetaWithEval p e meta
+  let (DEC_VAR (PARAM iden)) = p
+  newMeta <- addUpdateScopeInMetaWithEval iden e meta
   handleArgumentsEval params evals newMeta
 handleArgumentsEval [] [] meta = return meta
 

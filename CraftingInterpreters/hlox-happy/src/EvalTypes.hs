@@ -22,8 +22,8 @@ data EVAL = EVAL_NUMBER Double
           | RUNTIME_ERROR ErrorMessage
           | SKIP_EVAL
           | DEC_EVAL Name EVAL ID
-          | FUNC_DEC_EVAL Name Arity [PARAMETER] STATEMENT Closure ID
-          | NATIVE_FUNC_DEC_EVAL Name Arity [PARAMETER] NATIVE_FUNCTION_TYPES
+          | FUNC_DEC_EVAL Name Arity [DECLARATION] STATEMENT Closure ID
+          | NATIVE_FUNC_DEC_EVAL Name Arity [DECLARATION] NATIVE_FUNCTION_TYPES
           | CLASS_DEC_EVAL Name [EVAL] Closure ID
           | SUB_CLASS_DEC_EVAL Name ParentName [EVAL] Closure ID PARENT_ID
           | RETURN_EVAL EVAL

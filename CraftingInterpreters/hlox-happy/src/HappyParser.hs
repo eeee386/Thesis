@@ -2496,14 +2496,14 @@ happyReduction_47 (HappyTerminal (L.IDENTIFIER happy_var_3))
 	_
 	(HappyAbsSyn24  happy_var_1)
 	 =  HappyAbsSyn24
-		 (happy_var_3 : happy_var_1
+		 ((DEC_VAR (PARAM happy_var_3)) : happy_var_1
 	)
 happyReduction_47 _ _ _  = notHappyAtAll 
 
 happyReduce_48 = happySpecReduce_1  24 happyReduction_48
 happyReduction_48 (HappyTerminal (L.IDENTIFIER happy_var_1))
 	 =  HappyAbsSyn24
-		 ([happy_var_1]
+		 ([(DEC_VAR (PARAM happy_var_1))]
 	)
 happyReduction_48 _  = notHappyAtAll 
 
@@ -2600,7 +2600,7 @@ happyReduction_58 _ _ _  = notHappyAtAll
 happyReduce_59 = happySpecReduce_1  28 happyReduction_59
 happyReduction_59 (HappyAbsSyn25  happy_var_1)
 	 =  HappyAbsSyn28
-		 ([happy_var_1]
+		 ([LINK_CALL happy_var_1]
 	)
 happyReduction_59 _  = notHappyAtAll 
 
