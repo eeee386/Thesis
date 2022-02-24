@@ -169,17 +169,17 @@ checkIfDefinedForDeclarationAndDefinition iden fact factFunc meta = checkIfDefin
   where exp = newExpr meta
 
 -- Checking both that the variable exists, and that the variable is not a functions I don't want people to redeclare functions/classes as simple variables
-checkIfDefinedForDefinition :: TextType -> ResolverMeta -> IO ResolverMeta
-checkIfDefinedForDefinition iden meta = do
+checkIfDefinedForDefinition :: TextType -> (Int -> DECLARATION) -> DECLARATION -> ResolverMeta -> IO ResolverMeta
+checkIfDefinedForDefinition iden decFact dec meta = do
   let exp = newExpr meta
   maybeDec <- findInClosure iden meta
   if isInFunction meta && isJust maybeDec then do
     if isVariableDeclaration (fromJust maybeDec) then do
-      return meta{declarations=R_DEC_VAR (RC_VAR_DEF iden exp):declarations meta}
+      return meta{declarations=dec:declarations meta}
     else do
       return meta{
         resolverErrors="This is not a variable declaration":resolverErrors meta
-        , declarations=R_DEC_VAR (RC_VAR_DEF iden exp):declarations meta
+        , declarations=dec:declarations meta
       }
   else do
     maybeId <- findIdInVariables iden meta
@@ -187,16 +187,16 @@ checkIfDefinedForDefinition iden meta = do
       print (declarationVector meta)
       print (fromJust maybeId)
       if isVariableDeclaration (declarationVector meta V.! fromJust maybeId) then do
-        return meta{declarations=R_DEC_VAR (R_VAR_DEF iden exp (fromJust maybeId)):declarations meta}
+        return meta{declarations=decFact (fromJust maybeId):declarations meta}
       else do
         return meta{
           resolverErrors="This is not a variable declaration":resolverErrors meta
-          , declarations=R_DEC_VAR (R_VAR_DEF iden exp (-1)):declarations meta
+          , declarations=decFact (-1):declarations meta
         }
     else
       return meta{
         resolverErrors="Variable is not in scope":resolverErrors meta
-        , declarations=R_DEC_VAR (R_VAR_DEF iden exp (-1)):declarations meta
+        , declarations=decFact (-1):declarations meta
       }
 
 -- Here I only check but I don't create it

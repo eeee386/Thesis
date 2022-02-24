@@ -24,8 +24,9 @@ data EVAL = EVAL_NUMBER Double
           | DEC_EVAL Name EVAL ID
           | FUNC_DEC_EVAL Name Arity [DECLARATION] STATEMENT Closure ID
           | NATIVE_FUNC_DEC_EVAL Name Arity [DECLARATION] NATIVE_FUNCTION_TYPES
-          | CLASS_DEC_EVAL Name [EVAL] Closure ID
-          | SUB_CLASS_DEC_EVAL Name ParentName [EVAL] Closure ID PARENT_ID
+          | CLASS_DEC_EVAL Name [DECLARATION] Closure ID
+          | SUB_CLASS_DEC_EVAL Name ParentName [DECLARATION] Closure ID PARENT_ID
+          | THIS_EVAL [Closure]
           | RETURN_EVAL EVAL
           | BREAK_EVAL
           | CONTINUE_EVAL
@@ -72,5 +73,9 @@ isBreakOrContinue eval = isBreak eval || isContinue eval
 getValueFromReturn :: EVAL -> EVAL
 getValueFromReturn (RETURN_EVAL x) = x
 getValueFromReturn _ = EVAL_NIL
+
+isSubClass :: EVAL -> Bool
+isSubClass SUB_CLASS_DEC_EVAL {} = True
+isSubClass _ = False
 
 

@@ -24,7 +24,13 @@ instance Show DECLARATION where
 type IDENTIFIER = TextType
 type PARAMETER = TextType
 
-data VARIABLE_DECLARATION = VAR_DEC_DEF IDENTIFIER EXPRESSION | VAR_DEC IDENTIFIER | VAR_DEF IDENTIFIER EXPRESSION | PARAM IDENTIFIER deriving Eq
+data VARIABLE_DECLARATION = VAR_DEC_DEF IDENTIFIER EXPRESSION
+                          | VAR_DEC IDENTIFIER
+                          | VAR_DEF IDENTIFIER EXPRESSION
+                          | PARAM IDENTIFIER
+                          | CLASS_VAR_DEF IDENTIFIER IDENTIFIER EXPRESSION
+                          | THIS_VAR_DEF IDENTIFIER EXPRESSION
+                          deriving Eq
 instance Show VARIABLE_DECLARATION where
   show (VAR_DEC_DEF iden expr) = mconcat ["var", " ", show iden, " = ", show expr]
   show (VAR_DEC iden) = mconcat ["var", " ", show iden]
@@ -67,10 +73,14 @@ instance Show RESOLVED_CLASS_DECLARATION where
 -- RC: in closure
 data RESOLVED_VARIABLE_DECLARATION = R_VAR_DEC_DEF IDENTIFIER EXPRESSION ID 
                                    | R_VAR_DEC IDENTIFIER ID 
-                                   | R_VAR_DEF IDENTIFIER EXPRESSION ID 
+                                   | R_VAR_DEF IDENTIFIER EXPRESSION ID
+                                   | R_CLASS_VAR_DEF IDENTIFIER IDENTIFIER EXPRESSION ID
+                                   | R_THIS_VAR_DEF IDENTIFIER EXPRESSION
                                    | RC_VAR_DEC_DEF IDENTIFIER EXPRESSION
                                    | RC_VAR_DEC IDENTIFIER
                                    | RC_VAR_DEF IDENTIFIER EXPRESSION
+                                   | RC_CLASS_VAR_DEF IDENTIFIER IDENTIFIER EXPRESSION
+
                                    deriving Eq
 instance Show RESOLVED_VARIABLE_DECLARATION where
   show (R_VAR_DEC_DEF iden expr _) = mconcat ["var", " ", show iden, " = ", show expr]
@@ -231,3 +241,7 @@ isVariableDeclaration :: DECLARATION -> Bool
 isVariableDeclaration (DEC_VAR _) = True
 isVariableDeclaration (R_DEC_VAR _) = True
 isVariableDeclaration _ = False
+
+isCall :: CHAIN_LINK -> Bool
+isCall (LINK_CALL _) = True
+isCall _ = False

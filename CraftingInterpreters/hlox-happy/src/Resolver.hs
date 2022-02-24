@@ -60,7 +60,11 @@ resolveDeclaration x meta = return meta{declarations=x:declarations meta}
 resolveVarDeclaration :: VARIABLE_DECLARATION -> ResolverMeta -> IO ResolverMeta
 resolveVarDeclaration (VAR_DEC_DEF iden exp) meta = resolveExpression exp meta >>= checkIfDefinedForDeclarationAndDefinition iden (R_VAR_DEC_DEF iden) (RC_VAR_DEC_DEF iden)
 resolveVarDeclaration (VAR_DEC iden) meta = checkIfDefinedForDeclaration iden (R_VAR_DEC iden) (RC_VAR_DEC iden) meta
-resolveVarDeclaration (VAR_DEF iden exp) meta = resolveExpression exp meta >>= checkIfDefinedForDefinition iden
+resolveVarDeclaration (VAR_DEF iden exp) meta = resolveExpression exp meta >>= checkIfDefinedForDefinition iden (R_DEC_VAR . R_VAR_DEF iden exp) (R_DEC_VAR (RC_VAR_DEF iden exp))
+resolveVarDeclaration (CLASS_VAR_DEF iden pIden exp) meta = resolveExpression exp meta >>= checkIfDefinedForDefinition iden (R_DEC_VAR . R_CLASS_VAR_DEF iden pIden exp) (R_DEC_VAR (RC_CLASS_VAR_DEF iden pIden exp))
+resolveVarDeclaration (THIS_VAR_DEF iden exp) meta = do
+  exprMeta <- resolveExpression exp meta
+  return (updateResolverErrorsByPredicate (isInClass meta) "'this' is called outside of class" meta{declarations=R_DEC_VAR (R_THIS_VAR_DEF iden (newExpr meta)):declarations meta})
 
 -- Check if method is resolved properly
 resolveFunctionDeclaration :: FUNCTION_DECLARATION -> ResolverMeta -> IO ResolverMeta
@@ -171,6 +175,16 @@ resolveExpression (EXP_CALL (CALL_MULTI call multiArgs)) meta = do
     newExpr=EXP_CALL (CALL_MULTI newCall newMultiArgs)
     , resolverErrors=mconcat [newResErrs, resolverErrors meta]
   }
+resolveExpression (EXP_CHAIN (CHAIN links)) meta = do
+  let (firstLink:rest) = links
+  if isCall firstLink then do
+    let (LINK_CALL firstCall) = firstLink
+    callMeta <- resolveExpression (EXP_CALL firstCall) meta
+    let (EXP_CALL x) = newExpr callMeta
+    return meta{newExpr=(EXP_CHAIN (CHAIN (LINK_CALL x:rest)))}
+  else do
+    return meta{newExpr=EXP_CHAIN (CHAIN links)}
+
 resolveExpression EXP_THIS meta = return (updateResolverErrorsByPredicate (isInClass meta) "The 'this' keyword has to be called in a class" meta{newExpr=EXP_THIS})
 resolveExpression exp meta = return meta{newExpr=exp}
 
@@ -197,7 +211,6 @@ handleBinaryExp fact left right meta = do
 -- TODO: add check that it really calls a function, and relagate the arity check here
 handleCall :: TextType -> [ARGUMENT] -> ResolverMeta -> IO ResolverMeta
 handleCall iden args meta = do
-  print "handle call is called"
   (newArgs, newResErrs) <- handleArguments args meta
   checkIfCallReferenceForDefinition iden (EXP_CALL . R_CALL iden newArgs) (EXP_CALL (RC_CALL iden newArgs)) meta{resolverErrors=mconcat [newResErrs, resolverErrors meta]}
 

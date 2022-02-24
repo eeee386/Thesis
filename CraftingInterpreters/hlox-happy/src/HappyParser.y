@@ -106,11 +106,14 @@ continue_statement    : 'continue' ';'                            { AST.CONTINUE
 
 variable_declaration_assignment       : variable_declaration                 { $1 }
                                       | variable_assignment                  { $1 }
+                                      | class_variable_assignment            { $1 }
 
 
 variable_declaration                  : 'var' IDENTIFIER '=' expression   { VAR_DEC_DEF $2 $4 }
                                       | 'var' IDENTIFIER                  { VAR_DEC $2 }
 variable_assignment                   : IDENTIFIER '=' expression         { VAR_DEF $1 $3 }
+class_variable_assignment             : IDENTIFIER '.' IDENTIFIER '=' expression            { CLASS_VAR_DEF $1 $3 $5 }
+                                      | 'this' '.' IDENTIFIER '=' expression                { THIS_VAR_DEF $3 $5 }
 
 class_declaration          : 'class' IDENTIFIER '{' methods '}'   { CLASS_DEC $2 (map (DEC_FUNC) (reverse $4)) }
                            | 'class' IDENTIFIER '<' IDENTIFIER '{' methods '}' { SUB_CLASS_DEC $2 $4 (map (DEC_FUNC) (reverse $6)) }

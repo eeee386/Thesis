@@ -23,11 +23,22 @@ deleteScopeFromClosure :: Closure -> Closure
 deleteScopeFromClosure closure = newClosure
   where (_:newClosure) = closure
 
+-- We already checked in resolver
 updateScopeInClosure :: T.Text -> EVAL -> Closure -> IO Closure
 updateScopeInClosure iden eval closure  = do
   let (last:delClos) = closure
   HT.insert last iden eval
   return (last:delClos)
+
+-- We already checked in resolver
+updateInClosure :: T.Text -> EVAL -> Closure -> IO Closure
+updateInClosure iden eval closure  = do
+  (firstIO, restIO) <- (partition <*> (fmap getEvalByIden iden . isJust)) <$> closure
+  first <- firstIO
+  rest <- restIO
+  let (last:delClos) = rest
+  HT.insert last iden eval
+  return mconcat [first, last:delClos]
 
 getEvalByIden :: T.Text -> Scope -> IO (Maybe EVAL)
 getEvalByIden iden scope = HT.lookup scope iden
@@ -62,10 +73,20 @@ addUpdateScopeInMeta :: T.Text -> META -> IO META
 addUpdateScopeInMeta iden meta = do
   clos <- updateScopeInClosure iden (eval meta) (EvalMeta.closure meta)
   return meta{EvalMeta.closure=clos}
-  
+
+addUpdateClosureInMeta :: T.Text -> META -> IO META
+addUpdateClosureInMeta iden meta = do
+  clos <- updateInClosure iden (eval meta) (EvalMeta.closure meta)
+  return meta{EvalMeta.closure=clos}
+
 addUpdateScopeInMetaWithEval :: T.Text -> EVAL -> META -> IO META
 addUpdateScopeInMetaWithEval iden eval meta = do
   clos <- updateScopeInClosure iden eval (EvalMeta.closure meta)
+  return meta{EvalMeta.closure=clos}
+
+addUpdateClosureInMetaWithEval :: T.Text -> EVAL -> META -> IO META
+addUpdateClosureInMetaWithEval iden eval meta = do
+  clos <- updateInClosure iden eval (EvalMeta.closure meta)
   return meta{EvalMeta.closure=clos}
 
 addNewScopeToMeta :: META -> IO META
