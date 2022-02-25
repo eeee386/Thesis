@@ -33,15 +33,24 @@ updateScopeInClosure iden eval closure  = do
 -- We already checked in resolver
 updateInClosure :: T.Text -> EVAL -> Closure -> IO Closure
 updateInClosure iden eval closure  = do
-  (firstIO, restIO) <- (partition <*> (fmap getEvalByIden iden . isJust)) <$> closure
-  first <- firstIO
-  rest <- restIO
+  (first, rest) <- partitionClosure iden closure []
   let (last:delClos) = rest
   HT.insert last iden eval
-  return mconcat [first, last:delClos]
+  return (mconcat [first, last:delClos])
+
 
 getEvalByIden :: T.Text -> Scope -> IO (Maybe EVAL)
 getEvalByIden iden scope = HT.lookup scope iden
+
+partitionClosure :: TextType -> Closure -> Closure -> IO (Closure, Closure)
+partitionClosure iden (h:rest) first = do
+  isFound <- isJust <$> getEvalByIden iden h
+  if isFound then do
+    return (first,rest)
+  else do
+    let newFirst = (h:first)
+    partitionClosure iden rest newFirst
+partitionClosure iden [] first = return (first, [])
 
 
 -- META
@@ -64,7 +73,22 @@ findValueInFunction iden meta = do
   values <- mapM (getEvalByIden iden) (EvalMeta.closure meta)
   let val = find isJust values
   return (fromJust (fromJust val))
-     
+
+maybeFindValueInFunction :: T.Text -> META -> IO (Maybe EVAL)
+maybeFindValueInFunction iden meta = do
+  values <- mapM (getEvalByIden iden) (EvalMeta.closure meta)
+  let val = find isJust values
+  if isNothing val then do
+    return Nothing
+  else do
+    return (fromJust val)
+
+findParentClass :: TextType -> ID -> META -> IO EVAL
+findParentClass iden id meta = do
+  if id == (-1) then do
+    findValueInFunction iden meta
+  else do
+    findValueInMeta id meta
 
 addUpdateValueToMeta :: ID -> META -> IO META
 addUpdateValueToMeta id meta = return meta{variableValues=V.update (variableValues meta) (V.singleton (id, eval meta))}

@@ -245,3 +245,18 @@ isVariableDeclaration _ = False
 isCall :: CHAIN_LINK -> Bool
 isCall (LINK_CALL _) = True
 isCall _ = False
+
+isLinkSuperOrThis :: CHAIN_LINK -> Bool
+isLinkSuperOrThis x = isLinkThis x && isLinkSuper x
+
+isLinkThis :: CHAIN_LINK -> Bool
+isLinkThis LINK_THIS = True
+isLinkThis _ = False
+
+isLinkSuper ::  CHAIN_LINK -> Bool
+isLinkSuper LINK_SUPER = True
+isLinkSuper _ = False
+
+isLinkCall :: CHAIN_LINK -> Bool
+isLinkCall (LINK_CALL x) = True
+isLinkCall _ = False

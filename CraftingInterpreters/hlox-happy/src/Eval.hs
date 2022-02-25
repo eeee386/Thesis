@@ -49,17 +49,16 @@ evalDeclaration (R_DEC_VAR (R_VAR_DEC iden id)) meta = return meta{eval=DEC_EVAL
 evalDeclaration (R_DEC_VAR (R_VAR_DEF iden expr id)) meta = do
   newMeta <- evalExpression expr meta
   handleVarDefinition iden id newMeta
-evalDeclaration (R_DEC_VAR (R_CLASS_VAR_DEF iden pIden exp classId)) = do
+evalDeclaration (R_DEC_VAR (R_CLASS_VAR_DEF iden pIden expr classId)) meta = do
     classEval <- findValueInMeta classId meta
     newMeta <- evalExpression expr meta
-    if (not isSubClass classEval) then do
-      let (CLASS_DEC_EVAL name evals clos id) = classEval
-      newClos <- updateScopeInClosure pIden (eval newMeta) clos
-      addUpdateValueToMeta (CLASS_DEC_EVAL name evals newClos id) newMeta
-    else do
-      let (SUB_CLASS_DEC_EVAL name parentName evals clos id parentId) = classEval
-      newClos <- updateScopeInClosure pIden (eval newMeta) clos
-      addUpdateValueToMeta (SUB_CLASS_DEC_EVAL name parentName evals newClos id parentId) newMeta
+    case classEval of
+      (CLASS_DEC_EVAL name evals clos id) -> do
+        newClos <- updateScopeInClosure pIden (eval newMeta) clos
+        addUpdateValueToMeta id newMeta{eval=CLASS_DEC_EVAL name evals newClos id}
+      (SUB_CLASS_DEC_EVAL name parentName evals clos id parentId) -> do
+        newClos <- updateScopeInClosure pIden (eval newMeta) clos
+        addUpdateValueToMeta id newMeta{eval=SUB_CLASS_DEC_EVAL name parentName evals newClos id parentId}
 
 evalDeclaration (R_DEC_VAR (RC_VAR_DEC_DEF iden expr)) meta = evalExpression expr meta >>= addUpdateClosureInMeta iden
 evalDeclaration (R_DEC_VAR (RC_VAR_DEC iden)) meta = addUpdateClosureInMeta iden meta{eval=EVAL_NIL}
@@ -86,26 +85,11 @@ evalDeclaration (DEC_STMT (LOOP expr stmt)) meta = do
 evalDeclaration (DEC_FUNC (R_FUNC_DEC iden params stmt id)) meta = functionDecEvalHelper (addUpdateValueToMeta id) iden params stmt id meta
 evalDeclaration (DEC_FUNC (RC_FUNC_DEC iden params stmt)) meta = functionDecEvalHelper (addUpdateScopeInMeta iden) iden params stmt (-1) meta
 evalDeclaration (DEC_FUNC (METHOD_DEC iden params stmt)) meta = functionDecEvalHelper (addUpdateScopeInMeta iden) iden params stmt (-1) meta
-evalDeclaration (R_DEC_CLASS (R_CLASS_DEC iden decs id)) meta = do
-  (evals, newMeta) <- classMethodsEvalHelper decs [] meta
-  addUpdateValueToMeta id newMeta{eval=CLASS_DEC_EVAL iden evals [] id}
-evalDeclaration (R_DEC_CLASS (RC_CLASS_DEC iden decs)) meta = do
-  (evals, newMeta) <- classMethodsEvalHelper decs [] meta
-  addUpdateScopeInMeta iden newMeta{eval=CLASS_DEC_EVAL iden evals (closure meta) (-1)}
-evalDeclaration (R_DEC_CLASS (R_SUB_CLASS_DEC iden parentIden decs id parentId)) meta = do
-  (evals, newMeta) <- classMethodsEvalHelper decs [] meta
-  addUpdateValueToMeta id newMeta{eval=SUB_CLASS_DEC_EVAL iden parentIden evals (closure meta) id parentId}
-evalDeclaration (R_DEC_CLASS (RC_SUB_CLASS_DEC iden parentIden decs parentId)) meta = do
-  (evals, newMeta) <- classMethodsEvalHelper decs [] meta
-  addUpdateScopeInMeta iden newMeta{eval=SUB_CLASS_DEC_EVAL iden parentIden evals (closure meta) (-1) parentId}
+evalDeclaration (R_DEC_CLASS (R_CLASS_DEC iden decs id)) meta = addUpdateValueToMeta id meta{eval=CLASS_DEC_EVAL iden decs (closure meta) id}
+evalDeclaration (R_DEC_CLASS (RC_CLASS_DEC iden decs)) meta = addUpdateScopeInMeta iden meta{eval=CLASS_DEC_EVAL iden decs (closure meta) (-1)}
+evalDeclaration (R_DEC_CLASS (R_SUB_CLASS_DEC iden parentIden decs id parentId)) meta = addUpdateValueToMeta id meta{eval=SUB_CLASS_DEC_EVAL iden parentIden decs (closure meta) id parentId}
+evalDeclaration (R_DEC_CLASS (RC_SUB_CLASS_DEC iden parentIden decs parentId)) meta = addUpdateScopeInMeta iden meta{eval=SUB_CLASS_DEC_EVAL iden parentIden decs (closure meta) (-1) parentId}
 
-
-classMethodsEvalHelper :: [DECLARATION] -> [EVAL] -> META -> IO ([EVAL], META)
-classMethodsEvalHelper (dec:decs) evals meta = do
-  newMeta <- evalDeclaration dec meta
-  let newEval = eval newMeta
-  classMethodsEvalHelper decs (newEval:evals) newMeta
-classMethodsEvalHelper [] evals meta = return (evals, meta)
 
 functionDecEvalHelper :: (META -> IO META) -> TextType -> [DECLARATION] -> STATEMENT -> ID -> META -> IO META
 functionDecEvalHelper addUpdateFunc iden params stmt id meta = do
@@ -160,10 +144,30 @@ evalExpression (EXP_CALL (R_CALL _ args id)) meta = handleCallEval args (findVal
 evalExpression (EXP_CALL (RC_CALL call_iden args)) meta = handleCallEval args (findValueInFunction call_iden) meta
 evalExpression (EXP_CALL (CALL_MULTI call args)) meta = evalExpression (EXP_CALL call) meta >>= handleCallEval args multiCallGetFunc
 
-evalExpression (EXP_CHAIN (CHAIN links)) meta =
+evalExpression (EXP_CHAIN (CHAIN (l:links))) meta = do
+  case l of
+    (LINK_THIS) -> do
+      classEval <- findValueInFunction "this" meta
+      return meta{eval=classEval}
+    (LINK_SUPER) -> do
+      classEval <- findValueInFunction "this" meta
+      (SUB_CLASS_DEC_EVAL _ parentName _ _ _ parentId) <- findValueInFunction "this" meta
+      parentClassEval <- findParentClass parentName parentId meta
+      evalExpression (EXP_CHAIN (CHAIN links)) meta{eval=parentClassEval}
+    (LINK_CALL call) -> do
+      case (eval meta) of
+        (CLASS_DEC_EVAL _ _ clos _) -> handleChainCall l links clos meta
+        (SUB_CLASS_DEC_EVAL _ _ _ clos _ _) -> handleChainCall l links clos meta
+        otherwise -> return meta{eval=RUNTIME_ERROR "Dot operation is only permitted on classes"}
+    (LINK_IDENTIFIER x) -> do
+      case (eval meta) of
+        (CLASS_DEC_EVAL _ _ clos _) -> handleChainIdentifier l links clos meta
+        (SUB_CLASS_DEC_EVAL _ _ _ clos _ _) -> handleChainIdentifier l links clos meta
+        otherwise -> return meta{eval=RUNTIME_ERROR "Dot operation is only permitted on classes"}
 
-evalExpression (EXP_THIS) meta = findValueInFunction "this" meta
-
+evalExpression (EXP_THIS) meta = do
+  ev <- findValueInFunction "this" meta
+  return meta{eval=ev}
 evalExpression _ meta = return meta{eval=RUNTIME_ERROR "Expression cannot be evaluated"}
 
 
@@ -173,16 +177,32 @@ handleCallEval args findDec meta = do
   ev <- findDec meta
   case ev of 
     FUNC_DEC_EVAL {} -> handleFunctionCall args ev meta
-    CLASS_DEC_EVAL _ decs clos _ -> handleClassInitCall decs clos meta
-    SUB_CLASS_DEC_EVAL _ _ decs clos _ _ -> do handleClassInitCall decs clos meta
+    CLASS_DEC_EVAL _ decs clos _ -> handleClassInitCall args decs clos meta
+    SUB_CLASS_DEC_EVAL _ _ decs clos _ _ -> do handleClassInitCall args decs clos meta
 
 
-handleClassInitCall :: [DECLARATION] -> Closure -> META -> META
-handleClassInitCall decs clos meta = do
+handleClassInitCall :: [ARGUMENT] -> [DECLARATION] -> Closure -> META -> IO META
+handleClassInitCall args decs clos meta = do
   let numberOfClos = L.length clos
-  newMeta <- addNewScopeToMeta meta >>= addSavedClosure clos meta >>= handleMethodsEval decs
-  let init = findValueInFunction "init" newMeta
-  handleFunctionCall args (fromJust maybeInit) newMeta >>= deleteScopeFromMeta >>= deleteSavedClosure numberOfClos
+  newMeta <- addNewScopeToMeta meta >>= addSavedClosure clos >>= handleMethodsEval decs
+  init <- findValueInFunction "init" newMeta
+  handleFunctionCall args init newMeta >>= deleteScopeFromMeta >>= deleteSavedClosure numberOfClos
+
+handleChainCall :: CHAIN_LINK -> [CHAIN_LINK] -> Closure -> META -> IO META
+handleChainCall (LINK_CALL call) links clos meta = do
+  let numberOfClos = L.length clos
+  expMeta <- addSavedClosure clos meta >>= evalExpression (EXP_CALL call)
+  let exprEval = eval expMeta
+  deleteSavedClosure numberOfClos expMeta{eval=exprEval} >>= evalExpression (EXP_CHAIN (CHAIN links))
+
+handleChainIdentifier :: CHAIN_LINK -> [CHAIN_LINK] -> Closure -> META -> IO META
+handleChainIdentifier link links clos meta = do
+  let (LINK_IDENTIFIER iden) = link
+  eval <- maybeFindValueInFunction iden meta
+  if isNothing eval then do
+    return meta{eval=RUNTIME_ERROR "This is not a property on the class"}
+  else do
+    evalExpression (EXP_CHAIN (CHAIN links)) meta{eval=fromJust eval}
 
 
 handleFunctionCall :: [ARGUMENT] -> EVAL -> META -> IO META
@@ -206,9 +226,7 @@ handleArgumentsEval (p:params) (e:evals) meta = do
 handleArgumentsEval [] [] meta = return meta
 
 handleMethodsEval :: [DECLARATION] -> META -> IO META
-handleMethodsEval (d:decs) meta = do
-  newMeta <- evalDeclaration d
-  handleMethodsEval decs newMeta
+handleMethodsEval (d:decs) meta = evalDeclaration d meta >>= handleMethodsEval decs
 handleMethodsEval [] meta = return meta
 
 

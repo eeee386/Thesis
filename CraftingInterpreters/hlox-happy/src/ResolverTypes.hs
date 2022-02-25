@@ -28,6 +28,7 @@ data ResolverMeta = ResolverMeta {
   , newExpr :: EXPRESSION
   , isInFunction :: Bool
   , isInClass :: Bool
+  , isInSubClass :: Bool
   , isInLoop :: Bool
   , closure :: ResolverClosure
 } deriving Show
@@ -46,6 +47,7 @@ createNewMeta = do
   , newExpr = EMPTY_EXP
   , isInFunction = False
   , isInClass = False
+  , isInSubClass = False
   , isInLoop = False
   , closure = []
   }

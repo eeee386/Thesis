@@ -95,44 +95,45 @@ methodMetaChanger iden params meta newMeta = return newMeta{declarations=DEC_FUN
 
 resolveClassDeclaration :: CLASS_DECLARATION -> ResolverMeta -> IO ResolverMeta
 resolveClassDeclaration (CLASS_DEC iden methods) meta = do
-    newMeta <- addBlockToMeta meta >>= addClosureToMeta >>= resolveMethods methods
+    newMeta <- handleClassSetup methods meta{isInClass=True}
     let newMethods = declarations newMeta
     if isInFunction meta then do
-      handleSaveClassDec newMeta >>= checkIfFunctionOrClassIsDefined iden (R_DEC_CLASS (RC_CLASS_DEC iden newMethods))
+      handleSaveClassDec meta newMeta >>= checkIfFunctionOrClassIsDefined iden (R_DEC_CLASS (RC_CLASS_DEC iden newMethods))
     else do
-      handleSaveClassDec (updateCurrentVariableInMeta (R_DEC_CLASS . R_CLASS_DEC iden newMethods) newMeta) >>= checkIfFunctionOrClassIsDefined iden (R_DEC_CLASS (R_CLASS_DEC iden newMethods (currentVariableId newMeta)))
+      handleSaveClassDec meta (updateCurrentVariableInMeta (R_DEC_CLASS . R_CLASS_DEC iden newMethods) newMeta) >>= checkIfFunctionOrClassIsDefined iden (R_DEC_CLASS (R_CLASS_DEC iden newMethods (currentVariableId newMeta)))
       
 resolveClassDeclaration (SUB_CLASS_DEC iden parentIden methods) meta = do
   let cMeta = updateResolverErrorsByPredicate (iden == parentIden) "Class name cannot be parent class name" meta
-  newMeta <- addBlockToMeta cMeta >>= addClosureToMeta >>= resolveMethods methods
+  newMeta <- handleClassSetup methods cMeta{isInClass=True, isInSubClass=True}
   let newMethods = declarations newMeta
   if isInFunction meta then do
     inClosure <- isInClosure parentIden meta
     if inClosure then do
-      handleSaveClassDec newMeta{
+      handleSaveClassDec meta newMeta{
          declarations=R_DEC_CLASS (RC_SUB_CLASS_DEC iden parentIden newMethods (-1)):declarations meta
       } 
     else do
       maybeParentId <- findIdInVariables parentIden newMeta
-      handleSaveClassDec (parentNotInScopeError maybeParentId newMeta) >>= checkIfFunctionOrClassIsDefined iden (R_DEC_CLASS (RC_SUB_CLASS_DEC iden parentIden newMethods (fromMaybe (-1) maybeParentId)))
+      handleSaveClassDec meta (parentNotInScopeError maybeParentId newMeta) >>= checkIfFunctionOrClassIsDefined iden (R_DEC_CLASS (RC_SUB_CLASS_DEC iden parentIden newMethods (fromMaybe (-1) maybeParentId)))
   else do
-    maybeParentId <- findIdInVariables parentIden cMeta
-    handleSaveClassDec (parentNotInScopeError maybeParentId (updateCurrentVariableInMeta (\p -> R_DEC_CLASS (R_SUB_CLASS_DEC iden parentIden newMethods p (fromMaybe (-1) maybeParentId))) cMeta))
+    maybeParentId <- findIdInVariables parentIden newMeta
+    handleSaveClassDec meta (parentNotInScopeError maybeParentId (updateCurrentVariableInMeta (\p -> R_DEC_CLASS (R_SUB_CLASS_DEC iden parentIden newMethods p (fromMaybe (-1) maybeParentId))) cMeta))
     
 parentNotInScopeError :: Maybe ID -> ResolverMeta -> ResolverMeta
 parentNotInScopeError maybeParentId = updateResolverErrorsByPredicate (isJust maybeParentId) "Parent class is not in scope"
 
-handleSaveClassDec :: ResolverMeta -> IO ResolverMeta
-handleSaveClassDec meta = deleteBlockFromMeta meta >>= deleteBlockFromMeta
-  
-      
+handleSaveClassDec :: ResolverMeta -> ResolverMeta -> IO ResolverMeta
+handleSaveClassDec oldMeta meta = deleteBlockFromMeta meta{isInClass=isInClass oldMeta, isInSubClass=isInSubClass oldMeta} >>= deleteBlockFromMeta
+
+handleClassSetup :: [DECLARATION] -> ResolverMeta -> IO ResolverMeta
+handleClassSetup methods meta = addBlockToMeta meta >>= addClosureToMeta >>= resolveMethods methods
+
 resolveMethods :: [DECLARATION] -> ResolverMeta -> IO ResolverMeta
 resolveMethods methods meta = do
  let isUniqueMethodNames = U.allUnique (map getIdentifierFromMethod methods)
  let newMethods = if any (\method -> getIdentifierFromMethod method /= "init") methods then DEC_FUNC (METHOD_DEC "init" [] (BLOCK_STMT [])):methods else methods 
  resolveDeclarations newMethods (updateResolverErrorsByPredicate isUniqueMethodNames "Method names are not unique" meta{
-   isInClass=True
-   , declarations=[]
+   declarations=[]
  }) >>= reverseDeclarationsAndErrors
 
 resolveBlock :: [DECLARATION] -> ResolverMeta -> IO ResolverMeta
@@ -181,9 +182,15 @@ resolveExpression (EXP_CHAIN (CHAIN links)) meta = do
     let (LINK_CALL firstCall) = firstLink
     callMeta <- resolveExpression (EXP_CALL firstCall) meta
     let (EXP_CALL x) = newExpr callMeta
-    return meta{newExpr=(EXP_CHAIN (CHAIN (LINK_CALL x:rest)))}
+    return meta{newExpr=EXP_CHAIN (CHAIN (LINK_CALL x:rest))}
   else do
-    return meta{newExpr=EXP_CHAIN (CHAIN links)}
+    if isLinkThis firstLink then do
+      return (updateResolverErrorsByPredicate (isInClass meta) "The 'this' keyword has to be called in a class" meta{newExpr=EXP_CHAIN (CHAIN links)})
+    else do
+      if isLinkSuper firstLink then do
+         return (updateResolverErrorsByPredicate (isInClass meta) "The 'super' keyword has to be called in a subclass" meta{newExpr=EXP_CHAIN (CHAIN links)})
+      else do
+         return meta{newExpr=EXP_CHAIN (CHAIN links)}
 
 resolveExpression EXP_THIS meta = return (updateResolverErrorsByPredicate (isInClass meta) "The 'this' keyword has to be called in a class" meta{newExpr=EXP_THIS})
 resolveExpression exp meta = return meta{newExpr=exp}
