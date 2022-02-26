@@ -2,29 +2,28 @@
 
 module Runners where
 
-{-
+
 import System.Environment
 import qualified Data.Text.IO as TIO
 import qualified Data.Text as T
 import GHC.IO.Handle (hFlush)
 import System.IO (stdout)
-import qualified Data.Sequence as S
-import Parser
-import ParseExpressions
 import Eval
-import AST
-import Data.Maybe
-import Utils
 import ResolverTypes
 import Resolver
-import EvalTypes
-import qualified Data.Vector as V
+import qualified HappyParser as H 
 
 
 run :: T.Text -> IO()
 run text = do
-  let tokens = scanTokens text
-  printScanErrorOrContinue tokens
+  let ast = H.happyParser (T.unpack text)
+  resolverMeta <- resolveProgram ast
+  if not (null (resolverErrors resolverMeta)) then do
+    mapM_ print (resolverErrors resolverMeta)
+  else do
+    print (declarations resolverMeta)
+    evalProgram (declarations resolverMeta) (variableVector resolverMeta)
+    return ()
 
 runLoxFile :: T.Text -> IO ()
 runLoxFile arg = do
@@ -64,32 +63,3 @@ readFromRepl :: IO String
 readFromRepl = putStr "Lox> "
      >> hFlush stdout
      >> getLine
-
-printScanErrorOrContinue :: S.Seq Token -> IO ()
-printScanErrorOrContinue tokens = if null scanError then printResolveErrorOrContinue parsed else print scanError
-  where scanError = S.filter (isNotToken . tokenType) tokens
-        parsed = parse tokens
-
-printResolveErrorOrContinue :: AST.PROGRAM -> IO()
-printResolveErrorOrContinue prog = do
-  resolved <- resolveProgram prog
-  let errors = rErrors resolved
-  if not (S.null errors) then do
-    print errors
-  else do
-    let newProgStack = newDeclarations resolved
-    let (newProg, _) = pop newProgStack
-    print "resolve: "
-    print newProg
-    printEvalErrorOrContinue (PROG newProg) (variableVector resolved)
-
-printEvalErrorOrContinue :: AST.PROGRAM -> V.Vector EVAL  -> IO ()
-printEvalErrorOrContinue (PROG statements) dMap = handleCases
-  where parseError = findParseError statements S.empty
-        astError = S.filter isJust (fmap getASTErrorFromStatement statements)
-        handleCases
-          | (not . null) parseError = print (mconcat ["ParserError: ", show parseError])
-          | (not . null) astError = print (mconcat ["ParserError: ", show astError])
-          | otherwise = evalProgram (PROG statements) dMap
-printEvalOrContinue parseError _ = print parseError
--}

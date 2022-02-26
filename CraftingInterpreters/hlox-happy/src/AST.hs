@@ -83,9 +83,9 @@ data RESOLVED_VARIABLE_DECLARATION = R_VAR_DEC_DEF IDENTIFIER EXPRESSION ID
 
                                    deriving Eq
 instance Show RESOLVED_VARIABLE_DECLARATION where
-  show (R_VAR_DEC_DEF iden expr _) = mconcat ["var", " ", show iden, " = ", show expr]
-  show (R_VAR_DEC iden _) = mconcat ["var", " ", show iden]
-  show (R_VAR_DEF iden expr _) = mconcat [show iden, " = ", show expr]
+  show (R_VAR_DEC_DEF iden expr id) = mconcat ["var", " ", show iden, " = ", show expr, show id]
+  show (R_VAR_DEC iden id) = mconcat ["var", " ", show iden, show id]
+  show (R_VAR_DEF iden expr id) = mconcat [show iden, " = ", show expr, show id]
   show (RC_VAR_DEC_DEF iden expr) = mconcat ["var", " ", show iden, " = ", show expr]
   show (RC_VAR_DEC iden) = mconcat ["var", " ", show iden]
   show (RC_VAR_DEF iden expr) = mconcat [show iden, " = ", show expr]

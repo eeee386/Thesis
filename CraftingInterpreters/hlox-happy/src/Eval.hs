@@ -11,8 +11,8 @@ import AST
 import Data.Vector as V
 import Data.List as L
 
-evalProgram :: PROGRAM -> V.Vector EVAL -> IO META
-evalProgram (PROG x) vector = createGlobalMeta vector >>= evalDeclarations x
+evalProgram :: [DECLARATION] -> V.Vector EVAL -> IO META
+evalProgram x vector = createGlobalMeta vector >>= evalDeclarations x
 
 evalBlock :: [DECLARATION]  -> META -> IO META
 evalBlock = evalDeclarations
@@ -30,6 +30,7 @@ evalDeclarations decs meta = do
       else do
         if isRuntimeError ev
           then do
+            print ev
             return meta{eval=ev}
           else do
             evalDeclarations rest newMeta
@@ -42,16 +43,11 @@ evalDeclaration (DEC_STMT (PRINT_STMT x)) meta = do
   newMeta <- evalExpression x meta
   print (eval newMeta)
   return newMeta
-evalDeclaration (DEC_STMT (EXPR_STMT x)) meta = do
-  evalExpression x meta
+evalDeclaration (DEC_STMT (EXPR_STMT x)) meta = evalExpression x meta
   
-evalDeclaration (R_DEC_VAR (R_VAR_DEC_DEF iden expr id)) meta = do
-  newMeta <- evalExpression expr meta
-  handleVarDefinition iden id newMeta
+evalDeclaration (R_DEC_VAR (R_VAR_DEC_DEF iden expr id)) meta = evalExpression expr meta >>= handleVarDefinition iden id
 evalDeclaration (R_DEC_VAR (R_VAR_DEC iden id)) meta = return meta{eval=DEC_EVAL iden EVAL_NIL id}
-evalDeclaration (R_DEC_VAR (R_VAR_DEF iden expr id)) meta = do
-  newMeta <- evalExpression expr meta
-  handleVarDefinition iden id newMeta
+evalDeclaration (R_DEC_VAR (R_VAR_DEF iden expr id)) meta = evalExpression expr meta >>= handleVarDefinition iden id
 evalDeclaration (R_DEC_VAR (R_CLASS_VAR_DEF iden pIden expr classId)) meta = do
     classEval <- findValueInMeta classId meta
     let evalClassDec newMeta = case classEval of
@@ -89,6 +85,7 @@ evalDeclaration (R_DEC_CLASS (R_CLASS_DEC iden decs id)) meta = addUpdateValueTo
 evalDeclaration (R_DEC_CLASS (RC_CLASS_DEC iden decs)) meta = addUpdateScopeInMeta iden meta{eval=CLASS_DEC_EVAL iden decs (closure meta) NON_ID}
 evalDeclaration (R_DEC_CLASS (R_SUB_CLASS_DEC iden parentIden decs id parentId)) meta = addUpdateValueToMeta id meta{eval=SUB_CLASS_DEC_EVAL iden parentIden decs (closure meta) id parentId}
 evalDeclaration (R_DEC_CLASS (RC_SUB_CLASS_DEC iden parentIden decs parentId)) meta = addUpdateScopeInMeta iden meta{eval=SUB_CLASS_DEC_EVAL iden parentIden decs (closure meta) NON_ID parentId}
+evalDeclaration _ meta = return meta{eval=RUNTIME_ERROR "Unknown error"}
 
 
 functionDecEvalHelper :: (META -> IO META) -> TextType -> [DECLARATION] -> STATEMENT -> ID -> META -> IO META
@@ -122,10 +119,17 @@ evalExpression (EXP_UNARY (UNARY_NEGATE x)) meta = do
   if isJust bool then return newMeta{eval=EVAL_BOOL (not (fromJust bool))} else return newMeta{eval=RUNTIME_ERROR "Can only negate truthy values (bool, string, number)"}
 
 evalExpression (EXP_BINARY (BIN_ADD left right)) meta = do
+  print "expr"
+  print left
+  print right
   leftMeta <- evalExpression left meta
   let evaledLeft = eval leftMeta
   rightMeta <- evalExpression right leftMeta
   let evaledRight = eval rightMeta
+  print "mine"
+  print evaledLeft
+  print evaledRight
+  print "mine over"
   return (addHelper evaledLeft evaledRight rightMeta)
 evalExpression (EXP_BINARY (BIN_SUB left right)) meta = binaryNumericHelper left right EVAL_NUMBER (-) meta
 evalExpression (EXP_BINARY (BIN_MUL left right)) meta = binaryNumericHelper left right EVAL_NUMBER (*) meta
@@ -167,7 +171,9 @@ evalExpression (EXP_CHAIN (CHAIN (l:links))) meta = do
 evalExpression EXP_THIS meta = do
   ev <- findValueInFunction "this" meta
   return meta{eval=ev}
-evalExpression _ meta = return meta{eval=RUNTIME_ERROR "Expression cannot be evaluated"}
+evalExpression exp meta = do
+   print exp
+   return meta{eval=RUNTIME_ERROR "Expression cannot be evaluated"}
 
 
 -- Resolver already adds the init function to the  

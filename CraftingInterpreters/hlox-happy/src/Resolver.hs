@@ -54,6 +54,12 @@ resolveDeclaration (DEC_STMT (IF_ELSE_STMT exp (BLOCK_STMT ifdecs) (BLOCK_STMT e
   return resElseBlockMeta{declarations=DEC_STMT (IF_ELSE_STMT resExp resIfBlockStmt resElseBlockStmt):declarations meta}
 resolveDeclaration (DEC_STMT BREAK) meta =  return (updateResolverErrorsByPredicate (isInLoop meta) "The 'break' statement should be inside a loop" meta{declarations=DEC_STMT BREAK:declarations meta})
 resolveDeclaration (DEC_STMT CONTINUE) meta =  return (updateResolverErrorsByPredicate (isInLoop meta) "The 'continue' statement should be inside a loop" meta{declarations=DEC_STMT CONTINUE:declarations meta})
+resolveDeclaration (DEC_STMT (PRINT_STMT x)) meta = do 
+  expMeta <- resolveExpression x meta
+  return expMeta{declarations=DEC_STMT (PRINT_STMT (newExpr expMeta)):declarations expMeta} 
+resolveDeclaration (DEC_STMT (EXPR_STMT x)) meta = do 
+  expMeta <- resolveExpression x meta
+  return expMeta{declarations=DEC_STMT (EXPR_STMT (newExpr expMeta)):declarations expMeta} 
 resolveDeclaration EMPTY_DEC meta = return meta
 resolveDeclaration x meta = return meta{declarations=x:declarations meta}
 

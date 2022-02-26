@@ -207,6 +207,7 @@ checkIfReferenceForDefinition iden factExp funcExp meta = do
     return meta{newExpr=funcExp}
   else do
     maybeId <- findIdInVariables iden meta
+    print "checkIfReferenceForDefinition called for global id"
     if isJust maybeId then
       return meta{newExpr=factExp (ID (fromJust maybeId))}
     else do
