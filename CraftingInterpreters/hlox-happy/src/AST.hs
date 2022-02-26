@@ -80,8 +80,8 @@ data RESOLVED_VARIABLE_DECLARATION = R_VAR_DEC_DEF IDENTIFIER EXPRESSION ID
                                    | RC_VAR_DEC IDENTIFIER
                                    | RC_VAR_DEF IDENTIFIER EXPRESSION
                                    | RC_CLASS_VAR_DEF IDENTIFIER IDENTIFIER EXPRESSION
-
                                    deriving Eq
+
 instance Show RESOLVED_VARIABLE_DECLARATION where
   show (R_VAR_DEC_DEF iden expr id) = mconcat ["var", " ", show iden, " = ", show expr, show id]
   show (R_VAR_DEC iden id) = mconcat ["var", " ", show iden, show id]
@@ -91,12 +91,7 @@ instance Show RESOLVED_VARIABLE_DECLARATION where
   show (RC_VAR_DEF iden expr) = mconcat [show iden, " = ", show expr]
 
 
-
-
-
-
 -- STATEMENT
-
 data STATEMENT = EXPR_STMT EXPRESSION 
                | PRINT_STMT EXPRESSION 
                | BLOCK_STMT [DECLARATION]

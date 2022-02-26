@@ -44,7 +44,10 @@ evalDeclaration (DEC_STMT (PRINT_STMT x)) meta = do
   print (eval newMeta)
   return newMeta
 evalDeclaration (DEC_STMT (EXPR_STMT x)) meta = evalExpression x meta
-  
+
+evalDeclaration (DEC_STMT BREAK) meta = return meta{eval=BREAK_EVAL}
+evalDeclaration (DEC_STMT CONTINUE) meta = return meta{eval=CONTINUE_EVAL}
+
 evalDeclaration (R_DEC_VAR (R_VAR_DEC_DEF iden expr id)) meta = evalExpression expr meta >>= handleVarDefinition iden id
 evalDeclaration (R_DEC_VAR (R_VAR_DEC iden id)) meta = return meta{eval=DEC_EVAL iden EVAL_NIL id}
 evalDeclaration (R_DEC_VAR (R_VAR_DEF iden expr id)) meta = evalExpression expr meta >>= handleVarDefinition iden id
@@ -72,10 +75,13 @@ evalDeclaration (DEC_STMT (IF_ELSE_STMT expr stmt1 stmt2)) meta = evalExpression
   where evalIfElse newMeta = if maybeEvalTruthy (eval newMeta) == Just True then evalDeclaration (createDecFromStatement stmt1) newMeta else evalDeclaration (createDecFromStatement stmt2) newMeta
 evalDeclaration (DEC_STMT (LOOP expr stmt)) meta = evalExpression expr meta >>= checkIfLastEvalIsRuntimeError evalLoop
   where lastEval = eval meta
-        evalLoop newMeta = if maybeEvalTruthy (eval newMeta) == Just True && not (isBreak lastEval) then do
-                                   evalDeclaration (createDecFromStatement stmt) newMeta >>= evalDeclaration (DEC_STMT (LOOP expr stmt))
-                                 else
-                                   return newMeta
+        evalLoop newMeta = if maybeEvalTruthy (eval newMeta) == Just True && not (isBreak lastEval) && not (isRuntimeError lastEval) then do
+                             print (expr)
+                             print (eval newMeta)
+                             print (lastEval)
+                             evalDeclaration (createDecFromStatement stmt) newMeta >>= evalDeclaration (DEC_STMT (LOOP expr stmt))
+                           else
+                             return newMeta
 
 -- closure meta will be an empty list, so it could be an [] as well
 evalDeclaration (DEC_FUNC (R_FUNC_DEC iden params stmt id)) meta = functionDecEvalHelper (addUpdateValueToMeta id) iden params stmt id meta
@@ -164,7 +170,8 @@ evalExpression (EXP_CHAIN (CHAIN (l:links))) meta = do
 evalExpression EXP_THIS meta = do
   ev <- findValueInFunction "this" meta
   return meta{eval=ev}
-evalExpression exp meta = return meta{eval=RUNTIME_ERROR "Expression cannot be evaluated"}
+evalExpression exp meta = do
+  return meta{eval=RUNTIME_ERROR "Expression cannot be evaluated"}
 
 
 -- Resolver already adds the init function to the  

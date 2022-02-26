@@ -43,6 +43,7 @@ resolveDeclaration (DEC_STMT (IF_STMT exp (BLOCK_STMT decs))) meta = do
   let resExp = newExpr resMeta
   resBlockMeta <- resolveBlock decs resMeta{declarations=[]}
   let (DEC_STMT resBlockStmt) = head (declarations resBlockMeta)
+  print resBlockStmt
   return resBlockMeta{declarations=DEC_STMT (IF_STMT resExp resBlockStmt):declarations meta}
 resolveDeclaration (DEC_STMT (IF_ELSE_STMT exp (BLOCK_STMT ifdecs) (BLOCK_STMT elsedecs))) meta = do
   resMeta <- resolveExpression exp meta

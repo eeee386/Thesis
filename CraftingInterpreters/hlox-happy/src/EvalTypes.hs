@@ -43,6 +43,8 @@ instance Show EVAL where
   show (FUNC_DEC_EVAL iden arity params stmt _ _) = mconcat ["Function ", show iden, ", arity: ", show arity, ", params: ", show params, ", statement: ", show stmt]
   show (NATIVE_FUNC_DEC_EVAL iden arity params _) = mconcat ["<<native>> Function ", show iden, ", arity: ", show arity, ", params: ", show params]
   show (RETURN_EVAL x) = "return: " ++ show x
+  show (BREAK_EVAL) = "break"
+  show (CONTINUE_EVAL) = "continue"
 
 {-
 getLineError :: S.Seq TH.Token -> String
