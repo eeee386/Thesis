@@ -13,7 +13,7 @@ import NativeFunctions
 import Data.List
 import Data.Set
 
-type ResolverBlockEnvironment = (HT.BasicHashTable T.Text ID)
+type ResolverBlockEnvironment = (HT.BasicHashTable T.Text Int)
 type ResolverEnvironment = [ResolverBlockEnvironment]
 type ResolverClosure = [HT.BasicHashTable TextType DECLARATION]
 
@@ -67,13 +67,13 @@ deleteBlockFromResEnv :: ResolverEnvironment -> ResolverEnvironment
 deleteBlockFromResEnv resEnv = newResEnv
   where (_:newResEnv) = resEnv 
   
-updateBlockInResEnv :: T.Text -> ID ->  ResolverEnvironment -> IO ResolverEnvironment
+updateBlockInResEnv :: T.Text -> Int ->  ResolverEnvironment -> IO ResolverEnvironment
 updateBlockInResEnv iden id resEnv  = do
   let (last:delResEnv) = resEnv 
   HT.insert last iden id
   return (last:delResEnv)
   
-getIdOfIden :: T.Text -> ResolverBlockEnvironment -> IO (Maybe ID)
+getIdOfIden :: T.Text -> ResolverBlockEnvironment -> IO (Maybe Int)
 getIdOfIden iden resEnv = HT.lookup resEnv iden
   
 addBlockToMeta :: ResolverMeta -> IO ResolverMeta
@@ -84,13 +84,13 @@ addBlockToMeta meta = do
 deleteBlockFromMeta :: ResolverMeta -> IO ResolverMeta
 deleteBlockFromMeta meta = return meta{resolverEnv=(deleteBlockFromResEnv (resolverEnv meta))}
 
-updateBlockInMeta :: ID -> T.Text -> ResolverMeta -> IO ResolverMeta
+updateBlockInMeta :: Int -> T.Text -> ResolverMeta -> IO ResolverMeta
 updateBlockInMeta id iden meta = do
   newEnv <- updateBlockInResEnv iden id (resolverEnv meta)
   return meta{resolverEnv=newEnv, currentVariableInDeclaration= Just iden}
   
   
-findIdInVariables :: T.Text -> ResolverMeta ->IO (Maybe ID)
+findIdInVariables :: T.Text -> ResolverMeta ->IO (Maybe Int)
 findIdInVariables iden meta
   | Data.List.null resEnv = return Nothing
   | otherwise = do
@@ -102,12 +102,12 @@ findIdInVariables iden meta
 findIdenInMeta :: T.Text -> ResolverMeta -> IO Bool
 findIdenInMeta iden meta = isJust <$> findIdInVariables iden meta
 
-updateCurrentVariableInMeta :: (Int -> DECLARATION) -> ResolverMeta -> ResolverMeta
+updateCurrentVariableInMeta :: (ID -> DECLARATION) -> ResolverMeta -> ResolverMeta
 updateCurrentVariableInMeta decFact meta = meta{
-  declarations = decFact currId:declarations meta
+  declarations = decFact (ID currId):declarations meta
   , currentVariableId=currentVariableId meta+1
   , variableVector= V.snoc (variableVector meta) EVAL_NIL
-  , declarationVector = V.snoc (declarationVector meta) (decFact currId)
+  , declarationVector = V.snoc (declarationVector meta) (decFact (ID currId))
 }
   where currId = currentVariableId meta
 
@@ -149,7 +149,7 @@ reverseDeclarationsAndErrors :: ResolverMeta -> IO ResolverMeta
 reverseDeclarationsAndErrors meta = return meta{declarations=reverse (declarations meta), resolverErrors=reverse (resolverErrors meta)} 
 
 -- Checking for closures as the values can depend on parameters, and if we have branching recursion, the running functions could rewrite the value in the global vector
-checkIfDefinedForDeclaration :: TextType -> (Int -> RESOLVED_VARIABLE_DECLARATION) -> RESOLVED_VARIABLE_DECLARATION -> ResolverMeta -> IO ResolverMeta
+checkIfDefinedForDeclaration :: TextType -> (ID -> RESOLVED_VARIABLE_DECLARATION) -> RESOLVED_VARIABLE_DECLARATION -> ResolverMeta -> IO ResolverMeta
 checkIfDefinedForDeclaration iden fact factFunc meta = do
   inScope <- isInScope iden meta
   if isInFunction meta && inScope then do
@@ -164,14 +164,14 @@ checkIfDefinedForDeclaration iden fact factFunc meta = do
     else
       return meta{
         resolverErrors="Variable already declared in scope":resolverErrors meta
-        , declarations=R_DEC_VAR (fact (-1)):declarations meta}
+        , declarations=R_DEC_VAR (fact NON_ID):declarations meta}
     
-checkIfDefinedForDeclarationAndDefinition :: TextType -> (EXPRESSION -> Int -> RESOLVED_VARIABLE_DECLARATION) -> (EXPRESSION -> RESOLVED_VARIABLE_DECLARATION) -> ResolverMeta -> IO ResolverMeta
+checkIfDefinedForDeclarationAndDefinition :: TextType -> (EXPRESSION -> ID -> RESOLVED_VARIABLE_DECLARATION) -> (EXPRESSION -> RESOLVED_VARIABLE_DECLARATION) -> ResolverMeta -> IO ResolverMeta
 checkIfDefinedForDeclarationAndDefinition iden fact factFunc meta = checkIfDefinedForDeclaration iden (fact exp) (factFunc exp) meta
   where exp = newExpr meta
 
 -- Checking both that the variable exists, and that the variable is not a functions I don't want people to redeclare functions/classes as simple variables
-checkIfDefinedForDefinition :: TextType -> (Int -> DECLARATION) -> DECLARATION -> ResolverMeta -> IO ResolverMeta
+checkIfDefinedForDefinition :: TextType -> (ID -> DECLARATION) -> DECLARATION -> ResolverMeta -> IO ResolverMeta
 checkIfDefinedForDefinition iden decFact dec meta = do
   let exp = newExpr meta
   maybeDec <- findInClosure iden meta
@@ -187,20 +187,20 @@ checkIfDefinedForDefinition iden decFact dec meta = do
     maybeId <- findIdInVariables iden meta
     if isJust maybeId then do
       if isVariableDeclaration (declarationVector meta V.! fromJust maybeId) then do
-        return meta{declarations=decFact (fromJust maybeId):declarations meta}
+        return meta{declarations=decFact (ID (fromJust maybeId)):declarations meta}
       else do
         return meta{
           resolverErrors="This is not a variable declaration":resolverErrors meta
-          , declarations=decFact (-1):declarations meta
+          , declarations=decFact NON_ID:declarations meta
         }
     else
       return meta{
         resolverErrors="Variable is not in scope":resolverErrors meta
-        , declarations=decFact (-1):declarations meta
+        , declarations=decFact NON_ID:declarations meta
       }
 
 -- Here I only check but I don't create it
-checkIfReferenceForDefinition :: TextType -> (Int -> EXPRESSION) -> EXPRESSION -> ResolverMeta -> IO ResolverMeta
+checkIfReferenceForDefinition :: TextType -> (ID -> EXPRESSION) -> EXPRESSION -> ResolverMeta -> IO ResolverMeta
 checkIfReferenceForDefinition iden factExp funcExp meta = do
   inClosure <- isInClosure iden meta
   if isInFunction meta && inClosure then do
@@ -208,13 +208,13 @@ checkIfReferenceForDefinition iden factExp funcExp meta = do
   else do
     maybeId <- findIdInVariables iden meta
     if isJust maybeId then
-      return meta{newExpr=factExp (fromJust maybeId)}
+      return meta{newExpr=factExp (ID (fromJust maybeId))}
     else do
       return meta{
         resolverErrors="Variable is not in scope":resolverErrors meta
-        , newExpr=factExp (-1)}
+        , newExpr=factExp NON_ID}
 
-checkIfCallReferenceForDefinition :: TextType -> (Int -> EXPRESSION) -> EXPRESSION -> ResolverMeta -> IO ResolverMeta
+checkIfCallReferenceForDefinition :: TextType -> (ID -> EXPRESSION) -> EXPRESSION -> ResolverMeta -> IO ResolverMeta
 checkIfCallReferenceForDefinition iden factExp funcExp meta = do
   maybeDec <- findInClosure iden meta
   if isInFunction meta && isJust maybeDec then do
@@ -229,15 +229,15 @@ checkIfCallReferenceForDefinition iden factExp funcExp meta = do
     if isJust maybeId then do
       print (declarationVector meta V.! fromJust maybeId)
       if not (isVariableDeclaration (declarationVector meta V.! fromJust maybeId)) then do
-        return meta{newExpr=factExp (fromJust maybeId)}
+        return meta{newExpr=factExp (ID (fromJust maybeId))}
       else do
         return meta{
           resolverErrors="Not a function call":resolverErrors meta
-        , newExpr=factExp (-1)}
+        , newExpr=factExp NON_ID}
     else do
       return meta{
         resolverErrors="Variable is not in scope":resolverErrors meta
-        , newExpr=factExp (-1)}
+        , newExpr=factExp NON_ID}
   
 isFunctionOrClass :: DECLARATION -> Bool
 isFunctionOrClass (DEC_FUNC _) = True
@@ -258,8 +258,7 @@ checkIfFunctionOrClassIsDefined iden dec meta = do
     let (currentResEnv:_) = resolverEnv meta
     maybeId <- getIdOfIden iden currentResEnv
     if isNothing maybeId then do
-      newMeta <- updateBlockInMeta (currentVariableId meta) iden meta
-      return newMeta
+      updateBlockInMeta (currentVariableId meta) iden meta
     else
       return meta{resolverErrors="Variable already declared in scope":resolverErrors meta}
     

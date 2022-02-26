@@ -87,7 +87,7 @@ functionMetaChanger iden params meta newMeta = do
   if isInFunction meta then do
     checkIfFunctionOrClassIsDefined iden (DEC_FUNC (RC_FUNC_DEC iden params (BLOCK_STMT (declarations newMeta)))) meta{isInFunction = isInFunction meta, resolverErrors=resolverErrors newMeta}
   else do
-    cMeta <- checkIfFunctionOrClassIsDefined iden (DEC_FUNC (R_FUNC_DEC iden params (BLOCK_STMT (declarations newMeta)) (currentVariableId newMeta))) meta{isInFunction = isInFunction meta, resolverErrors=resolverErrors newMeta}
+    cMeta <- checkIfFunctionOrClassIsDefined iden (DEC_FUNC (R_FUNC_DEC iden params (BLOCK_STMT (declarations newMeta)) (ID (currentVariableId newMeta)))) meta{isInFunction = isInFunction meta, resolverErrors=resolverErrors newMeta}
     return (updateCurrentVariableInMeta (DEC_FUNC . R_FUNC_DEC iden params (BLOCK_STMT (declarations newMeta))) cMeta)
 
 methodMetaChanger :: TextType -> [DECLARATION] -> ResolverMeta -> ResolverMeta -> IO ResolverMeta
@@ -100,7 +100,7 @@ resolveClassDeclaration (CLASS_DEC iden methods) meta = do
     if isInFunction meta then do
       handleSaveClassDec meta newMeta >>= checkIfFunctionOrClassIsDefined iden (R_DEC_CLASS (RC_CLASS_DEC iden newMethods))
     else do
-      handleSaveClassDec meta (updateCurrentVariableInMeta (R_DEC_CLASS . R_CLASS_DEC iden newMethods) newMeta) >>= checkIfFunctionOrClassIsDefined iden (R_DEC_CLASS (R_CLASS_DEC iden newMethods (currentVariableId newMeta)))
+      handleSaveClassDec meta (updateCurrentVariableInMeta (R_DEC_CLASS . R_CLASS_DEC iden newMethods) newMeta) >>= checkIfFunctionOrClassIsDefined iden (R_DEC_CLASS (R_CLASS_DEC iden newMethods (ID (currentVariableId newMeta))))
       
 resolveClassDeclaration (SUB_CLASS_DEC iden parentIden methods) meta = do
   let cMeta = updateResolverErrorsByPredicate (iden == parentIden) "Class name cannot be parent class name" meta
@@ -110,14 +110,16 @@ resolveClassDeclaration (SUB_CLASS_DEC iden parentIden methods) meta = do
     inClosure <- isInClosure parentIden meta
     if inClosure then do
       handleSaveClassDec meta newMeta{
-         declarations=R_DEC_CLASS (RC_SUB_CLASS_DEC iden parentIden newMethods (-1)):declarations meta
+         declarations=R_DEC_CLASS (RC_SUB_CLASS_DEC iden parentIden newMethods NON_ID):declarations meta
       } 
     else do
-      maybeParentId <- findIdInVariables parentIden newMeta
-      handleSaveClassDec meta (parentNotInScopeError maybeParentId newMeta) >>= checkIfFunctionOrClassIsDefined iden (R_DEC_CLASS (RC_SUB_CLASS_DEC iden parentIden newMethods (fromMaybe (-1) maybeParentId)))
+      maybeParentIdVal <- (findIdInVariables parentIden newMeta)
+      let maybeParentId = ID <$> maybeParentIdVal
+      handleSaveClassDec meta (parentNotInScopeError maybeParentId newMeta) >>= checkIfFunctionOrClassIsDefined iden (R_DEC_CLASS (RC_SUB_CLASS_DEC iden parentIden newMethods (fromMaybe NON_ID maybeParentId)))
   else do
-    maybeParentId <- findIdInVariables parentIden newMeta
-    handleSaveClassDec meta (parentNotInScopeError maybeParentId (updateCurrentVariableInMeta (\p -> R_DEC_CLASS (R_SUB_CLASS_DEC iden parentIden newMethods p (fromMaybe (-1) maybeParentId))) cMeta))
+    maybeParentIdVal <- findIdInVariables parentIden newMeta
+    let maybeParentId = ID <$> maybeParentIdVal
+    handleSaveClassDec meta (parentNotInScopeError maybeParentId (updateCurrentVariableInMeta (\p -> R_DEC_CLASS (R_SUB_CLASS_DEC iden parentIden newMethods p (fromMaybe NON_ID maybeParentId))) cMeta))
     
 parentNotInScopeError :: Maybe ID -> ResolverMeta -> ResolverMeta
 parentNotInScopeError maybeParentId = updateResolverErrorsByPredicate (isJust maybeParentId) "Parent class is not in scope"

@@ -66,7 +66,7 @@ createGlobalMeta vector = do
   return META { variableValues=vector, EvalMeta.closure=[], eval=SKIP_EVAL }
 
 findValueInMeta :: ID -> META -> IO EVAL
-findValueInMeta id meta = return (variableValues meta V.! id)
+findValueInMeta (ID id) meta = return (variableValues meta V.! id)
 
 findValueInFunction :: T.Text -> META -> IO EVAL
 findValueInFunction iden meta = do
@@ -85,13 +85,13 @@ maybeFindValueInFunction iden meta = do
 
 findParentClass :: TextType -> ID -> META -> IO EVAL
 findParentClass iden id meta = do
-  if id == (-1) then do
+  if id == NON_ID then do
     findValueInFunction iden meta
   else do
     findValueInMeta id meta
 
 addUpdateValueToMeta :: ID -> META -> IO META
-addUpdateValueToMeta id meta = return meta{variableValues=V.update (variableValues meta) (V.singleton (id, eval meta))}
+addUpdateValueToMeta (ID id) meta = return meta{variableValues=V.update (variableValues meta) (V.singleton (id, eval meta))}
 
 addUpdateScopeInMeta :: T.Text -> META -> IO META
 addUpdateScopeInMeta iden meta = do

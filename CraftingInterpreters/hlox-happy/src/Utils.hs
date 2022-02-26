@@ -4,4 +4,4 @@ import qualified Data.Text as T
 
 -- Types
 type TextType = T.Text
-type ID = Int
+data ID = ID Int | NON_ID deriving (Eq, Show) 
