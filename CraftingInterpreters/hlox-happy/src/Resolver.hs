@@ -66,8 +66,8 @@ resolveDeclaration x meta = return meta{declarations=x:declarations meta}
 resolveVarDeclaration :: VARIABLE_DECLARATION -> ResolverMeta -> IO ResolverMeta
 resolveVarDeclaration (VAR_DEC_DEF iden exp) meta = resolveExpression exp meta >>= checkIfDefinedForDeclarationAndDefinition iden (R_VAR_DEC_DEF iden) (RC_VAR_DEC_DEF iden)
 resolveVarDeclaration (VAR_DEC iden) meta = checkIfDefinedForDeclaration iden (R_VAR_DEC iden) (RC_VAR_DEC iden) meta
-resolveVarDeclaration (VAR_DEF iden exp) meta = resolveExpression exp meta >>= checkIfDefinedForDefinition iden (R_DEC_VAR . R_VAR_DEF iden exp) (R_DEC_VAR (RC_VAR_DEF iden exp))
-resolveVarDeclaration (CLASS_VAR_DEF iden pIden exp) meta = resolveExpression exp meta >>= checkIfDefinedForDefinition iden (R_DEC_VAR . R_CLASS_VAR_DEF iden pIden exp) (R_DEC_VAR (RC_CLASS_VAR_DEF iden pIden exp))
+resolveVarDeclaration (VAR_DEF iden exp) meta = resolveExpression exp meta >>= checkIfDefinedForDefinitionWithExpr iden (\exp id -> R_DEC_VAR (R_VAR_DEF iden exp id)) (\exp -> R_DEC_VAR (RC_VAR_DEF iden exp))
+resolveVarDeclaration (CLASS_VAR_DEF iden pIden exp) meta = resolveExpression exp meta >>= checkIfDefinedForDefinitionWithExpr iden (\exp id -> R_DEC_VAR (R_CLASS_VAR_DEF iden pIden exp id)) (\exp -> R_DEC_VAR (RC_CLASS_VAR_DEF iden pIden exp))
 resolveVarDeclaration (THIS_VAR_DEF iden exp) meta = do
   exprMeta <- resolveExpression exp meta
   return (updateResolverErrorsByPredicate (isInClass meta) "'this' is called outside of class" meta{declarations=R_DEC_VAR (R_THIS_VAR_DEF iden (newExpr meta)):declarations meta})
@@ -213,7 +213,7 @@ handleGrouping fact = handleSingleExp (EXP_GROUPING . fact)
 handleSingleExp :: (EXPRESSION -> EXPRESSION) -> EXPRESSION -> ResolverMeta -> IO ResolverMeta
 handleSingleExp fact exp meta = do
   newMeta <- resolveExpression exp meta
-  return meta{newExpr=fact (newExpr newMeta) }
+  return newMeta{newExpr=fact (newExpr newMeta) }
 
 handleBinaryExp :: (EXPRESSION -> EXPRESSION -> BINARY) -> EXPRESSION -> EXPRESSION -> ResolverMeta -> IO ResolverMeta
 handleBinaryExp fact left right meta = do
@@ -221,7 +221,9 @@ handleBinaryExp fact left right meta = do
   let leftExpr = newExpr leftMeta
   rightMeta <- resolveExpression right leftMeta
   let rightExpr = newExpr rightMeta
-  return meta{newExpr=EXP_BINARY (fact leftExpr rightExpr) }
+  print leftExpr
+  print (EXP_BINARY (fact leftExpr rightExpr))
+  return rightMeta{newExpr=EXP_BINARY (fact leftExpr rightExpr) }
 
 -- TODO: add check that it really calls a function, and relagate the arity check here
 handleCall :: TextType -> [ARGUMENT] -> ResolverMeta -> IO ResolverMeta

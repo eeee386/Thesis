@@ -119,17 +119,10 @@ evalExpression (EXP_UNARY (UNARY_NEGATE x)) meta = do
   if isJust bool then return newMeta{eval=EVAL_BOOL (not (fromJust bool))} else return newMeta{eval=RUNTIME_ERROR "Can only negate truthy values (bool, string, number)"}
 
 evalExpression (EXP_BINARY (BIN_ADD left right)) meta = do
-  print "expr"
-  print left
-  print right
   leftMeta <- evalExpression left meta
   let evaledLeft = eval leftMeta
   rightMeta <- evalExpression right leftMeta
   let evaledRight = eval rightMeta
-  print "mine"
-  print evaledLeft
-  print evaledRight
-  print "mine over"
   return (addHelper evaledLeft evaledRight rightMeta)
 evalExpression (EXP_BINARY (BIN_SUB left right)) meta = binaryNumericHelper left right EVAL_NUMBER (-) meta
 evalExpression (EXP_BINARY (BIN_MUL left right)) meta = binaryNumericHelper left right EVAL_NUMBER (*) meta

@@ -5,7 +5,7 @@ Rewrite of the hlox but using happy parser
 ## Basics
 
 ### Start project
-- stack build happy (only first time)
+- stack build happy (only first time, use bash)
 - stack build
 
 ### Run project

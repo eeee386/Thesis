@@ -173,7 +173,6 @@ checkIfDefinedForDeclarationAndDefinition iden fact factFunc meta = checkIfDefin
 -- Checking both that the variable exists, and that the variable is not a functions I don't want people to redeclare functions/classes as simple variables
 checkIfDefinedForDefinition :: TextType -> (ID -> DECLARATION) -> DECLARATION -> ResolverMeta -> IO ResolverMeta
 checkIfDefinedForDefinition iden decFact dec meta = do
-  let exp = newExpr meta
   maybeDec <- findInClosure iden meta
   if isInFunction meta && isJust maybeDec then do
     if isVariableDeclaration (fromJust maybeDec) then do
@@ -198,6 +197,10 @@ checkIfDefinedForDefinition iden decFact dec meta = do
         resolverErrors="Variable is not in scope":resolverErrors meta
         , declarations=decFact NON_ID:declarations meta
       }
+
+checkIfDefinedForDefinitionWithExpr :: TextType -> (EXPRESSION -> ID -> DECLARATION) -> (EXPRESSION -> DECLARATION) -> ResolverMeta -> IO ResolverMeta
+checkIfDefinedForDefinitionWithExpr iden decFact dec meta = checkIfDefinedForDefinition iden (decFact expr) (dec expr) meta
+  where expr = newExpr meta
 
 -- Here I only check but I don't create it
 checkIfReferenceForDefinition :: TextType -> (ID -> EXPRESSION) -> EXPRESSION -> ResolverMeta -> IO ResolverMeta
