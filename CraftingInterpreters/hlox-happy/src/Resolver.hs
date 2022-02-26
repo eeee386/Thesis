@@ -221,8 +221,6 @@ handleBinaryExp fact left right meta = do
   let leftExpr = newExpr leftMeta
   rightMeta <- resolveExpression right leftMeta
   let rightExpr = newExpr rightMeta
-  print leftExpr
-  print (EXP_BINARY (fact leftExpr rightExpr))
   return rightMeta{newExpr=EXP_BINARY (fact leftExpr rightExpr) }
 
 -- TODO: add check that it really calls a function, and relagate the arity check here

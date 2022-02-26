@@ -164,9 +164,7 @@ evalExpression (EXP_CHAIN (CHAIN (l:links))) meta = do
 evalExpression EXP_THIS meta = do
   ev <- findValueInFunction "this" meta
   return meta{eval=ev}
-evalExpression exp meta = do
-   print exp
-   return meta{eval=RUNTIME_ERROR "Expression cannot be evaluated"}
+evalExpression exp meta = return meta{eval=RUNTIME_ERROR "Expression cannot be evaluated"}
 
 
 -- Resolver already adds the init function to the  
