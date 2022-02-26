@@ -35,6 +35,8 @@ evalDeclarations decs meta = do
             evalDeclarations rest newMeta
 
 
+
+
 evalDeclaration :: DECLARATION -> META -> IO META
 evalDeclaration (DEC_STMT (PRINT_STMT x)) meta = do
   newMeta <- evalExpression x meta
@@ -42,6 +44,7 @@ evalDeclaration (DEC_STMT (PRINT_STMT x)) meta = do
   return newMeta
 evalDeclaration (DEC_STMT (EXPR_STMT x)) meta = do
   evalExpression x meta
+  
 evalDeclaration (R_DEC_VAR (R_VAR_DEC_DEF iden expr id)) meta = do
   newMeta <- evalExpression expr meta
   handleVarDefinition iden id newMeta
@@ -51,36 +54,33 @@ evalDeclaration (R_DEC_VAR (R_VAR_DEF iden expr id)) meta = do
   handleVarDefinition iden id newMeta
 evalDeclaration (R_DEC_VAR (R_CLASS_VAR_DEF iden pIden expr classId)) meta = do
     classEval <- findValueInMeta classId meta
-    newMeta <- evalExpression expr meta
-    case classEval of
-      (CLASS_DEC_EVAL name evals clos id) -> do
-        newClos <- updateScopeInClosure pIden (eval newMeta) clos
-        addUpdateValueToMeta id newMeta{eval=CLASS_DEC_EVAL name evals newClos id}
-      (SUB_CLASS_DEC_EVAL name parentName evals clos id parentId) -> do
-        newClos <- updateScopeInClosure pIden (eval newMeta) clos
-        addUpdateValueToMeta id newMeta{eval=SUB_CLASS_DEC_EVAL name parentName evals newClos id parentId}
+    let evalClassDec newMeta = case classEval of
+          (CLASS_DEC_EVAL name evals clos id) -> do
+            newClos <- updateScopeInClosure pIden (eval newMeta) clos
+            addUpdateValueToMeta id newMeta{eval=CLASS_DEC_EVAL name evals newClos id}
+          (SUB_CLASS_DEC_EVAL name parentName evals clos id parentId) -> do
+            newClos <- updateScopeInClosure pIden (eval newMeta) clos
+            addUpdateValueToMeta id newMeta{eval=SUB_CLASS_DEC_EVAL name parentName evals newClos id parentId}
+          _ -> return newMeta{eval=RUNTIME_ERROR "Unknown error"}
+    evalExpression expr meta >>= checkIfLastEvalIsRuntimeError evalClassDec
 
-evalDeclaration (R_DEC_VAR (RC_VAR_DEC_DEF iden expr)) meta = evalExpression expr meta >>= addUpdateClosureInMeta iden
+
+evalDeclaration (R_DEC_VAR (RC_VAR_DEC_DEF iden expr)) meta = evalExpression expr meta >>= checkIfLastEvalIsRuntimeError (addUpdateClosureInMeta iden)
 evalDeclaration (R_DEC_VAR (RC_VAR_DEC iden)) meta = addUpdateClosureInMeta iden meta{eval=EVAL_NIL}
-evalDeclaration (R_DEC_VAR (RC_VAR_DEF iden expr)) meta = evalExpression expr meta >>= addUpdateClosureInMeta iden
+evalDeclaration (R_DEC_VAR (RC_VAR_DEF iden expr)) meta = evalExpression expr meta >>= checkIfLastEvalIsRuntimeError (addUpdateClosureInMeta iden)
 
 evalDeclaration (DEC_STMT (BLOCK_STMT x)) meta = evalBlock x meta
-evalDeclaration (DEC_STMT (IF_STMT expr stmt)) meta = do
-  newMeta <- evalExpression expr meta
-  if maybeEvalTruthy (eval newMeta) == Just True then evalDeclaration (createDecFromStatement stmt) newMeta else return newMeta
-evalDeclaration (DEC_STMT (IF_ELSE_STMT expr stmt1 stmt2)) meta = do
-  newMeta  <- evalExpression expr meta
-  if
-    maybeEvalTruthy (eval newMeta) == Just True
-  then evalDeclaration (createDecFromStatement stmt1) newMeta
-  else evalDeclaration (createDecFromStatement stmt2) newMeta
-evalDeclaration (DEC_STMT (LOOP expr stmt)) meta = do
-  let lastEval = eval meta
-  newMeta <- evalExpression expr meta
-  if maybeEvalTruthy (eval newMeta) == Just True && not (isBreak lastEval) then do
-    evalDeclaration (createDecFromStatement stmt) newMeta >>= evalDeclaration (DEC_STMT (LOOP expr stmt))
-  else
-    return newMeta
+evalDeclaration (DEC_STMT (IF_STMT expr stmt)) meta = evalExpression expr meta >>= checkIfLastEvalIsRuntimeError evalIf
+  where evalIf newMeta = if maybeEvalTruthy (eval newMeta) == Just True then evalDeclaration (createDecFromStatement stmt) newMeta else return newMeta
+evalDeclaration (DEC_STMT (IF_ELSE_STMT expr stmt1 stmt2)) meta = evalExpression expr meta >>= checkIfLastEvalIsRuntimeError evalIfElse
+  where evalIfElse newMeta = if maybeEvalTruthy (eval newMeta) == Just True then evalDeclaration (createDecFromStatement stmt1) newMeta else evalDeclaration (createDecFromStatement stmt2) newMeta
+evalDeclaration (DEC_STMT (LOOP expr stmt)) meta = evalExpression expr meta >>= checkIfLastEvalIsRuntimeError evalLoop
+  where lastEval = eval meta
+        evalLoop newMeta = if maybeEvalTruthy (eval newMeta) == Just True && not (isBreak lastEval) then do
+                                   evalDeclaration (createDecFromStatement stmt) newMeta >>= evalDeclaration (DEC_STMT (LOOP expr stmt))
+                                 else
+                                   return newMeta
+
 -- closure meta will be an empty list, so it could be an [] as well
 evalDeclaration (DEC_FUNC (R_FUNC_DEC iden params stmt id)) meta = functionDecEvalHelper (addUpdateValueToMeta id) iden params stmt id meta
 evalDeclaration (DEC_FUNC (RC_FUNC_DEC iden params stmt)) meta = functionDecEvalHelper (addUpdateScopeInMeta iden) iden params stmt (-1) meta
@@ -146,26 +146,25 @@ evalExpression (EXP_CALL (CALL_MULTI call args)) meta = evalExpression (EXP_CALL
 
 evalExpression (EXP_CHAIN (CHAIN (l:links))) meta = do
   case l of
-    (LINK_THIS) -> do
+    LINK_THIS -> do
       classEval <- findValueInFunction "this" meta
       return meta{eval=classEval}
-    (LINK_SUPER) -> do
-      classEval <- findValueInFunction "this" meta
+    LINK_SUPER -> do
       (SUB_CLASS_DEC_EVAL _ parentName _ _ _ parentId) <- findValueInFunction "this" meta
       parentClassEval <- findParentClass parentName parentId meta
       evalExpression (EXP_CHAIN (CHAIN links)) meta{eval=parentClassEval}
-    (LINK_CALL call) -> do
-      case (eval meta) of
+    LINK_CALL _ -> do
+      case eval meta of
         (CLASS_DEC_EVAL _ _ clos _) -> handleChainCall l links clos meta
         (SUB_CLASS_DEC_EVAL _ _ _ clos _ _) -> handleChainCall l links clos meta
-        otherwise -> return meta{eval=RUNTIME_ERROR "Dot operation is only permitted on classes"}
+        _ -> return meta{eval=RUNTIME_ERROR "Dot operation is only permitted on classes"}
     (LINK_IDENTIFIER x) -> do
-      case (eval meta) of
+      case eval meta of
         (CLASS_DEC_EVAL _ _ clos _) -> handleChainIdentifier l links clos meta
         (SUB_CLASS_DEC_EVAL _ _ _ clos _ _) -> handleChainIdentifier l links clos meta
-        otherwise -> return meta{eval=RUNTIME_ERROR "Dot operation is only permitted on classes"}
+        _ -> return meta{eval=RUNTIME_ERROR "Dot operation is only permitted on classes"}
 
-evalExpression (EXP_THIS) meta = do
+evalExpression EXP_THIS meta = do
   ev <- findValueInFunction "this" meta
   return meta{eval=ev}
 evalExpression _ meta = return meta{eval=RUNTIME_ERROR "Expression cannot be evaluated"}
@@ -229,6 +228,11 @@ handleMethodsEval :: [DECLARATION] -> META -> IO META
 handleMethodsEval (d:decs) meta = evalDeclaration d meta >>= handleMethodsEval decs
 handleMethodsEval [] meta = return meta
 
+checkIfLastEvalIsRuntimeError :: (META -> IO META) -> META -> IO META
+checkIfLastEvalIsRuntimeError func meta = do
+  case eval meta of
+    (RUNTIME_ERROR _) -> return meta
+    _ -> func meta
 
 -- Helpers for operations
 maybeEvalNumber :: EVAL -> Maybe Double
@@ -306,5 +310,8 @@ evalTernary trueRes falseRes meta
 -- Variable helpers
 handleVarDefinition :: TextType -> ID -> META -> IO META
 handleVarDefinition iden id meta = do
-  newMeta <- addUpdateValueToMeta id meta
-  return newMeta{eval=DEC_EVAL iden (eval newMeta) id}
+  case eval meta of
+    (RUNTIME_ERROR x) -> return (meta{eval=RUNTIME_ERROR x})
+    _ -> do
+      newMeta <- addUpdateValueToMeta id meta
+      return newMeta{eval=DEC_EVAL iden (eval newMeta) id}

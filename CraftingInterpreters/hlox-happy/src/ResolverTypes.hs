@@ -186,8 +186,6 @@ checkIfDefinedForDefinition iden decFact dec meta = do
   else do
     maybeId <- findIdInVariables iden meta
     if isJust maybeId then do
-      print (declarationVector meta)
-      print (fromJust maybeId)
       if isVariableDeclaration (declarationVector meta V.! fromJust maybeId) then do
         return meta{declarations=decFact (fromJust maybeId):declarations meta}
       else do
@@ -218,7 +216,6 @@ checkIfReferenceForDefinition iden factExp funcExp meta = do
 
 checkIfCallReferenceForDefinition :: TextType -> (Int -> EXPRESSION) -> EXPRESSION -> ResolverMeta -> IO ResolverMeta
 checkIfCallReferenceForDefinition iden factExp funcExp meta = do
-  print "is called"
   maybeDec <- findInClosure iden meta
   if isInFunction meta && isJust maybeDec then do
     if not (isVariableDeclaration (fromJust maybeDec)) then do
