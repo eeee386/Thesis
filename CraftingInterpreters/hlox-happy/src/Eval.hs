@@ -26,12 +26,12 @@ evalDeclarations decs meta = do
     newMeta <- evalDeclaration current meta
     let ev = eval newMeta
     if isReturn ev || isBreakOrContinue ev
-      then do return meta{eval=ev}
+      then do return newMeta{eval=ev}
       else do
         if isRuntimeError ev
           then do
             print ev
-            return meta{eval=ev}
+            return newMeta{eval=ev}
           else do
             evalDeclarations rest newMeta
 
@@ -70,17 +70,16 @@ evalDeclaration (R_DEC_VAR (RC_VAR_DEF iden expr)) meta = evalExpression expr me
 
 evalDeclaration (DEC_STMT (BLOCK_STMT x)) meta = evalBlock x meta
 evalDeclaration (DEC_STMT (IF_STMT expr stmt)) meta = evalExpression expr meta >>= checkIfLastEvalIsRuntimeError evalIf
-  where evalIf newMeta = if maybeEvalTruthy (eval newMeta) == Just True then evalDeclaration (createDecFromStatement stmt) newMeta else return newMeta
+  where evalIf newMeta = if maybeEvalTruthy (eval newMeta) == Just True then do
+                           evalDeclaration (createDecFromStatement stmt) newMeta
+                         else return newMeta
 evalDeclaration (DEC_STMT (IF_ELSE_STMT expr stmt1 stmt2)) meta = evalExpression expr meta >>= checkIfLastEvalIsRuntimeError evalIfElse
   where evalIfElse newMeta = if maybeEvalTruthy (eval newMeta) == Just True then evalDeclaration (createDecFromStatement stmt1) newMeta else evalDeclaration (createDecFromStatement stmt2) newMeta
 evalDeclaration (DEC_STMT (LOOP expr stmt)) meta = evalExpression expr meta >>= checkIfLastEvalIsRuntimeError evalLoop
   where lastEval = eval meta
         evalLoop newMeta = if maybeEvalTruthy (eval newMeta) == Just True && not (isBreak lastEval) && not (isRuntimeError lastEval) then do
-                             print (expr)
-                             print (eval newMeta)
-                             print (lastEval)
                              evalDeclaration (createDecFromStatement stmt) newMeta >>= evalDeclaration (DEC_STMT (LOOP expr stmt))
-                           else
+                           else do
                              return newMeta
 
 -- closure meta will be an empty list, so it could be an [] as well
