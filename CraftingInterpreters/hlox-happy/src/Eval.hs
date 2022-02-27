@@ -90,14 +90,16 @@ evalDeclaration (R_DEC_CLASS (R_CLASS_DEC iden decs id)) meta = addUpdateValueTo
 evalDeclaration (R_DEC_CLASS (RC_CLASS_DEC iden decs)) meta = addUpdateScopeInMeta iden meta{eval=CLASS_DEC_EVAL iden decs (closure meta) NON_ID}
 evalDeclaration (R_DEC_CLASS (R_SUB_CLASS_DEC iden parentIden decs id parentId)) meta = addUpdateValueToMeta id meta{eval=SUB_CLASS_DEC_EVAL iden parentIden decs (closure meta) id parentId}
 evalDeclaration (R_DEC_CLASS (RC_SUB_CLASS_DEC iden parentIden decs parentId)) meta = addUpdateScopeInMeta iden meta{eval=SUB_CLASS_DEC_EVAL iden parentIden decs (closure meta) NON_ID parentId}
+evalDeclaration (DEC_STMT (RETURN exp)) meta = do 
+  expMeta <- evalExpression exp meta
+  return expMeta{eval=RETURN_EVAL (eval expMeta)}
+
 evalDeclaration _ meta = return meta{eval=RUNTIME_ERROR "Unknown error"}
 
 
 functionDecEvalHelper :: (META -> IO META) -> TextType -> [DECLARATION] -> STATEMENT -> ID -> META -> IO META
-functionDecEvalHelper addUpdateFunc iden params stmt id meta = do
-    let evalFunc = FUNC_DEC_EVAL iden (L.length params) params stmt (closure meta) id
-    newMeta <- addUpdateFunc meta
-    return newMeta{eval=evalFunc}
+functionDecEvalHelper addUpdateFunc iden params stmt id meta = addUpdateFunc meta{eval=evalFunc}
+  where evalFunc = FUNC_DEC_EVAL iden (L.length params) params stmt (closure meta) id
 
 evalExpression :: EXPRESSION -> META -> IO META
 evalExpression (EXP_LITERAL (NUMBER x)) meta = return meta{eval=EVAL_NUMBER x}
@@ -177,6 +179,7 @@ evalExpression exp meta = do
 handleCallEval :: [ARGUMENT] -> (META -> IO EVAL) -> META -> IO META
 handleCallEval args findDec meta = do
   ev <- findDec meta
+  print ev
   case ev of 
     FUNC_DEC_EVAL {} -> handleFunctionCall args ev meta
     CLASS_DEC_EVAL _ decs clos _ -> handleClassInitCall args decs clos meta
