@@ -20,8 +20,9 @@ resolveDeclaration :: DECLARATION -> ResolverMeta -> IO ResolverMeta
 resolveDeclaration (DEC_VAR x) meta = resolveVarDeclaration x meta
 resolveDeclaration (DEC_STMT (BLOCK_STMT x)) meta = resolveBlock x meta
 resolveDeclaration (DEC_STMT (RETURN exp)) meta = do
-  resExp <- newExpr <$> resolveExpression exp meta
-  return (updateResolverErrorsByPredicate (isInFunction meta) "Return is not in function" meta{
+  resMeta <- resolveExpression exp meta
+  let resExp = newExpr resMeta
+  return (updateResolverErrorsByPredicate (isInFunction meta) "Return is not in function" resMeta{
     declarations=DEC_STMT (RETURN resExp):declarations meta
 })
 resolveDeclaration (DEC_FUNC x) meta = resolveFunctionDeclaration x meta
@@ -43,7 +44,6 @@ resolveDeclaration (DEC_STMT (IF_STMT exp (BLOCK_STMT decs))) meta = do
   let resExp = newExpr resMeta
   resBlockMeta <- resolveBlock decs resMeta{declarations=[]}
   let (DEC_STMT resBlockStmt) = head (declarations resBlockMeta)
-  print resBlockStmt
   return resBlockMeta{declarations=DEC_STMT (IF_STMT resExp resBlockStmt):declarations meta}
 resolveDeclaration (DEC_STMT (IF_ELSE_STMT exp (BLOCK_STMT ifdecs) (BLOCK_STMT elsedecs))) meta = do
   resMeta <- resolveExpression exp meta
@@ -82,8 +82,8 @@ resolveFunctionDeclarationHelper :: TextType -> [DECLARATION] -> [DECLARATION] -
 resolveFunctionDeclarationHelper iden params decs changer meta = do
   newBlockMeta <- addBlockToMeta meta >>= addClosureToMeta
   let isUniqueParamNames = U.allUnique (map getIdentifierFromParams params)
-  let updatedParams = handleParams params newBlockMeta 
-  newMeta <- resolveDeclarations decs (updateResolverErrorsByPredicate isUniqueParamNames "Parameter names are not unique" (newBlockMeta{
+  updatedParams <- handleParams params newBlockMeta
+  newMeta <- resolveDeclarations decs (updateResolverErrorsByPredicate isUniqueParamNames "Parameter names are not unique" (updatedParams{
                                        isInFunction = True
                                        , declarations=[]
   })) >>= reverseDeclarationsAndErrors
@@ -242,5 +242,6 @@ handleParams (p:params) meta = do
    let (DEC_VAR (PARAM iden)) = p
    newClosure <- updateClosure iden p (closure meta)
    handleParams params meta{closure=newClosure}
+handleParams [] meta = return meta
 
 

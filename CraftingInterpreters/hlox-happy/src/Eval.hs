@@ -25,15 +25,14 @@ evalDeclarations decs meta = do
     let (current:rest) = decs
     newMeta <- evalDeclaration current meta
     let ev = eval newMeta
-    if isReturn ev || isBreakOrContinue ev
-      then do return newMeta{eval=ev}
-      else do
-        if isRuntimeError ev
-          then do
-            print ev
-            return newMeta{eval=ev}
-          else do
-            evalDeclarations rest newMeta
+    case ev of
+      (RETURN_EVAL x) -> return newMeta{eval=x}
+      (CONTINUE_EVAL) -> return newMeta{eval=ev}
+      (BREAK_EVAL) -> return newMeta{eval=ev}
+      (RUNTIME_ERROR x) -> do
+        print ev
+        return newMeta{eval=ev}
+      _ -> evalDeclarations rest newMeta
 
 
 
@@ -179,7 +178,6 @@ evalExpression exp meta = do
 handleCallEval :: [ARGUMENT] -> (META -> IO EVAL) -> META -> IO META
 handleCallEval args findDec meta = do
   ev <- findDec meta
-  print ev
   case ev of 
     FUNC_DEC_EVAL {} -> handleFunctionCall args ev meta
     CLASS_DEC_EVAL _ decs clos _ -> handleClassInitCall args decs clos meta
