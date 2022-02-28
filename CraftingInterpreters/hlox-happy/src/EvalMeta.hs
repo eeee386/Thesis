@@ -46,7 +46,7 @@ partitionClosure :: TextType -> Closure -> Closure -> IO (Closure, Closure)
 partitionClosure iden (h:rest) first = do
   isFound <- isJust <$> getEvalByIden iden h
   if isFound then do
-    return (first,rest)
+    return (first,h:rest)
   else do
     let newFirst = (h:first)
     partitionClosure iden rest newFirst
