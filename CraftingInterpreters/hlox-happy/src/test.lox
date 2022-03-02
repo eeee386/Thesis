@@ -19,17 +19,23 @@ for (var i = 0; i < 5; i = i+1){ print i;}
 
 var a = 5; for (var i = 0; i < 5; i = i+1){ print i;}
 
+var a = 5; if (a == 5){ print a*2; }
+var a = 4; if (a <= 5){print a*2}
+
 
 for (var i = 0; i < 5; i = i+1){print i;}
 
 // Fix "if without block, it does not see return after first return"
-fun fib(n){if (n <= 1) {return n;} return fib(n-2) + fib(n-1);} for (var i = 0; i < 20; i = i + 1) {print fib(i);}
+fun fib(n) {if (n <= 1) {return n;} return fib(n-2) + fib(n-1);} for (var i = 0; i < 20; i = i + 1) {print fib(i);}
 
 fun addOne(n){print n; if (n == 5) {return n;} return addOne(n+1);} addOne(1);
 
 fun ret(n){if(!n) {return n-1;} return n-3;} print ret(5);
+fun ret(n){if(n) {return n-1;} return n-3;} print ret(5);
 
 var n = 1 ;fun addOne(n){print n; if (n == 5) {return n;} return addOne(n+1);} addOne(n); print n;
+
+fun a(n) {return n;} var b = a(5); print b;
 
 
 fun addOne(n){print n; if (n > 7) {return n;} return addOne(n+1) + addOne(n+3);} addOne(1);

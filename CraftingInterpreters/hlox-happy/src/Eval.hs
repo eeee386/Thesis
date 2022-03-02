@@ -19,16 +19,16 @@ evalBlock = evalDeclarations
 
 evalDeclarations :: [DECLARATION] -> META -> IO META
 evalDeclarations decs meta = do
-  if L.null decs then do
+  if L.null decs || EvalMeta.isReturn meta then do
     return meta
   else do
     let (current:rest) = decs
     newMeta <- evalDeclaration current meta
     let ev = eval newMeta
     case ev of
-      (RETURN_EVAL x) -> return newMeta{eval=x}
-      (CONTINUE_EVAL) -> return newMeta{eval=ev}
-      (BREAK_EVAL) -> return newMeta{eval=ev}
+      (RETURN_EVAL x)  -> return newMeta{eval=x, EvalMeta.isReturn=True}
+      CONTINUE_EVAL -> return newMeta{eval=ev}
+      BREAK_EVAL -> return newMeta{eval=ev}
       (RUNTIME_ERROR x) -> do
         print ev
         return newMeta{eval=ev}
@@ -215,8 +215,8 @@ handleFunctionCall args ev meta = do
     let numberOfClos = L.length clos
     updatedClosMeta <- addSavedClosure clos meta >>= addNewScopeToMeta
     evaledArgsMetas <- Prelude.mapM (`evalExpression` updatedClosMeta) args
-    if L.any (isRuntimeError . eval) evaledArgsMetas then return meta{eval=fromJust (L.find isRuntimeError (L.map eval evaledArgsMetas))} else do
-      handleArgumentsEval params (L.map eval evaledArgsMetas) updatedClosMeta >>= evalDeclaration (createDecFromStatement stmt) >>= deleteScopeFromMeta >>= deleteSavedClosure numberOfClos
+    if L.any (isRuntimeError . eval) evaledArgsMetas then return updatedClosMeta{eval=fromJust (L.find isRuntimeError (L.map eval evaledArgsMetas))} else do
+      handleArgumentsEval params (L.map eval evaledArgsMetas) updatedClosMeta >>= evalDeclaration (createDecFromStatement stmt) >>= setReturnToFalse >>= deleteScopeFromMeta >>= deleteSavedClosure numberOfClos
 
 multiCallGetFunc :: META -> IO EVAL
 multiCallGetFunc meta = return (eval meta)  

@@ -58,12 +58,13 @@ data META = META {
   variableValues :: V.Vector EVAL
   , closure :: Closure
   , eval :: EVAL
+  , isReturn :: Bool
                  } deriving Show
 
 
 createGlobalMeta ::  V.Vector EVAL -> IO META
 createGlobalMeta vector = do
-  return META { variableValues=vector, EvalMeta.closure=[], eval=SKIP_EVAL }
+  return META { variableValues=vector, EvalMeta.closure=[], eval=SKIP_EVAL, EvalMeta.isReturn=False }
 
 findValueInMeta :: ID -> META -> IO EVAL
 findValueInMeta (ID id) meta = return (variableValues meta V.! id)
@@ -92,6 +93,9 @@ findParentClass iden id meta = do
 
 addUpdateValueToMeta :: ID -> META -> IO META
 addUpdateValueToMeta (ID id) meta = return meta{variableValues=V.update (variableValues meta) (V.singleton (id, eval meta))}
+
+addUpdateValueToMetaWithEval :: ID  -> EVAL -> META -> IO META
+addUpdateValueToMetaWithEval (ID id) ev meta = return meta{variableValues=V.update (variableValues meta) (V.singleton (id, ev))}
 
 addUpdateScopeInMeta :: T.Text -> META -> IO META
 addUpdateScopeInMeta iden meta = do
@@ -128,3 +132,6 @@ addSavedClosure clos meta = return meta{EvalMeta.closure=mconcat [clos, EvalMeta
 
 deleteSavedClosure :: Int -> META -> IO META
 deleteSavedClosure numberOfClos meta = return meta{EvalMeta.closure= drop numberOfClos (EvalMeta.closure meta)}
+
+setReturnToFalse ::  META -> IO META
+setReturnToFalse meta = return meta{EvalMeta.isReturn=False}

@@ -102,8 +102,10 @@ findIdInVariables iden meta
 findIdenInMeta :: T.Text -> ResolverMeta -> IO Bool
 findIdenInMeta iden meta = isJust <$> findIdInVariables iden meta
 
-updateCurrentVariableInMeta :: (ID -> DECLARATION) -> ResolverMeta -> ResolverMeta
-updateCurrentVariableInMeta decFact meta = meta{
+updateCurrentVariableInMeta :: TextType -> (ID -> DECLARATION) -> ResolverMeta -> IO ResolverMeta
+updateCurrentVariableInMeta iden decFact meta = do
+  newMeta <- updateBlockInMeta currId iden meta
+  return newMeta{
   declarations = decFact (ID currId):declarations meta
   , currentVariableId=currentVariableId meta+1
   , variableVector= V.snoc (variableVector meta) EVAL_NIL
@@ -116,6 +118,12 @@ updateClosure iden dec closure = do
   let (current:rest) = closure
   HT.insert current iden dec
   return (current:rest)
+
+updateClosureInMeta :: TextType -> DECLARATION -> ResolverMeta -> IO ResolverMeta
+updateClosureInMeta iden dec meta = do
+  newClosure <- updateClosure iden dec (closure meta)
+  return meta{closure=newClosure, declarations=dec:declarations meta}
+
   
 addClosureToMeta :: ResolverMeta -> IO ResolverMeta
 addClosureToMeta meta = do
@@ -149,24 +157,22 @@ reverseDeclarationsAndErrors :: ResolverMeta -> IO ResolverMeta
 reverseDeclarationsAndErrors meta = return meta{declarations=reverse (declarations meta), resolverErrors=reverse (resolverErrors meta)} 
 
 -- Checking for closures as the values can depend on parameters, and if we have branching recursion, the running functions could rewrite the value in the global vector
-checkIfDefinedForDeclaration :: TextType -> (ID -> RESOLVED_VARIABLE_DECLARATION) -> RESOLVED_VARIABLE_DECLARATION -> ResolverMeta -> IO ResolverMeta
+checkIfDefinedForDeclaration :: TextType -> (ID -> DECLARATION) -> DECLARATION -> ResolverMeta -> IO ResolverMeta
 checkIfDefinedForDeclaration iden fact factFunc meta = do
   inScope <- isInScope iden meta
   if isInFunction meta && inScope then do
-    newClosure <- updateClosure iden (R_DEC_VAR factFunc) (closure meta)
-    return meta{declarations=R_DEC_VAR factFunc:declarations meta, closure=newClosure}
+    updateClosureInMeta iden factFunc meta
   else do
     let (currentResEnv:_) = resolverEnv meta
     maybeId <- getIdOfIden iden currentResEnv
     if isNothing maybeId then do
-      uMeta <- updateBlockInMeta (currentVariableId meta) iden meta
-      return (updateCurrentVariableInMeta (R_DEC_VAR . fact) uMeta)
+      updateCurrentVariableInMeta iden fact meta
     else
       return meta{
         resolverErrors="Variable already declared in scope":resolverErrors meta
-        , declarations=R_DEC_VAR (fact NON_ID):declarations meta}
+        , declarations=fact NON_ID:declarations meta}
     
-checkIfDefinedForDeclarationAndDefinition :: TextType -> (EXPRESSION -> ID -> RESOLVED_VARIABLE_DECLARATION) -> (EXPRESSION -> RESOLVED_VARIABLE_DECLARATION) -> ResolverMeta -> IO ResolverMeta
+checkIfDefinedForDeclarationAndDefinition :: TextType -> (EXPRESSION -> ID -> DECLARATION) -> (EXPRESSION -> DECLARATION) -> ResolverMeta -> IO ResolverMeta
 checkIfDefinedForDeclarationAndDefinition iden fact factFunc meta = checkIfDefinedForDeclaration iden (fact exp) (factFunc exp) meta
   where exp = newExpr meta
 
@@ -247,22 +253,33 @@ isFunctionOrClass (DEC_CLASS _) = True
 isFunctionOrClass (R_DEC_CLASS _) = True
 isFunctionOrClass _ = False
 
-checkIfFunctionOrClassIsDefined :: TextType -> DECLARATION -> ResolverMeta  -> IO ResolverMeta
-checkIfFunctionOrClassIsDefined iden dec meta = do
+checkIfFunctionOrClassIsDefinedAndSaveEmpty :: TextType -> ResolverMeta -> IO (ID, ResolverMeta)
+checkIfFunctionOrClassIsDefinedAndSaveEmpty iden meta = do
   if isInFunction meta then do
     inClosure <- isInClosure iden meta
     if inClosure then do
-      return meta{resolverErrors="Variable already declared in scope":resolverErrors meta}
+      return (NON_ID, meta{resolverErrors="Variable already declared in scope":resolverErrors meta})
     else do
-      newClosure <- updateClosure iden dec (closure meta)
-      return meta{closure=newClosure, declarations=dec:declarations meta}
+      newMeta <- updateClosureInMeta iden EMPTY_DEC meta 
+      return (NON_ID, newMeta)
   else do
     let (currentResEnv:_) = resolverEnv meta
     maybeId <- getIdOfIden iden currentResEnv
     if isNothing maybeId then do
-      updateBlockInMeta (currentVariableId meta) iden meta
+      newMeta <- updateCurrentVariableInMeta iden (const EMPTY_DEC) meta
+      return (ID currId, newMeta)
     else
-      return meta{resolverErrors="Variable already declared in scope":resolverErrors meta}
+      return (NON_ID, meta{resolverErrors="Variable already declared in scope":resolverErrors meta})
+  where currId = currentVariableId meta
+
+updateFunctionOrClassDeclaration :: ID -> TextType -> DECLARATION -> ResolverMeta -> IO ResolverMeta
+updateFunctionOrClassDeclaration id iden dec meta = do
+  if isInFunction meta then do
+    updateClosureInMeta iden dec meta
+  else do
+    let (ID val) = id
+    return meta{declarations=dec:declarations meta, declarationVector=V.update (declarationVector meta) (V.fromList [(val,dec)])}
+
     
 updateResolverErrorsByPredicate :: Bool -> TextType -> ResolverMeta -> ResolverMeta
 updateResolverErrorsByPredicate predicate message meta = meta{resolverErrors=if predicate then resolverErrors meta else message:resolverErrors meta}
