@@ -39,8 +39,8 @@ lexer ('(':cs) = LEFT_PAREN : lexer cs
 lexer (')':cs) = RIGHT_PAREN : lexer cs
 lexer ('{':cs) = LEFT_BRACE : lexer cs
 lexer ('}':cs) = RIGHT_BRACE : lexer cs
-lexer ('<': cs) = LESS : lexer cs
-lexer ('>': cs) = GREATER : lexer cs
+lexer ('<': cs) = lexHandleLess cs
+lexer ('>': cs) = lexHandleGreater cs
 lexer (';': cs) = SEMICOLON : lexer cs
 lexer (':': cs) = COLON : lexer cs
 lexer ('.': cs) = DOT : lexer cs
@@ -88,3 +88,11 @@ lexHandleEqual (c:cs) = if c == '=' then EQUAL_EQUAL : lexer cs else EQUAL : lex
 lexHandleBang :: String -> [Token]
 lexHandleBang [] = [BANG]
 lexHandleBang (c:cs) = if c == '=' then BANG_EQUAL : lexer cs else BANG : lexer (c:cs)
+
+lexHandleLess :: String -> [Token]
+lexHandleLess [] = [LESS]
+lexHandleLess (c:cs) = if c == '=' then LESS_EQUAL : lexer cs else LESS : lexer (c:cs)
+
+lexHandleGreater :: String -> [Token]
+lexHandleGreater [] = [GREATER]
+lexHandleGreater (c:cs) = if c == '=' then GREATER_EQUAL : lexer cs else GREATER : lexer (c:cs)

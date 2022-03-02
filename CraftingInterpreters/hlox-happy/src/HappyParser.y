@@ -180,7 +180,7 @@ ternary        : expression '?' expression ':' expression { TERNARY $1 $3 $5 }
 
 {
 parseError :: [Token] -> a
-parseError _ = error "Parse error"
+parseError tokens = error ("Parse error" ++ show tokens)
 
 
 happyParser = parser . lexer

@@ -3076,7 +3076,7 @@ happySeq = happyDontSeq
 
 
 parseError :: [Token] -> a
-parseError _ = error "Parse error"
+parseError tokens = error ("Parse error" ++ show tokens)
 
 
 happyParser = parser . lexer
