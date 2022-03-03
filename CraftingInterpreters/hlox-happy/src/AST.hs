@@ -18,7 +18,7 @@ instance Show DECLARATION where
   show (DEC_FUNC x) = "function: " ++ show x
   show (DEC_CLASS x) = "class: " ++ show x
   show (R_DEC_CLASS x) = "class: " ++ show x
-  show EMPTY_DEC = ""
+  show EMPTY_DEC = "empty"
 
 
 type IDENTIFIER = TextType
@@ -65,7 +65,7 @@ data RESOLVED_CLASS_DECLARATION = R_CLASS_DEC IDENTIFIER [DECLARATION] ID
                                 | RC_SUB_CLASS_DEC IDENTIFIER IDENTIFIER [DECLARATION] PARENT_ID 
                                 deriving Eq
 instance Show RESOLVED_CLASS_DECLARATION where
-  show (R_CLASS_DEC i methods _) = mconcat ["class name: ", show i, "  methods: ", show methods]
+  show (R_CLASS_DEC i methods id) = mconcat ["class name: ", show i, "  methods: ", show methods, " ", show id]
   show (R_SUB_CLASS_DEC iden parentIden methods _ _) = mconcat ["class name: ", show iden, ", parent: ", show parentIden, ",  methods: ", show methods]
   show (RC_CLASS_DEC i methods) = mconcat ["class name: ", show i, "  methods: ", show methods]
   show (RC_SUB_CLASS_DEC iden parentIden methods _) = mconcat ["class name: ", show iden, ", parent: ", show parentIden, ",  methods: ", show methods]
@@ -163,7 +163,7 @@ type ARGUMENT = EXPRESSION
 data CALL = CALL IDENTIFIER [ARGUMENT] | R_CALL IDENTIFIER [ARGUMENT] ID | RC_CALL IDENTIFIER [ARGUMENT] | CALL_MULTI CALL [ARGUMENT] deriving Eq
 instance Show CALL where
   show (CALL lit args) = mconcat [show lit, "(", show args, ")"]
-  show (R_CALL lit args _) = mconcat [show lit, "(", show args, ")"]
+  show (R_CALL lit args id) = mconcat [show lit, "(", show args, ")", " ", show id]
   show (RC_CALL lit args) = mconcat [show lit, "(", show args, ")"]
   show (CALL_MULTI call args) = mconcat [ show call, "(", show args, ")"]
   

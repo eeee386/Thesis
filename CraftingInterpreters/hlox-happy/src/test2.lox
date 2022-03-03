@@ -1,0 +1,11 @@
+fun v(a) {
+    fun w() {print a;}
+    return w;
+}
+
+fun x(){
+    var y = v(5);
+    var z = v(4);
+    y();
+}
+x();

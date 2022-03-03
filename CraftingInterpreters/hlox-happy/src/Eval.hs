@@ -93,7 +93,8 @@ evalDeclaration (DEC_STMT (RETURN exp)) meta = do
   expMeta <- evalExpression exp meta
   return expMeta{eval=RETURN_EVAL (eval expMeta)}
 
-evalDeclaration _ meta = return meta{eval=RUNTIME_ERROR "Unknown error"}
+evalDeclaration dec meta = do
+  return meta{eval=RUNTIME_ERROR "Unknown error"}
 
 
 functionDecEvalHelper :: (META -> IO META) -> TextType -> [DECLARATION] -> STATEMENT -> ID -> META -> IO META
@@ -189,14 +190,14 @@ handleClassInitCall args decs clos meta = do
   let numberOfClos = L.length clos
   newMeta <- addNewScopeToMeta meta >>= addSavedClosure clos >>= handleMethodsEval decs
   init <- findValueInFunction "init" newMeta
-  handleFunctionCall args init newMeta >>= deleteScopeFromMeta >>= deleteSavedClosure numberOfClos
+  handleFunctionCall args init newMeta >>= cleanUpFunction numberOfClos
 
 handleChainCall :: CHAIN_LINK -> [CHAIN_LINK] -> Closure -> META -> IO META
 handleChainCall (LINK_CALL call) links clos meta = do
   let numberOfClos = L.length clos
   expMeta <- addSavedClosure clos meta >>= evalExpression (EXP_CALL call)
   let exprEval = eval expMeta
-  deleteSavedClosure numberOfClos expMeta{eval=exprEval} >>= evalExpression (EXP_CHAIN (CHAIN links))
+  cleanUpFunction numberOfClos expMeta{eval=exprEval} >>= evalExpression (EXP_CHAIN (CHAIN links))
 
 handleChainIdentifier :: CHAIN_LINK -> [CHAIN_LINK] -> Closure -> META -> IO META
 handleChainIdentifier link links clos meta = do
@@ -216,7 +217,7 @@ handleFunctionCall args ev meta = do
     updatedClosMeta <- addSavedClosure clos meta >>= addNewScopeToMeta
     evaledArgsMetas <- Prelude.mapM (`evalExpression` updatedClosMeta) args
     if L.any (isRuntimeError . eval) evaledArgsMetas then return updatedClosMeta{eval=fromJust (L.find isRuntimeError (L.map eval evaledArgsMetas))} else do
-      handleArgumentsEval params (L.map eval evaledArgsMetas) updatedClosMeta >>= evalDeclaration (createDecFromStatement stmt) >>= setReturnToFalse >>= deleteScopeFromMeta >>= deleteSavedClosure numberOfClos
+      handleArgumentsEval params (L.map eval evaledArgsMetas) updatedClosMeta >>= evalDeclaration (createDecFromStatement stmt) >>= cleanUpFunction numberOfClos
 
 multiCallGetFunc :: META -> IO EVAL
 multiCallGetFunc meta = return (eval meta)  
@@ -231,6 +232,9 @@ handleArgumentsEval [] [] meta = return meta
 handleMethodsEval :: [DECLARATION] -> META -> IO META
 handleMethodsEval (d:decs) meta = evalDeclaration d meta >>= handleMethodsEval decs
 handleMethodsEval [] meta = return meta
+
+cleanUpFunction :: Int -> META -> IO META
+cleanUpFunction numberOfClos meta = setReturnToFalse meta >>= deleteScopeFromMeta >>= deleteSavedClosure numberOfClos
 
 checkIfLastEvalIsRuntimeError :: (META -> IO META) -> META -> IO META
 checkIfLastEvalIsRuntimeError func meta = do

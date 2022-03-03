@@ -129,7 +129,9 @@ parameters                 : parameters ',' IDENTIFIER            { (DEC_VAR (PA
                            | IDENTIFIER                           { [(DEC_VAR (PARAM $1))] }
 
 function_call  : IDENTIFIER '(' arguments ')'         { CALL $1 (reverse $3) }
+               | IDENTIFIER '(' ')'                   { CALL $1 [] }
                | function_call '(' arguments ')'      { CALL_MULTI $1 (reverse $3) }
+               | function_call '(' ')'                { CALL_MULTI $1 [] }
 
 chain          : chaining                             { CHAIN (reverse $1)}
 chaining       : IDENTIFIER '.' IDENTIFIER            { [(LINK_IDENTIFIER $3), (LINK_IDENTIFIER $1)] }

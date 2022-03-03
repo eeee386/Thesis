@@ -42,7 +42,10 @@ instance Show EVAL where
   show SKIP_EVAL = "skip"
   show (FUNC_DEC_EVAL iden arity params stmt _ _) = mconcat ["Function ", show iden, ", arity: ", show arity, ", params: ", show params, ", statement: ", show stmt]
   show (NATIVE_FUNC_DEC_EVAL iden arity params _) = mconcat ["<<native>> Function ", show iden, ", arity: ", show arity, ", params: ", show params]
+  show (CLASS_DEC_EVAL name decs _ id) = mconcat ["Class: ", show name, "decs: ", show decs, "id: ", show id]
+  show (SUB_CLASS_DEC_EVAL name pName decs _ id _) = mconcat ["Class: ", show name, "parent: ", show pName, "decs: ", show decs, "id: ", show id]
   show (RETURN_EVAL x) = "return: " ++ show x
+  show (THIS_EVAL _) = "this"
   show (BREAK_EVAL) = "break"
   show (CONTINUE_EVAL) = "continue"
 

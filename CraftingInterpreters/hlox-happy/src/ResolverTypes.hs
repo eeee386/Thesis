@@ -31,6 +31,7 @@ data ResolverMeta = ResolverMeta {
   , isInSubClass :: Bool
   , isInLoop :: Bool
   , closure :: ResolverClosure
+  , currentFunctionName :: TextType
 } deriving Show
 
 createNewMeta :: IO ResolverMeta
@@ -50,8 +51,12 @@ createNewMeta = do
   , isInSubClass = False
   , isInLoop = False
   , closure = []
+  , currentFunctionName = ""
   }
   
+isInFunctionOrClass :: ResolverMeta -> Bool
+isInFunctionOrClass meta = isInFunction meta || isInClass meta
+
 createResolverBlockEnvironment :: IO ResolverBlockEnvironment
 createResolverBlockEnvironment = HT.new
 
@@ -160,7 +165,7 @@ reverseDeclarationsAndErrors meta = return meta{declarations=reverse (declaratio
 checkIfDefinedForDeclaration :: TextType -> (ID -> DECLARATION) -> DECLARATION -> ResolverMeta -> IO ResolverMeta
 checkIfDefinedForDeclaration iden fact factFunc meta = do
   inScope <- isInScope iden meta
-  if isInFunction meta && inScope then do
+  if isInFunctionOrClass meta && inScope then do
     updateClosureInMeta iden factFunc meta
   else do
     let (currentResEnv:_) = resolverEnv meta
@@ -180,8 +185,8 @@ checkIfDefinedForDeclarationAndDefinition iden fact factFunc meta = checkIfDefin
 checkIfDefinedForDefinition :: TextType -> (ID -> DECLARATION) -> DECLARATION -> ResolverMeta -> IO ResolverMeta
 checkIfDefinedForDefinition iden decFact dec meta = do
   maybeDec <- findInClosure iden meta
-  if isInFunction meta && isJust maybeDec then do
-    if isVariableDeclaration (fromJust maybeDec) then do
+  if isInFunctionOrClass meta && isJust maybeDec then do
+    if not (isCallable iden (fromJust maybeDec) meta) then do
       return meta{declarations=dec:declarations meta}
     else do
       return meta{
@@ -191,7 +196,7 @@ checkIfDefinedForDefinition iden decFact dec meta = do
   else do
     maybeId <- findIdInVariables iden meta
     if isJust maybeId then do
-      if isVariableDeclaration (declarationVector meta V.! fromJust maybeId) then do
+      if not (isCallable iden (declarationVector meta V.! fromJust maybeId) meta) then do
         return meta{declarations=decFact (ID (fromJust maybeId)):declarations meta}
       else do
         return meta{
@@ -212,7 +217,7 @@ checkIfDefinedForDefinitionWithExpr iden decFact dec meta = checkIfDefinedForDef
 checkIfReferenceForDefinition :: TextType -> (ID -> EXPRESSION) -> EXPRESSION -> ResolverMeta -> IO ResolverMeta
 checkIfReferenceForDefinition iden factExp funcExp meta = do
   inClosure <- isInClosure iden meta
-  if isInFunction meta && inClosure then do
+  if isInFunctionOrClass meta && inClosure then do
     return meta{newExpr=funcExp}
   else do
     maybeId <- findIdInVariables iden meta
@@ -226,8 +231,8 @@ checkIfReferenceForDefinition iden factExp funcExp meta = do
 checkIfCallReferenceForDefinition :: TextType -> (ID -> EXPRESSION) -> EXPRESSION -> ResolverMeta -> IO ResolverMeta
 checkIfCallReferenceForDefinition iden factExp funcExp meta = do
   maybeDec <- findInClosure iden meta
-  if isInFunction meta && isJust maybeDec then do
-    if not (isVariableDeclaration (fromJust maybeDec)) then do
+  if isInFunctionOrClass meta && isJust maybeDec then do
+    if isCallable iden (fromJust maybeDec) meta then do
       return meta{newExpr=funcExp}
     else do
       return meta{
@@ -236,7 +241,8 @@ checkIfCallReferenceForDefinition iden factExp funcExp meta = do
   else do
     maybeId <- findIdInVariables iden meta
     if isJust maybeId then do
-      if not (isVariableDeclaration (declarationVector meta V.! fromJust maybeId)) then do
+      print (declarationVector meta V.! fromJust maybeId)
+      if isCallable iden (declarationVector meta V.! fromJust maybeId) meta then do
         return meta{newExpr=factExp (ID (fromJust maybeId))}
       else do
         return meta{
@@ -255,7 +261,7 @@ isFunctionOrClass _ = False
 
 checkIfFunctionOrClassIsDefinedAndSaveEmpty :: TextType -> ResolverMeta -> IO (ID, ResolverMeta)
 checkIfFunctionOrClassIsDefinedAndSaveEmpty iden meta = do
-  if isInFunction meta then do
+  if isInFunctionOrClass meta then do
     inClosure <- isInClosure iden meta
     if inClosure then do
       return (NON_ID, meta{resolverErrors="Variable already declared in scope":resolverErrors meta})
@@ -266,6 +272,9 @@ checkIfFunctionOrClassIsDefinedAndSaveEmpty iden meta = do
     let (currentResEnv:_) = resolverEnv meta
     maybeId <- getIdOfIden iden currentResEnv
     if isNothing maybeId then do
+      print iden
+      print EMPTY_DEC
+      print currId
       newMeta <- updateCurrentVariableInMeta iden (const EMPTY_DEC) meta
       return (ID currId, newMeta)
     else
@@ -274,7 +283,7 @@ checkIfFunctionOrClassIsDefinedAndSaveEmpty iden meta = do
 
 updateFunctionOrClassDeclaration :: ID -> TextType -> DECLARATION -> ResolverMeta -> IO ResolverMeta
 updateFunctionOrClassDeclaration id iden dec meta = do
-  if isInFunction meta then do
+  if isInFunctionOrClass meta then do
     updateClosureInMeta iden dec meta
   else do
     let (ID val) = id
@@ -283,3 +292,16 @@ updateFunctionOrClassDeclaration id iden dec meta = do
     
 updateResolverErrorsByPredicate :: Bool -> TextType -> ResolverMeta -> ResolverMeta
 updateResolverErrorsByPredicate predicate message meta = meta{resolverErrors=if predicate then resolverErrors meta else message:resolverErrors meta}
+
+
+isCallOrFuncDecOrClassDec :: DECLARATION -> Bool
+isCallOrFuncDecOrClassDec (R_DEC_VAR (R_VAR_DEC_DEF _ (EXP_CALL _) _)) = True
+isCallOrFuncDecOrClassDec (R_DEC_VAR (R_VAR_DEF _ (EXP_CALL _) _)) = True
+isCallOrFuncDecOrClassDec (R_DEC_VAR (RC_VAR_DEC_DEF _ (EXP_CALL _))) = True
+isCallOrFuncDecOrClassDec (R_DEC_VAR (RC_VAR_DEF _ (EXP_CALL _))) = True
+isCallOrFuncDecOrClassDec (DEC_FUNC _) = True
+isCallOrFuncDecOrClassDec (R_DEC_CLASS _) = True
+isCallOrFuncDecOrClassDec _ = False
+
+isCallable :: TextType -> DECLARATION -> ResolverMeta -> Bool
+isCallable iden dec meta = currentFunctionName meta == iden || isCallOrFuncDecOrClassDec dec
