@@ -97,6 +97,8 @@ fun a(b, c){
     }
     return new Animal;
 }
+var d = a(1,2)
+d.hello()
 //
 
 //

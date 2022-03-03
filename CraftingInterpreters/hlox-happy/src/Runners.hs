@@ -21,8 +21,6 @@ run text = do
   if not (null (resolverErrors resolverMeta)) then do
     mapM_ print (resolverErrors resolverMeta)
   else do
-    print (declarations resolverMeta)
-    print (declarationVector resolverMeta)
     evalProgram (declarations resolverMeta) (variableVector resolverMeta)
     return ()
 

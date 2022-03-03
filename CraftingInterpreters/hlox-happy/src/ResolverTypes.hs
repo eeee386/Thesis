@@ -241,7 +241,6 @@ checkIfCallReferenceForDefinition iden factExp funcExp meta = do
   else do
     maybeId <- findIdInVariables iden meta
     if isJust maybeId then do
-      print (declarationVector meta V.! fromJust maybeId)
       if isCallable iden (declarationVector meta V.! fromJust maybeId) meta then do
         return meta{newExpr=factExp (ID (fromJust maybeId))}
       else do
@@ -272,9 +271,6 @@ checkIfFunctionOrClassIsDefinedAndSaveEmpty iden meta = do
     let (currentResEnv:_) = resolverEnv meta
     maybeId <- getIdOfIden iden currentResEnv
     if isNothing maybeId then do
-      print iden
-      print EMPTY_DEC
-      print currId
       newMeta <- updateCurrentVariableInMeta iden (const EMPTY_DEC) meta
       return (ID currId, newMeta)
     else
