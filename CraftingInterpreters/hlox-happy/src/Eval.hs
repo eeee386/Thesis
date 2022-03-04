@@ -169,6 +169,7 @@ evalExpression (EXP_CHAIN (CHAIN (l:links))) meta = do
         (CLASS_DEC_EVAL _ _ clos _) -> handleChainIdentifier l links clos meta
         (SUB_CLASS_DEC_EVAL _ _ _ clos _ _) -> handleChainIdentifier l links clos meta
         _ -> return meta{eval=RUNTIME_ERROR "Dot operation is only permitted on classes"}
+evalExpression (EXP_CHAIN (CHAIN [])) meta = return meta
 
 evalExpression EXP_THIS meta = do
   ev <- findValueInClosureInMeta "this" meta
