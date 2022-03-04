@@ -185,19 +185,18 @@ resolveExpression (EXP_CALL (CALL_MULTI call multiArgs)) meta = do
   }
 resolveExpression (EXP_CHAIN (CHAIN links)) meta = do
   let (firstLink:rest) = links
-  if isCall firstLink then do
-    let (LINK_CALL firstCall) = firstLink
-    callMeta <- resolveExpression (EXP_CALL firstCall) meta
-    let (EXP_CALL x) = newExpr callMeta
-    return meta{newExpr=EXP_CHAIN (CHAIN (LINK_CALL x:rest))}
-  else do
-    if isLinkThis firstLink then do
-      return (updateResolverErrorsByPredicate (isInClass meta) "The 'this' keyword has to be called in a class" meta{newExpr=EXP_CHAIN (CHAIN links)})
-    else do
-      if isLinkSuper firstLink then do
-         return (updateResolverErrorsByPredicate (isInClass meta) "The 'super' keyword has to be called in a subclass" meta{newExpr=EXP_CHAIN (CHAIN links)})
-      else do
-         return meta{newExpr=EXP_CHAIN (CHAIN links)}
+  case firstLink of
+    (LINK_CALL firstCall) -> do
+      callMeta <- resolveExpression (EXP_CALL firstCall) meta
+      let (EXP_CALL x) = newExpr callMeta
+      return meta{newExpr=EXP_CHAIN (CHAIN (LINK_CALL x:rest))}
+    (LINK_IDENTIFIER iden) -> do 
+      newMeta <- checkIfReferenceForDefinition iden (\p -> EXP_CHAIN (CHAIN [R_LINK_IDENTIFIER iden p])) (EXP_CHAIN (CHAIN [RC_LINK_IDENTIFIER iden])) meta
+      let (EXP_CHAIN (CHAIN (x:_))) = newExpr newMeta
+      return newMeta{newExpr=EXP_CHAIN (CHAIN (x:rest))}
+    LINK_THIS -> return (updateResolverErrorsByPredicate (isInClass meta) "The 'this' keyword has to be called in a class" meta{newExpr=EXP_CHAIN (CHAIN links)})
+    LINK_SUPER -> return (updateResolverErrorsByPredicate (isInClass meta) "The 'super' keyword has to be called in a subclass" meta{newExpr=EXP_CHAIN (CHAIN links)})
+    _ -> return meta{newExpr=EXP_CHAIN (CHAIN links)}
 
 resolveExpression EXP_THIS meta = return (updateResolverErrorsByPredicate (isInClass meta) "The 'this' keyword has to be called in a class" meta{newExpr=EXP_THIS})
 resolveExpression exp meta = return meta{newExpr=exp}

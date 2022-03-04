@@ -140,6 +140,7 @@ chaining       : IDENTIFIER '.' IDENTIFIER            { [(LINK_IDENTIFIER $3), (
                | 'this' '.' method_chain              { mconcat [$3, [LINK_THIS]] }
                | 'super' '.' method_chain             { mconcat [$3, [LINK_SUPER]] }
                | method_chain '.' IDENTIFIER          { (LINK_IDENTIFIER $3) : $1 }
+               | method_chain '.' method_chain        { mconcat [$3, $1] }
 
 method_chain   : method_chain '.' function_call        { (LINK_CALL $3) : $1 }
                | function_call                         { [LINK_CALL $1] }

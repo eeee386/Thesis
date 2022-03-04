@@ -168,10 +168,12 @@ instance Show CALL where
   show (CALL_MULTI call args) = mconcat [ show call, "(", show args, ")"]
   
 -- CHAIN data structure: list but the first and last element CAN be IDENTIFIERs, and this and super can only be first 
-data CHAIN_LINK = LINK_CALL CALL | LINK_IDENTIFIER IDENTIFIER | LINK_THIS | LINK_SUPER deriving Eq
+data CHAIN_LINK = LINK_CALL CALL | LINK_IDENTIFIER IDENTIFIER | R_LINK_IDENTIFIER IDENTIFIER ID | RC_LINK_IDENTIFIER IDENTIFIER | LINK_THIS | LINK_SUPER deriving Eq
 instance Show CHAIN_LINK where
   show (LINK_CALL x) = show x
   show (LINK_IDENTIFIER x) = show x
+  show (R_LINK_IDENTIFIER x _) = show x
+  show (RC_LINK_IDENTIFIER x) = show x
   show LINK_THIS = "this"
   show LINK_SUPER = "super"
 

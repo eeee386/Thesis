@@ -1,10 +1,9 @@
 class Breakfast {
   cook() {
-    print \"Eggs a-fryin'!\";
+    print "Eggs a-fryin'!";
   }
   serve(who) {
-    print \"Enjoy your breakfast + \" + who + \".\";
+    print "Enjoy your breakfast " + who + ".";
   }
 }
-var a = Breakfast();
-a.cook();
+Breakfast().cook();

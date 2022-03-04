@@ -69,9 +69,12 @@ createGlobalMeta vector = do
 findValueInMeta :: ID -> META -> IO EVAL
 findValueInMeta (ID id) meta = return (variableValues meta V.! id)
 
-findValueInFunction :: T.Text -> META -> IO EVAL
-findValueInFunction iden meta = do
-  values <- mapM (getEvalByIden iden) (EvalMeta.closure meta)
+findValueInClosureInMeta :: T.Text -> META -> IO EVAL
+findValueInClosureInMeta iden meta = findValueInClosure iden (EvalMeta.closure meta)
+
+findValueInClosure :: T.Text -> Closure -> IO EVAL
+findValueInClosure iden clos = do
+  values <- mapM (getEvalByIden iden) clos
   let val = find isJust values
   return (fromJust (fromJust val))
 
@@ -87,7 +90,7 @@ maybeFindValueInFunction iden meta = do
 findParentClass :: TextType -> ID -> META -> IO EVAL
 findParentClass iden id meta = do
   if id == NON_ID then do
-    findValueInFunction iden meta
+    findValueInClosureInMeta iden meta
   else do
     findValueInMeta id meta
 

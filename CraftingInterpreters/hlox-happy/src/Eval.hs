@@ -10,6 +10,7 @@ import Data.Maybe
 import AST
 import Data.Vector as V
 import Data.List as L
+import Data.HashTable.IO as HT
 
 evalProgram :: [DECLARATION] -> V.Vector EVAL -> IO META
 evalProgram x vector = createGlobalMeta vector >>= evalDeclarations x
@@ -111,7 +112,7 @@ evalExpression (EXP_LITERAL (R_IDENTIFIER_REFERENCE _ id)) meta = do
   val <- findValueInMeta id meta
   return meta{eval=val}
 evalExpression (EXP_LITERAL (R_REFERENCE_IN_CLOSURE iden)) meta = do
-  val <- findValueInFunction iden meta
+  val <- findValueInClosureInMeta iden meta
   return meta{eval=val}
 
 evalExpression (EXP_GROUPING (GROUP x)) meta = evalExpression x meta
@@ -144,24 +145,25 @@ evalExpression (EXP_BINARY (BIN_AND left right)) meta = binaryBoolHelper left ri
 evalExpression (EXP_BINARY (BIN_OR left right)) meta = binaryBoolHelper left right createOr meta
 evalExpression (EXP_TERNARY (TERNARY predi trueRes falseRes)) meta = evalExpression predi meta >>= evalTernary trueRes falseRes
 
+evalExpression (EXP_CALL (CALL call_iden args)) meta = handleCallEval args (findValueInClosureInMeta call_iden) meta
 evalExpression (EXP_CALL (R_CALL _ args id)) meta = handleCallEval args (findValueInMeta id) meta
-evalExpression (EXP_CALL (RC_CALL call_iden args)) meta = handleCallEval args (findValueInFunction call_iden) meta
+evalExpression (EXP_CALL (RC_CALL call_iden args)) meta = handleCallEval args (findValueInClosureInMeta call_iden) meta
 evalExpression (EXP_CALL (CALL_MULTI call args)) meta = evalExpression (EXP_CALL call) meta >>= handleCallEval args multiCallGetFunc
 
 evalExpression (EXP_CHAIN (CHAIN (l:links))) meta = do
   case l of
     LINK_THIS -> do
-      classEval <- findValueInFunction "this" meta
-      return meta{eval=classEval}
+      classEval <- findValueInClosureInMeta "this" meta
+      evalExpression (EXP_CHAIN (CHAIN links)) meta{eval=classEval}
     LINK_SUPER -> do
-      (SUB_CLASS_DEC_EVAL _ parentName _ _ _ parentId) <- findValueInFunction "this" meta
+      (SUB_CLASS_DEC_EVAL _ parentName _ _ _ parentId) <- findValueInClosureInMeta "this" meta
       parentClassEval <- findParentClass parentName parentId meta
       evalExpression (EXP_CHAIN (CHAIN links)) meta{eval=parentClassEval}
-    LINK_CALL _ -> do
+    LINK_CALL x -> do
       case eval meta of
         (CLASS_DEC_EVAL _ _ clos _) -> handleChainCall l links clos meta
         (SUB_CLASS_DEC_EVAL _ _ _ clos _ _) -> handleChainCall l links clos meta
-        _ -> return meta{eval=RUNTIME_ERROR "Dot operation is only permitted on classes"}
+        _ -> handleChainCall l links (closure meta) meta
     (LINK_IDENTIFIER x) -> do
       case eval meta of
         (CLASS_DEC_EVAL _ _ clos _) -> handleChainIdentifier l links clos meta
@@ -169,9 +171,11 @@ evalExpression (EXP_CHAIN (CHAIN (l:links))) meta = do
         _ -> return meta{eval=RUNTIME_ERROR "Dot operation is only permitted on classes"}
 
 evalExpression EXP_THIS meta = do
-  ev <- findValueInFunction "this" meta
+  ev <- findValueInClosureInMeta "this" meta
   return meta{eval=ev}
 evalExpression exp meta = do
+  print "fails"
+  print exp
   return meta{eval=RUNTIME_ERROR "Expression cannot be evaluated"}
 
 
@@ -181,23 +185,24 @@ handleCallEval args findDec meta = do
   ev <- findDec meta
   case ev of 
     FUNC_DEC_EVAL {} -> handleFunctionCall args ev meta
-    CLASS_DEC_EVAL _ decs clos _ -> handleClassInitCall args decs clos meta
-    SUB_CLASS_DEC_EVAL _ _ decs clos _ _ -> do handleClassInitCall args decs clos meta
+    CLASS_DEC_EVAL name decs _ id -> handleClassInitCall args decs (\clos -> CLASS_DEC_EVAL name decs clos id) meta
+    SUB_CLASS_DEC_EVAL name pName decs _ id pId -> do handleClassInitCall args decs (\clos -> SUB_CLASS_DEC_EVAL name pName decs clos id pId) meta
 
 
-handleClassInitCall :: [ARGUMENT] -> [DECLARATION] -> Closure -> META -> IO META
-handleClassInitCall args decs clos meta = do
-  let numberOfClos = L.length clos
-  newMeta <- addNewScopeToMeta meta >>= addSavedClosure clos >>= handleMethodsEval decs
-  init <- findValueInFunction "init" newMeta
-  handleFunctionCall args init newMeta >>= cleanUpFunction numberOfClos
+handleClassInitCall :: [ARGUMENT] -> [DECLARATION] -> (Closure -> EVAL) -> META -> IO META
+handleClassInitCall args decs fact meta = do
+  newMeta <- addNewScopeToMeta meta >>= handleMethodsEval decs
+  init <- findValueInClosureInMeta "init" newMeta
+  initMeta <- handleFunctionCall args init newMeta
+  deleteScopeFromMeta initMeta{eval=fact (closure initMeta)}
 
 handleChainCall :: CHAIN_LINK -> [CHAIN_LINK] -> Closure -> META -> IO META
-handleChainCall (LINK_CALL call) links clos meta = do
-  let numberOfClos = L.length clos
-  expMeta <- addSavedClosure clos meta >>= evalExpression (EXP_CALL call)
-  let exprEval = eval expMeta
-  cleanUpFunction numberOfClos expMeta{eval=exprEval} >>= evalExpression (EXP_CHAIN (CHAIN links))
+handleChainCall (LINK_CALL (CALL iden args)) links clos meta = do
+  ev <- findValueInClosure iden clos
+  handleFunctionCall args ev meta >>= evalExpression (EXP_CHAIN (CHAIN links))
+
+handleChainCall (LINK_CALL x) links clos meta = evalExpression (EXP_CALL x) meta >>= evalExpression (EXP_CHAIN (CHAIN links))
+
 
 handleChainIdentifier :: CHAIN_LINK -> [CHAIN_LINK] -> Closure -> META -> IO META
 handleChainIdentifier link links clos meta = do
