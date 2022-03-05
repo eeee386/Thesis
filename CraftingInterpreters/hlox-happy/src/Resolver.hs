@@ -124,7 +124,7 @@ resolveClassDeclaration (SUB_CLASS_DEC iden parentIden methods) meta = do
   else do
     maybeParentIdVal <- findIdInVariables parentIden newMeta
     let maybeParentId = ID <$> maybeParentIdVal
-    handleSaveClassDec id iden (R_DEC_CLASS (R_SUB_CLASS_DEC iden parentIden newMethods id (fromMaybe NON_ID maybeParentId))) meta (parentNotInScopeError maybeParentId cMeta)
+    handleSaveClassDec id iden (R_DEC_CLASS (R_SUB_CLASS_DEC iden parentIden newMethods id (fromMaybe NON_ID maybeParentId))) meta (parentNotInScopeError maybeParentId newMeta)
     
 parentNotInScopeError :: Maybe ID -> ResolverMeta -> ResolverMeta
 parentNotInScopeError maybeParentId = updateResolverErrorsByPredicate (isJust maybeParentId) "Parent class is not in scope"
@@ -138,7 +138,7 @@ handleClassSetup methods meta = addBlockToMeta meta >>= addClosureToMeta >>= res
 resolveMethods :: [DECLARATION] -> ResolverMeta -> IO ResolverMeta
 resolveMethods methods meta = do
  let isUniqueMethodNames = U.allUnique (map getIdentifierFromMethod methods)
- let newMethods = if any (\method -> getIdentifierFromMethod method /= "init") methods then DEC_FUNC (METHOD_DEC "init" [] (BLOCK_STMT [])):methods else methods 
+ let newMethods = if all (\method -> getIdentifierFromMethod method /= "init") methods then DEC_FUNC (METHOD_DEC "init" [] (BLOCK_STMT [])):methods else methods
  resolveDeclarations newMethods (updateResolverErrorsByPredicate isUniqueMethodNames "Method names are not unique" meta{
    declarations=[]
  }) >>= reverseDeclarationsAndErrors

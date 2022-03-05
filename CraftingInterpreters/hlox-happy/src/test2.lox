@@ -1,9 +1,11 @@
-class Breakfast {
-  cook() {
-    print "Eggs a-fryin'!";
+fun a() {
+  var i = 0;
+  fun e(){
+    var i = 2;
+    print i;
   }
-  serve(who) {
-    print "Enjoy your breakfast " + who + ".";
-  }
+  return e;
 }
-Breakfast().cook();
+
+var b = a();
+b();

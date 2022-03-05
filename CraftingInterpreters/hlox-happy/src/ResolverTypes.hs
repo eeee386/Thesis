@@ -164,6 +164,7 @@ reverseDeclarationsAndErrors meta = return meta{declarations=reverse (declaratio
 -- Checking for closures as the values can depend on parameters, and if we have branching recursion, the running functions could rewrite the value in the global vector
 checkIfDefinedForDeclaration :: TextType -> (ID -> DECLARATION) -> DECLARATION -> ResolverMeta -> IO ResolverMeta
 checkIfDefinedForDeclaration iden fact factFunc meta = do
+  print iden
   inScope <- isInScope iden meta
   if isInFunctionOrClass meta && inScope then do
     updateClosureInMeta iden factFunc meta
@@ -172,7 +173,7 @@ checkIfDefinedForDeclaration iden fact factFunc meta = do
     maybeId <- getIdOfIden iden currentResEnv
     if isNothing maybeId then do
       updateCurrentVariableInMeta iden fact meta
-    else
+    else do
       return meta{
         resolverErrors="Variable already declared in scope":resolverErrors meta
         , declarations=fact NON_ID:declarations meta}

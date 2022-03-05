@@ -117,11 +117,29 @@ class B(){
 
 var c = B();
 c.changeA();
+print a;
 //
 
 
 //
-fun a() {}
+fun a() {
+  print "dummy"
+}
 
 a = 5;
+//
+
+//
+class A{
+  cook(){
+    print "cook";
+  }
+}
+
+class B < A {
+
+}
+
+var c = B();
+c.cook();
 //
