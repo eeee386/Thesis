@@ -79,8 +79,11 @@ findValueInClosure iden clos = do
   return (fromJust (fromJust val))
 
 maybeFindValueInFunction :: T.Text -> META -> IO (Maybe EVAL)
-maybeFindValueInFunction iden meta = do
-  values <- mapM (getEvalByIden iden) (EvalMeta.closure meta)
+maybeFindValueInFunction iden meta = maybeFindValueInClosure iden (EvalMeta.closure meta)
+    
+maybeFindValueInClosure :: T.Text -> Closure -> IO (Maybe EVAL)
+maybeFindValueInClosure iden clos = do
+  values <- mapM (getEvalByIden iden) clos
   let val = find isJust values
   if isNothing val then do
     return Nothing

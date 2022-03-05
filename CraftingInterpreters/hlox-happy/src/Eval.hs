@@ -164,11 +164,18 @@ evalExpression (EXP_CHAIN (CHAIN (l:links))) meta = do
         (CLASS_DEC_EVAL _ _ clos _) -> handleChainCall l links clos meta
         (SUB_CLASS_DEC_EVAL _ _ _ clos _ _) -> handleChainCall l links clos meta
         _ -> handleChainCall l links (closure meta) meta
+    -- Link Identifier is the ending of the chain
     (LINK_IDENTIFIER x) -> do
       case eval meta of
         (CLASS_DEC_EVAL _ _ clos _) -> handleChainIdentifier l links clos meta
         (SUB_CLASS_DEC_EVAL _ _ _ clos _ _) -> handleChainIdentifier l links clos meta
         _ -> return meta{eval=RUNTIME_ERROR "Dot operation is only permitted on classes"}
+    (R_LINK_IDENTIFIER _ id) -> do
+      ev <- findValueInMeta id meta
+      evalExpression (EXP_CHAIN (CHAIN links)) meta{eval=ev}
+    (RC_LINK_IDENTIFIER iden) -> do 
+      ev <- findValueInClosureInMeta iden meta
+      evalExpression (EXP_CHAIN (CHAIN links)) meta{eval=ev}
 evalExpression (EXP_CHAIN (CHAIN [])) meta = return meta
 
 evalExpression EXP_THIS meta = do
@@ -208,7 +215,7 @@ handleChainCall (LINK_CALL x) links clos meta = evalExpression (EXP_CALL x) meta
 handleChainIdentifier :: CHAIN_LINK -> [CHAIN_LINK] -> Closure -> META -> IO META
 handleChainIdentifier link links clos meta = do
   let (LINK_IDENTIFIER iden) = link
-  eval <- maybeFindValueInFunction iden meta
+  eval <- maybeFindValueInClosure iden clos
   if isNothing eval then do
     return meta{eval=RUNTIME_ERROR "This is not a property on the class"}
   else do
