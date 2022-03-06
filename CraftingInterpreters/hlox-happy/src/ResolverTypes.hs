@@ -164,9 +164,8 @@ reverseDeclarationsAndErrors meta = return meta{declarations=reverse (declaratio
 -- Checking for closures as the values can depend on parameters, and if we have branching recursion, the running functions could rewrite the value in the global vector
 checkIfDefinedForDeclaration :: TextType -> (ID -> DECLARATION) -> DECLARATION -> ResolverMeta -> IO ResolverMeta
 checkIfDefinedForDeclaration iden fact factFunc meta = do
-  print iden
   inScope <- isInScope iden meta
-  if isInFunctionOrClass meta && inScope then do
+  if isInFunctionOrClass meta && not inScope then do
     updateClosureInMeta iden factFunc meta
   else do
     let (currentResEnv:_) = resolverEnv meta

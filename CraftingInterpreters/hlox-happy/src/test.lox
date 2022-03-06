@@ -143,3 +143,17 @@ class B < A {
 var c = B();
 c.cook();
 //
+
+//
+fun a() {
+  var i = 0;
+  fun e(){
+    var i = 2;
+    print i;
+  }
+  return e;
+}
+
+var b = a();
+b();
+//

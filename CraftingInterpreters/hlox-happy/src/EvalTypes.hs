@@ -46,8 +46,8 @@ instance Show EVAL where
   show (SUB_CLASS_DEC_EVAL name pName decs _ id _) = mconcat ["Class: ", show name, "parent: ", show pName, "decs: ", show decs, "id: ", show id]
   show (RETURN_EVAL x) = "return: " ++ show x
   show (THIS_EVAL _) = "this"
-  show (BREAK_EVAL) = "break"
-  show (CONTINUE_EVAL) = "continue"
+  show BREAK_EVAL = "break"
+  show CONTINUE_EVAL = "continue"
 
 {-
 getLineError :: S.Seq TH.Token -> String

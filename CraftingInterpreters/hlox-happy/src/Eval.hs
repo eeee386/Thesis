@@ -42,7 +42,7 @@ evalDeclaration :: DECLARATION -> META -> IO META
 evalDeclaration (DEC_STMT (PRINT_STMT x)) meta = do
   newMeta <- evalExpression x meta
   print (eval newMeta)
-  return newMeta
+  return newMeta{eval=EVAL_NIL}
 evalDeclaration (DEC_STMT (EXPR_STMT x)) meta = evalExpression x meta
 
 evalDeclaration (DEC_STMT BREAK) meta = return meta{eval=BREAK_EVAL}
@@ -62,10 +62,8 @@ evalDeclaration (R_DEC_VAR (R_CLASS_VAR_DEF iden pIden expr classId)) meta = do
             addUpdateValueToMeta id newMeta{eval=SUB_CLASS_DEC_EVAL name parentName evals newClos id parentId}
           _ -> return newMeta{eval=RUNTIME_ERROR "Unknown error"}
     evalExpression expr meta >>= checkIfLastEvalIsRuntimeError evalClassDec
-
-
-evalDeclaration (R_DEC_VAR (RC_VAR_DEC_DEF iden expr)) meta = evalExpression expr meta >>= checkIfLastEvalIsRuntimeError (addUpdateClosureInMeta iden)
-evalDeclaration (R_DEC_VAR (RC_VAR_DEC iden)) meta = addUpdateClosureInMeta iden meta{eval=EVAL_NIL}
+evalDeclaration (R_DEC_VAR (RC_VAR_DEC_DEF iden expr)) meta = evalExpression expr meta >>= checkIfLastEvalIsRuntimeError (addUpdateScopeInMeta iden)
+evalDeclaration (R_DEC_VAR (RC_VAR_DEC iden)) meta = addUpdateScopeInMeta iden meta{eval=EVAL_NIL}
 evalDeclaration (R_DEC_VAR (RC_VAR_DEF iden expr)) meta = evalExpression expr meta >>= checkIfLastEvalIsRuntimeError (addUpdateClosureInMeta iden)
 
 evalDeclaration (DEC_STMT (BLOCK_STMT x)) meta = evalBlock x meta

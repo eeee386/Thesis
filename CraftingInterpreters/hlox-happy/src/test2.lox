@@ -9,3 +9,5 @@ fun a() {
 
 var b = a();
 b();
+print "val";
+print a()();
