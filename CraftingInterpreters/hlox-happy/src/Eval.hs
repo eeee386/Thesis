@@ -152,20 +152,12 @@ evalExpression (EXP_CHAIN (CHAIN [LINK_SUPER,LINK_CALL (CALL "init" args)])) met
   (SUB_CLASS_DEC_EVAL _ parentName _ _ _ parentId) <- findValueInClosureInMeta "this" meta
   parentClassEval <- findParentClass parentName parentId meta
   case parentClassEval of
-    (CLASS_DEC_EVAL pname decs parentClos pId) -> do
-      newMeta <- addNewScopeToMeta meta >>= handleMethodsEval decs
-      -- Class's this declaration will not have this in it but the parser already filters out "this.this/super.this" structure
-      thisMeta <- addUpdateScopeInMetaWithEval "this" (CLASS_DEC_EVAL pname decs (closure newMeta) pId) newMeta
-      init <- findValueInClosure "init" parentClos
-      initMeta <- handleFunctionCall args init meta
-      deleteScopeFromMeta initMeta{superClass=CLASS_DEC_EVAL pname decs (closure initMeta) pId}
-    (SUB_CLASS_DEC_EVAL pName gpName decs parentClos pId gpId) -> do
-      newMeta <- addNewScopeToMeta meta >>= handleMethodsEval decs
-      -- Class's this declaration will not have this in it but the parser already filters out "this.this/super.this" structure
-      thisMeta <- addUpdateScopeInMetaWithEval "this" (SUB_CLASS_DEC_EVAL pName gpName decs (closure newMeta) pId gpId) newMeta
-      init <- findValueInClosure "init" parentClos
-      initMeta <- handleFunctionCall args init meta
-      deleteScopeFromMeta initMeta{superClass=SUB_CLASS_DEC_EVAL pName gpName decs (closure initMeta) pId gpId}  
+    (CLASS_DEC_EVAL pname decs _ pId) -> do
+      let func initMeta = return initMeta{superClass=CLASS_DEC_EVAL pname decs (closure initMeta) pId}
+      handleInit args decs (\pClos -> CLASS_DEC_EVAL pname decs pClos pId) func meta
+    (SUB_CLASS_DEC_EVAL pName gpName decs _ pId gpId) -> do
+      let func initMeta = return initMeta{superClass=SUB_CLASS_DEC_EVAL pName gpName decs (closure initMeta) pId gpId}
+      handleInit args decs (\pClos -> SUB_CLASS_DEC_EVAL pName gpName decs pClos pId gpId) func meta
 
 
 evalExpression (EXP_CHAIN (CHAIN (l:links))) meta = do
@@ -174,19 +166,18 @@ evalExpression (EXP_CHAIN (CHAIN (l:links))) meta = do
       classEval <- findValueInClosureInMeta "this" meta
       evalExpression (EXP_CHAIN (CHAIN links)) meta{eval=classEval}
     LINK_SUPER -> do
-      (SUB_CLASS_DEC_EVAL _ parentName _ _ _ parentId) <- findValueInClosureInMeta "this" meta
-      parentClassEval <- findParentClass parentName parentId meta
+      parentClassEval <- findValueInClosureInMeta "super" meta
       evalExpression (EXP_CHAIN (CHAIN links)) meta{eval=parentClassEval}
     LINK_CALL x -> do
       case eval meta of
         (CLASS_DEC_EVAL _ _ clos _) -> handleChainCall l links clos meta
-        (SUB_CLASS_DEC_EVAL _ _ _ clos _ _) -> handleChainCall l links clos meta
+        (SUB_CLASS_DEC_EVAL _ _ _ clos _ _) -> handleSubClassChain l links clos handleChainCall meta
         _ -> handleChainCall l links (closure meta) meta
     -- Link Identifier is the ending of the chain
     (LINK_IDENTIFIER x) -> do
       case eval meta of
         (CLASS_DEC_EVAL _ _ clos _) -> handleChainIdentifier l links clos meta
-        (SUB_CLASS_DEC_EVAL _ _ _ clos _ _) -> handleChainIdentifier l links clos meta
+        (SUB_CLASS_DEC_EVAL _ _ _ clos _ _) -> handleSubClassChain l links clos handleChainIdentifier meta
         _ -> return meta{eval=RUNTIME_ERROR "Dot operation is only permitted on classes"}
     (R_LINK_IDENTIFIER _ id) -> do
       ev <- findValueInMeta id meta
@@ -204,6 +195,12 @@ evalExpression exp meta = do
   print exp
   return meta{eval=RUNTIME_ERROR "Expression cannot be evaluated"}
 
+handleSubClassChain :: CHAIN_LINK -> [CHAIN_LINK] -> Closure -> (CHAIN_LINK -> [CHAIN_LINK] -> Closure -> META -> IO META) -> META -> IO META
+handleSubClassChain l links clos func meta = do
+  parentClassEval <- findValueInClosure "super" clos
+  case parentClassEval of
+    (CLASS_DEC_EVAL _ _ parentClos _) -> func l links (mconcat [clos, parentClos]) meta
+    (SUB_CLASS_DEC_EVAL _ _ _ parentClos _ _) -> func l links (mconcat [clos, parentClos]) meta
 
 -- Resolver already adds the init function to the  
 handleCallEval :: [ARGUMENT] -> (META -> IO EVAL) -> META -> IO META
@@ -216,24 +213,27 @@ handleCallEval args findDec meta = do
 
 
 handleClassInitCall :: [ARGUMENT] -> [DECLARATION] -> (Closure -> EVAL) -> META -> IO META
-handleClassInitCall args decs fact meta = do
-  newMeta <- addNewScopeToMeta meta >>= handleMethodsEval decs
-  -- Class's this declaration will not have this in it but the parser already filters out "this.this/super.this" structure
-  thisMeta <- addUpdateScopeInMetaWithEval "this" (fact (closure newMeta)) newMeta
-  init <- findValueInClosureInMeta "init" thisMeta
-  initMeta <- handleFunctionCall args init thisMeta
-  deleteScopeFromMeta initMeta{eval=fact (closure initMeta)}
+handleClassInitCall args decs fact = handleInit args decs fact func
+  where func initMeta = return initMeta{eval=fact (closure initMeta)}
   
 handleSubClassInitCall :: [ARGUMENT] -> [DECLARATION] -> (Closure -> EVAL) -> META -> IO META
 handleSubClassInitCall args decs fact meta = do
+  let func initMeta = do
+      let parentClass = superClass initMeta
+      superMeta <- addUpdateScopeInMetaWithEval "super" parentClass initMeta
+      return superMeta{eval=fact (closure superMeta), superClass=EVAL_NIL}
+  handleInit args decs fact func meta
+  
+handleInit :: [ARGUMENT] -> [DECLARATION] -> (Closure -> EVAL) -> (META -> IO META) -> META -> IO META
+handleInit args decs fact func meta = do
   newMeta <- addNewScopeToMeta meta >>= handleMethodsEval decs
   -- Class's this declaration will not have this in it but the parser already filters out "this.this/super.this" structure
   thisMeta <- addUpdateScopeInMetaWithEval "this" (fact (closure newMeta)) newMeta
   init <- findValueInClosureInMeta "init" thisMeta
   initMeta <- handleFunctionCall args init thisMeta
-  let parentClass = superClass initMeta
-  superMeta <- addUpdateScopeInMetaWithEval "this" parentClass initMeta
-  deleteScopeFromMeta initMeta{eval=fact (closure superMeta), superClass=EVAL_NIL}
+  additionalMeta <- func initMeta
+  deleteScopeFromMeta additionalMeta
+
 
 handleChainCall :: CHAIN_LINK -> [CHAIN_LINK] -> Closure -> META -> IO META
 handleChainCall (LINK_CALL (CALL iden args)) links clos meta = do
