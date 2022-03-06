@@ -135,13 +135,22 @@ handleSaveClassDec id iden dec oldMeta meta = deleteBlockFromMeta meta{isInClass
 handleClassSetup :: [DECLARATION] -> ResolverMeta -> IO ResolverMeta
 handleClassSetup methods meta = addBlockToMeta meta >>= addClosureToMeta >>= resolveMethods methods
 
+-- I will force that "init" is required, because creating init on the fly is easy for simple classes, but when it comes to subclasses,
+-- what happens if the superclass init has args -> 
+-- 1. you can create an init to have the same number of arguments (confusing)
+-- 2. You add default args to super -> hard to create, confusing for users
+-- 3. force it -> easy to check, transparent to users, albeit tedious
 resolveMethods :: [DECLARATION] -> ResolverMeta -> IO ResolverMeta
 resolveMethods methods meta = do
  let isUniqueMethodNames = U.allUnique (map getIdentifierFromMethod methods)
- let newMethods = if all (\method -> getIdentifierFromMethod method /= "init") methods then DEC_FUNC (METHOD_DEC "init" [] (BLOCK_STMT [])):methods else methods
- resolveDeclarations newMethods (updateResolverErrorsByPredicate isUniqueMethodNames "Method names are not unique" meta{
+ let hasInit = any (\method -> getIdentifierFromMethod method == "init") methods
+ let isSuperError = not (isInSubClass meta) || hasSuperInitInInit methods
+ resolveDeclarations methods (
+   updateResolverErrorsByPredicate hasInit "Class does not have init" (
+   updateResolverErrorsByPredicate isSuperError "Subclass does not have super.init in init function" (
+   updateResolverErrorsByPredicate isUniqueMethodNames "Method names are not unique" meta{
    declarations=[]
- }) >>= reverseDeclarationsAndErrors
+ }))) >>= reverseDeclarationsAndErrors
 
 resolveBlock :: [DECLARATION] -> ResolverMeta -> IO ResolverMeta
 resolveBlock decs meta = do
@@ -241,4 +250,14 @@ handleParams (p:params) meta = do
    handleParams params meta{closure=newClosure}
 handleParams [] meta = return meta
 
+hasSuperInitInInit :: [DECLARATION] -> Bool
+hasSuperInitInInit methods =  hasSuperInit (head (filter (not . null) (map getInitFromMethods methods)))
+  where getInitFromMethods (DEC_FUNC (METHOD_DEC "init" _ (BLOCK_STMT decs))) = decs
+        getInitFromMethods _ = []
 
+hasSuperInit :: [DECLARATION] -> Bool
+hasSuperInit = any isSuperInit
+
+isSuperInit :: DECLARATION -> Bool
+isSuperInit (DEC_STMT (EXPR_STMT (EXP_CHAIN (CHAIN [LINK_SUPER,LINK_CALL (CALL "init" _)])))) = True
+isSuperInit _ = False

@@ -33,6 +33,7 @@ updateScopeInClosure iden eval closure  = do
 -- We already checked in resolver
 updateInClosure :: T.Text -> EVAL -> Closure -> IO Closure
 updateInClosure iden eval closure  = do
+  print iden
   (first, rest) <- partitionClosure iden closure []
   let (last:delClos) = rest
   HT.insert last iden eval
@@ -59,12 +60,13 @@ data META = META {
   , closure :: Closure
   , eval :: EVAL
   , isReturn :: Bool
+  , superClass :: EVAL
                  } deriving Show
 
 
 createGlobalMeta ::  V.Vector EVAL -> IO META
 createGlobalMeta vector = do
-  return META { variableValues=vector, EvalMeta.closure=[], eval=SKIP_EVAL, EvalMeta.isReturn=False }
+  return META { variableValues=vector, EvalMeta.closure=[], eval=SKIP_EVAL, EvalMeta.isReturn=False, superClass=EVAL_NIL }
 
 findValueInMeta :: ID -> META -> IO EVAL
 findValueInMeta (ID id) meta = return (variableValues meta V.! id)

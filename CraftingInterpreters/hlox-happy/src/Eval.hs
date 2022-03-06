@@ -148,6 +148,26 @@ evalExpression (EXP_CALL (R_CALL _ args id)) meta = handleCallEval args (findVal
 evalExpression (EXP_CALL (RC_CALL call_iden args)) meta = handleCallEval args (findValueInClosureInMeta call_iden) meta
 evalExpression (EXP_CALL (CALL_MULTI call args)) meta = evalExpression (EXP_CALL call) meta >>= handleCallEval args multiCallGetFunc
 
+evalExpression (EXP_CHAIN (CHAIN [LINK_SUPER,LINK_CALL (CALL "init" args)])) meta = do
+  (SUB_CLASS_DEC_EVAL _ parentName _ _ _ parentId) <- findValueInClosureInMeta "this" meta
+  parentClassEval <- findParentClass parentName parentId meta
+  case parentClassEval of
+    (CLASS_DEC_EVAL pname decs parentClos pId) -> do
+      newMeta <- addNewScopeToMeta meta >>= handleMethodsEval decs
+      -- Class's this declaration will not have this in it but the parser already filters out "this.this/super.this" structure
+      thisMeta <- addUpdateScopeInMetaWithEval "this" (CLASS_DEC_EVAL pname decs (closure newMeta) pId) newMeta
+      init <- findValueInClosure "init" parentClos
+      initMeta <- handleFunctionCall args init meta
+      deleteScopeFromMeta initMeta{superClass=CLASS_DEC_EVAL pname decs (closure initMeta) pId}
+    (SUB_CLASS_DEC_EVAL pName gpName decs parentClos pId gpId) -> do
+      newMeta <- addNewScopeToMeta meta >>= handleMethodsEval decs
+      -- Class's this declaration will not have this in it but the parser already filters out "this.this/super.this" structure
+      thisMeta <- addUpdateScopeInMetaWithEval "this" (SUB_CLASS_DEC_EVAL pName gpName decs (closure newMeta) pId gpId) newMeta
+      init <- findValueInClosure "init" parentClos
+      initMeta <- handleFunctionCall args init meta
+      deleteScopeFromMeta initMeta{superClass=SUB_CLASS_DEC_EVAL pName gpName decs (closure initMeta) pId gpId}  
+
+
 evalExpression (EXP_CHAIN (CHAIN (l:links))) meta = do
   case l of
     LINK_THIS -> do
@@ -192,15 +212,28 @@ handleCallEval args findDec meta = do
   case ev of 
     FUNC_DEC_EVAL {} -> handleFunctionCall args ev meta
     CLASS_DEC_EVAL name decs _ id -> handleClassInitCall args decs (\clos -> CLASS_DEC_EVAL name decs clos id) meta
-    SUB_CLASS_DEC_EVAL name pName decs _ id pId -> do handleClassInitCall args decs (\clos -> SUB_CLASS_DEC_EVAL name pName decs clos id pId) meta
+    SUB_CLASS_DEC_EVAL name pName decs _ id pId -> do handleSubClassInitCall args decs (\clos -> SUB_CLASS_DEC_EVAL name pName decs clos id pId) meta
 
 
 handleClassInitCall :: [ARGUMENT] -> [DECLARATION] -> (Closure -> EVAL) -> META -> IO META
 handleClassInitCall args decs fact meta = do
   newMeta <- addNewScopeToMeta meta >>= handleMethodsEval decs
-  init <- findValueInClosureInMeta "init" newMeta
-  initMeta <- handleFunctionCall args init newMeta
+  -- Class's this declaration will not have this in it but the parser already filters out "this.this/super.this" structure
+  thisMeta <- addUpdateScopeInMetaWithEval "this" (fact (closure newMeta)) newMeta
+  init <- findValueInClosureInMeta "init" thisMeta
+  initMeta <- handleFunctionCall args init thisMeta
   deleteScopeFromMeta initMeta{eval=fact (closure initMeta)}
+  
+handleSubClassInitCall :: [ARGUMENT] -> [DECLARATION] -> (Closure -> EVAL) -> META -> IO META
+handleSubClassInitCall args decs fact meta = do
+  newMeta <- addNewScopeToMeta meta >>= handleMethodsEval decs
+  -- Class's this declaration will not have this in it but the parser already filters out "this.this/super.this" structure
+  thisMeta <- addUpdateScopeInMetaWithEval "this" (fact (closure newMeta)) newMeta
+  init <- findValueInClosureInMeta "init" thisMeta
+  initMeta <- handleFunctionCall args init thisMeta
+  let parentClass = superClass initMeta
+  superMeta <- addUpdateScopeInMetaWithEval "this" parentClass initMeta
+  deleteScopeFromMeta initMeta{eval=fact (closure superMeta), superClass=EVAL_NIL}
 
 handleChainCall :: CHAIN_LINK -> [CHAIN_LINK] -> Closure -> META -> IO META
 handleChainCall (LINK_CALL (CALL iden args)) links clos meta = do

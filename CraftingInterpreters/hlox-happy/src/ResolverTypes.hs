@@ -261,9 +261,9 @@ isFunctionOrClass _ = False
 checkIfFunctionOrClassIsDefinedAndSaveEmpty :: TextType -> ResolverMeta -> IO (ID, ResolverMeta)
 checkIfFunctionOrClassIsDefinedAndSaveEmpty iden meta = do
   if isInFunctionOrClass meta then do
-    inClosure <- isInClosure iden meta
-    if inClosure then do
-      return (NON_ID, meta{resolverErrors="Variable already declared in scope":resolverErrors meta})
+    inScope <- isInScope iden meta
+    if inScope then do
+      return (NON_ID, meta{resolverErrors="Function/class already declared in scope":resolverErrors meta})
     else do
       newMeta <- updateClosureInMeta iden EMPTY_DEC meta 
       return (NON_ID, newMeta)
@@ -274,7 +274,7 @@ checkIfFunctionOrClassIsDefinedAndSaveEmpty iden meta = do
       newMeta <- updateCurrentVariableInMeta iden (const EMPTY_DEC) meta
       return (ID currId, newMeta)
     else
-      return (NON_ID, meta{resolverErrors="Variable already declared in scope":resolverErrors meta})
+      return (NON_ID, meta{resolverErrors="Function/class already declared in scope":resolverErrors meta})
   where currId = currentVariableId meta
 
 updateFunctionOrClassDeclaration :: ID -> TextType -> DECLARATION -> ResolverMeta -> IO ResolverMeta

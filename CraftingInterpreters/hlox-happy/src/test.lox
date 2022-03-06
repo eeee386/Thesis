@@ -157,3 +157,18 @@ fun a() {
 var b = a();
 b();
 //
+
+//
+var a = 1;
+
+class B {
+  changeA(){
+    a = a + 1;
+  }
+}
+fun c() {
+  B().changeA();
+}
+c();
+print a;
+//

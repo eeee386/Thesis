@@ -1,13 +1,15 @@
-fun a() {
-  var i = 0;
-  fun e(){
-    var i = 2;
-    print i;
-  }
-  return e;
-}
+var a = 1;
 
-var b = a();
-b();
-print "val";
-print a()();
+class B {
+  init(){
+    print "created";
+  }
+  changeA(){
+    a = a + 1;
+  }
+}
+fun c() {
+  B().changeA();
+}
+c();
+print a;
