@@ -69,7 +69,7 @@ import Lexer as L
 program        : declarations                 { PROG (reverse $1) }
 
 declarations   : declarations declaration     { $2 : $1 }
-               | declaration                  { [$1] }
+               | {- empty -}                  { [] }
 
 declaration    : statement                               { DEC_STMT $1 }
                | variable_declaration_assignment ';'     { DEC_VAR $1 }
@@ -89,7 +89,6 @@ statement      : expression_statement              { $1 }
 expression_statement  : expression ';'                    { EXPR_STMT $1 }
 print_statement       : 'print' expression ';'            { PRINT_STMT $2 }
 block_statement       : '{' declarations '}'              { BLOCK_STMT (reverse $2) }
-                      | '{' '}'                           { BLOCK_STMT [] }
 conditional_statement : 'if' '(' expression ')' statement                         { IF_STMT $3 $5}
                       | 'if' '(' expression ')' statement 'else' statement        { IF_ELSE_STMT $3 $5 $7 }
 while_statement       : 'while' '(' expression ')' statement                      { WHILE_STMT $3 $5 }

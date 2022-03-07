@@ -88,7 +88,9 @@ x();
 // w should write out 5;
 
 //
-class A() {
+fun b(){}
+
+class A{
  init(){}
 }
 //
@@ -96,6 +98,10 @@ class A() {
 //
 fun a(b, c){
     class Animal{
+        init(){
+          print 1;
+        }
+
         hello() {
           print b;
         }
@@ -159,7 +165,10 @@ b();
 var a = 1;
 
 class B {
-  init(){}
+  init(){
+    print 1;
+  }
+
   changeA(){
     a = a + 1;
   }

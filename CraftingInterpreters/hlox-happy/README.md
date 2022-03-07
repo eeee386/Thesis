@@ -5,11 +5,17 @@ Rewrite of the hlox but using happy parser
 ## Basics
 
 ### Start project
-- stack build happy (only first time, use bash)
-- stack build
+- `stack build happy` 
+  - (only first time, use bash, I did not test it on windows)
+- `stack build`
 
-### Run project
-- stack build --exec hlox-happy-exe
+### Run Interpreter
+- `stack build --exec hlox-happy-exe`
+
+### Run files
+- `stack ghci`
+  - then in the ghci run: `:main <path-to-file>`
+  - src/test2.lox can be used as an example
 
 ### Generate HappyParser file
-- happy src/HappyParser.y -i
+- `happy src/HappyParser.y -i`
