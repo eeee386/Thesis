@@ -87,6 +87,11 @@ x();
 
 // w should write out 5;
 
+//
+class A() {
+ init(){}
+}
+//
 
 //
 fun a(b, c){
@@ -106,20 +111,6 @@ var a;
 a();
 //
 
-//
-var a = 1;
-
-class B(){
-  fun changeA(){
-    a = a + 1;
-  }
-}
-
-var c = B();
-c.changeA();
-print a;
-//
-
 
 //
 fun a() {
@@ -131,17 +122,23 @@ a = 5;
 
 //
 class A{
+  init(){
+    this.name = "Hello";
+  }
   cook(){
     print "cook";
   }
 }
 
 class B < A {
-
+  init(){
+    super.init();
+  }
 }
 
 var c = B();
 c.cook();
+print c.name;
 //
 
 //
@@ -162,6 +159,7 @@ b();
 var a = 1;
 
 class B {
+  init(){}
   changeA(){
     a = a + 1;
   }

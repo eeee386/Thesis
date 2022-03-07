@@ -33,7 +33,6 @@ updateScopeInClosure iden eval closure  = do
 -- We already checked in resolver
 updateInClosure :: T.Text -> EVAL -> Closure -> IO Closure
 updateInClosure iden eval closure  = do
-  print iden
   (first, rest) <- partitionClosure iden closure []
   let (last:delClos) = rest
   HT.insert last iden eval

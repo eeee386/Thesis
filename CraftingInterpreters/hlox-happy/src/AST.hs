@@ -86,9 +86,12 @@ instance Show RESOLVED_VARIABLE_DECLARATION where
   show (R_VAR_DEC_DEF iden expr id) = mconcat ["var", " ", show iden, " = ", show expr, show id]
   show (R_VAR_DEC iden id) = mconcat ["var", " ", show iden, show id]
   show (R_VAR_DEF iden expr id) = mconcat [show iden, " = ", show expr, show id]
+  show (R_CLASS_VAR_DEF cIden iden expr id) = mconcat [show cIden, ".", show iden, "=" , show expr, show id] 
+  show (R_THIS_VAR_DEF iden expr) = mconcat ["this.", show iden, "=", show expr]
   show (RC_VAR_DEC_DEF iden expr) = mconcat ["var", " ", show iden, " = ", show expr, "RC"]
   show (RC_VAR_DEC iden) = mconcat ["var", " ", show iden]
   show (RC_VAR_DEF iden expr) = mconcat [show iden, " = ", show expr]
+  show (RC_CLASS_VAR_DEF cIden iden expr) = mconcat [show cIden, ".", show iden, "=", show expr]
 
 
 -- STATEMENT

@@ -1,15 +1,3 @@
-var a = 1;
-
-class B {
-  init(){
-    print "created";
-  }
-  changeA(){
-    a = a + 1;
-  }
+class A{
+ init(){}
 }
-fun c() {
-  B().changeA();
-}
-c();
-print a;

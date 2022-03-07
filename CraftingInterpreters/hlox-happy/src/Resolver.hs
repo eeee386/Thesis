@@ -72,7 +72,7 @@ resolveVarDeclaration (VAR_DEF iden exp) meta = resolveExpression exp meta >>= c
 resolveVarDeclaration (CLASS_VAR_DEF iden pIden exp) meta = resolveExpression exp meta >>= checkIfDefinedForDefinitionWithExpr iden (\exp id -> R_DEC_VAR (R_CLASS_VAR_DEF iden pIden exp id)) (R_DEC_VAR . RC_CLASS_VAR_DEF iden pIden)
 resolveVarDeclaration (THIS_VAR_DEF iden exp) meta = do
   exprMeta <- resolveExpression exp meta
-  return (updateResolverErrorsByPredicate (isInClass meta) "'this' is called outside of class" meta{declarations=R_DEC_VAR (R_THIS_VAR_DEF iden (newExpr meta)):declarations meta})
+  return (updateResolverErrorsByPredicate (isInClass meta) "'this' is called outside of class" exprMeta{declarations=R_DEC_VAR (R_THIS_VAR_DEF iden (newExpr exprMeta)):declarations meta})
 
 -- Check if method is resolved properly
 resolveFunctionDeclaration :: FUNCTION_DECLARATION -> ResolverMeta -> IO ResolverMeta

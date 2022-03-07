@@ -65,6 +65,17 @@ evalDeclaration (R_DEC_VAR (R_CLASS_VAR_DEF iden pIden expr classId)) meta = do
 evalDeclaration (R_DEC_VAR (RC_VAR_DEC_DEF iden expr)) meta = evalExpression expr meta >>= checkIfLastEvalIsRuntimeError (addUpdateScopeInMeta iden)
 evalDeclaration (R_DEC_VAR (RC_VAR_DEC iden)) meta = addUpdateScopeInMeta iden meta{eval=EVAL_NIL}
 evalDeclaration (R_DEC_VAR (RC_VAR_DEF iden expr)) meta = evalExpression expr meta >>= checkIfLastEvalIsRuntimeError (addUpdateClosureInMeta iden)
+evalDeclaration (R_DEC_VAR (R_THIS_VAR_DEF iden expr)) meta = do
+  exprMeta <- evalExpression expr meta
+  let exprEval = eval exprMeta
+  classEval <- findValueInClosureInMeta "this" exprMeta
+  case classEval of
+    (CLASS_DEC_EVAL classIden decs clos id) -> do
+      newClos <- updateScopeInClosure iden exprEval clos
+      addUpdateClosureInMetaWithEval "this" (CLASS_DEC_EVAL classIden decs newClos id) exprMeta
+    (SUB_CLASS_DEC_EVAL classIden parentIden decs clos id parentId ) -> do
+      newClos <- updateScopeInClosure iden exprEval clos
+      addUpdateClosureInMetaWithEval "this" (SUB_CLASS_DEC_EVAL classIden parentIden decs newClos id parentId) exprMeta  
 
 evalDeclaration (DEC_STMT (BLOCK_STMT x)) meta = evalBlock x meta
 evalDeclaration (DEC_STMT (IF_STMT expr stmt)) meta = evalExpression expr meta >>= checkIfLastEvalIsRuntimeError evalIf
@@ -80,10 +91,10 @@ evalDeclaration (DEC_STMT (LOOP expr stmt)) meta = evalExpression expr meta >>= 
                            else do
                              return newMeta
 
--- closure meta will be an empty list, so it could be an [] as well
 evalDeclaration (DEC_FUNC (R_FUNC_DEC iden params stmt id)) meta = functionDecEvalHelper (addUpdateValueToMeta id) iden params stmt id meta
 evalDeclaration (DEC_FUNC (RC_FUNC_DEC iden params stmt)) meta = functionDecEvalHelper (addUpdateScopeInMeta iden) iden params stmt NON_ID meta
 evalDeclaration (DEC_FUNC (METHOD_DEC iden params stmt)) meta = functionDecEvalHelper (addUpdateScopeInMeta iden) iden params stmt NON_ID meta
+-- closure meta will be an empty list, so it could be an [] as well
 evalDeclaration (R_DEC_CLASS (R_CLASS_DEC iden decs id)) meta = addUpdateValueToMeta id meta{eval=CLASS_DEC_EVAL iden decs (closure meta) id}
 evalDeclaration (R_DEC_CLASS (RC_CLASS_DEC iden decs)) meta = addUpdateScopeInMeta iden meta{eval=CLASS_DEC_EVAL iden decs (closure meta) NON_ID}
 evalDeclaration (R_DEC_CLASS (R_SUB_CLASS_DEC iden parentIden decs id parentId)) meta = addUpdateValueToMeta id meta{eval=SUB_CLASS_DEC_EVAL iden parentIden decs (closure meta) id parentId}
@@ -191,8 +202,6 @@ evalExpression EXP_THIS meta = do
   ev <- findValueInClosureInMeta "this" meta
   return meta{eval=ev}
 evalExpression exp meta = do
-  print "fails"
-  print exp
   return meta{eval=RUNTIME_ERROR "Expression cannot be evaluated"}
 
 handleSubClassChain :: CHAIN_LINK -> [CHAIN_LINK] -> Closure -> (CHAIN_LINK -> [CHAIN_LINK] -> Closure -> META -> IO META) -> META -> IO META
