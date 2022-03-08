@@ -205,10 +205,6 @@ handleSubClassChain l links clos func meta = do
   case parentClassEval of
     (CLASS_DEC_EVAL _ _ parentClos _) -> func l links (mconcat [clos, parentClos]) meta
     (SUB_CLASS_DEC_EVAL _ _ _ parentClos _ _) -> do
-      --val <- Prelude.mapM HT.toList clos
-      --print val
-      --pval <- Prelude.mapM HT.toList parentClos
-      --print pval
       newClos <- getAllClosuresFromInheritance clos parentClos
       func l links newClos meta
 

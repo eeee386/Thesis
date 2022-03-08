@@ -1,23 +1,5 @@
+fun b(){}
+
 class A{
-  init(){
-    print "A";
-  }
-  cook(){
-    print "cook";
-  }
+ init(){}
 }
-
-class B < A{
-  init(){
-    print "B";
-    super.init();
-  }
-
-  cook(){
-    super.cook();
-    print "coming from B";
-  }
-}
-
-var c = B();
-c.cook();
