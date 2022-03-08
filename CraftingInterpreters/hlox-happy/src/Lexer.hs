@@ -34,10 +34,10 @@ lexer ('!':cs) = lexHandleBang cs
 lexer ('+':cs) = PLUS : lexer cs
 lexer ('-':cs) = MINUS : lexer cs
 lexer ('*':cs) = STAR : lexer cs
-lexer ('/':cs) = SLASH : lexer cs
+lexer ('/':cs) = lexHandleSlash cs
 lexer ('(':cs) = LEFT_PAREN : lexer cs
 lexer (')':cs) = RIGHT_PAREN : lexer cs
-lexer ('{':cs) = LEFT_BRACE : lexer cs
+lexer ('{':cs) = lexHandleLeftBrace cs
 lexer ('}':cs) = RIGHT_BRACE : lexer cs
 lexer ('<': cs) = lexHandleLess cs
 lexer ('>': cs) = lexHandleGreater cs
@@ -96,3 +96,20 @@ lexHandleLess (c:cs) = if c == '=' then LESS_EQUAL : lexer cs else LESS : lexer 
 lexHandleGreater :: String -> [Token]
 lexHandleGreater [] = [GREATER]
 lexHandleGreater (c:cs) = if c == '=' then GREATER_EQUAL : lexer cs else GREATER : lexer (c:cs)
+
+lexHandleSlash :: String -> [Token]
+lexHandleSlash [] = [SLASH]
+lexHandleSlash (c:cs) = if c == '/' then lexer afterCommentCs else SLASH : lexer (c:cs)
+  where afterCommentCs = drop 1 (dropWhile (/= '\n') cs)
+
+
+lexHandleLeftBrace :: String -> [Token]
+lexHandleLeftBrace [] = [RIGHT_BRACE]
+lexHandleLeftBrace (c:cs) =  if c == '*' then lexer afterCommentCs else LEFT_BRACE : lexer (c:cs)
+  where afterCommentCs = findEndOfBlockComment cs
+
+-- Could be a more elegant solution to the error
+findEndOfBlockComment :: String -> String
+findEndOfBlockComment ('*':'}':cs) = cs
+findEndOfBlockComment (_:cs) = findEndOfBlockComment cs
+findEndOfBlockComment [] = error "Block comment is not closed"

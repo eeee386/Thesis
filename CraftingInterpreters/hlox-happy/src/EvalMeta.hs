@@ -59,13 +59,13 @@ data META = META {
   , closure :: Closure
   , eval :: EVAL
   , isReturn :: Bool
-  , superClass :: EVAL
+  , superClass :: [EVAL]
                  } deriving Show
 
 
 createGlobalMeta ::  V.Vector EVAL -> IO META
 createGlobalMeta vector = do
-  return META { variableValues=vector, EvalMeta.closure=[], eval=SKIP_EVAL, EvalMeta.isReturn=False, superClass=EVAL_NIL }
+  return META { variableValues=vector, EvalMeta.closure=[], eval=SKIP_EVAL, EvalMeta.isReturn=False, superClass=[] }
 
 findValueInMeta :: ID -> META -> IO EVAL
 findValueInMeta (ID id) meta = return (variableValues meta V.! id)

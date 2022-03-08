@@ -179,3 +179,55 @@ fun c() {
 c();
 print a;
 //
+
+//
+class A{
+  init(){
+    print "A";
+  }
+  cook(){
+    print "cook";
+  }
+}
+
+class B < A{
+  init(){
+    print "B";
+    super.init();
+  }
+}
+
+class C < B{
+  init(){
+    print "C";
+    super.init();
+  }
+}
+
+var d = C();
+d.cook();
+
+//
+class A{
+  init(){
+    print "A";
+  }
+  cook(){
+    print "cook";
+  }
+}
+
+class B < A{
+  init(){
+    print "B";
+    super.init();
+  }
+
+  cook(){
+    super.cook();
+    print "coming from B";
+  }
+}
+
+var c = B();
+c.cook();

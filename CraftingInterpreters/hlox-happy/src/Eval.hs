@@ -162,13 +162,8 @@ evalExpression (EXP_CALL (CALL_MULTI call args)) meta = evalExpression (EXP_CALL
 evalExpression (EXP_CHAIN (CHAIN [LINK_SUPER,LINK_CALL (CALL "init" args)])) meta = do
   (SUB_CLASS_DEC_EVAL _ parentName _ _ _ parentId) <- findValueInClosureInMeta "this" meta
   parentClassEval <- findParentClass parentName parentId meta
-  case parentClassEval of
-    (CLASS_DEC_EVAL pname decs _ pId) -> do
-      let func initMeta = return initMeta{superClass=CLASS_DEC_EVAL pname decs (closure initMeta) pId}
-      handleInit args decs (\pClos -> CLASS_DEC_EVAL pname decs pClos pId) func meta
-    (SUB_CLASS_DEC_EVAL pName gpName decs _ pId gpId) -> do
-      let func initMeta = return initMeta{superClass=SUB_CLASS_DEC_EVAL pName gpName decs (closure initMeta) pId gpId}
-      handleInit args decs (\pClos -> SUB_CLASS_DEC_EVAL pName gpName decs pClos pId gpId) func meta
+  newMeta <- evalInit args parentClassEval meta
+  return meta{superClass=eval newMeta:superClass newMeta}
 
 
 evalExpression (EXP_CHAIN (CHAIN (l:links))) meta = do
@@ -209,7 +204,23 @@ handleSubClassChain l links clos func meta = do
   parentClassEval <- findValueInClosure "super" clos
   case parentClassEval of
     (CLASS_DEC_EVAL _ _ parentClos _) -> func l links (mconcat [clos, parentClos]) meta
-    (SUB_CLASS_DEC_EVAL _ _ _ parentClos _ _) -> func l links (mconcat [clos, parentClos]) meta
+    (SUB_CLASS_DEC_EVAL _ _ _ parentClos _ _) -> do
+      --val <- Prelude.mapM HT.toList clos
+      --print val
+      --pval <- Prelude.mapM HT.toList parentClos
+      --print pval
+      newClos <- getAllClosuresFromInheritance clos parentClos
+      func l links newClos meta
+
+getAllClosuresFromInheritance :: Closure -> Closure -> IO Closure
+getAllClosuresFromInheritance clos pClos = do
+  parentClassEval <- findValueInClosure "super" pClos
+  let newClos = mconcat [clos, pClos]
+  case parentClassEval of
+    (CLASS_DEC_EVAL _ _ parentClos _) -> return (mconcat [newClos, parentClos])
+    (SUB_CLASS_DEC_EVAL _ _ _ parentClos _ _) -> getAllClosuresFromInheritance newClos parentClos
+
+
 
 -- Resolver already adds the init function to the  
 handleCallEval :: [ARGUMENT] -> (META -> IO EVAL) -> META -> IO META
@@ -217,22 +228,27 @@ handleCallEval args findDec meta = do
   ev <- findDec meta
   case ev of 
     FUNC_DEC_EVAL {} -> handleFunctionCall args ev meta
-    CLASS_DEC_EVAL name decs _ id -> handleClassInitCall args decs (\clos -> CLASS_DEC_EVAL name decs clos id) meta
-    SUB_CLASS_DEC_EVAL name pName decs _ id pId -> do handleSubClassInitCall args decs (\clos -> SUB_CLASS_DEC_EVAL name pName decs clos id pId) meta
+    _ -> evalInit args ev meta
 
+  
+evalInit :: [ARGUMENT]  -> EVAL -> META -> IO META
+evalInit args classEval meta = do
+  case classEval of
+    (CLASS_DEC_EVAL iden decs _ id) -> do
+      let fact = (\clos -> CLASS_DEC_EVAL iden decs clos id)
+      let func initMeta = return initMeta
+      handleInit args decs fact func meta
+    (SUB_CLASS_DEC_EVAL iden pIden decs _ id pId) -> do
+      let fact = (\clos -> SUB_CLASS_DEC_EVAL iden pIden decs clos id pId)      
+      handleInit args decs fact addSuperToClosure meta
 
-handleClassInitCall :: [ARGUMENT] -> [DECLARATION] -> (Closure -> EVAL) -> META -> IO META
-handleClassInitCall args decs fact = handleInit args decs fact func
-  where func initMeta = return initMeta{eval=fact (closure initMeta)}
+addSuperToClosure :: META -> IO META
+addSuperToClosure initMeta = do
+  let (parentClass:rest) = superClass initMeta
+  superMeta <- addUpdateScopeInMetaWithEval "super" parentClass initMeta
+  return superMeta{superClass=rest}
   
-handleSubClassInitCall :: [ARGUMENT] -> [DECLARATION] -> (Closure -> EVAL) -> META -> IO META
-handleSubClassInitCall args decs fact meta = do
-  let func initMeta = do
-      let parentClass = superClass initMeta
-      superMeta <- addUpdateScopeInMetaWithEval "super" parentClass initMeta
-      return superMeta{eval=fact (closure superMeta), superClass=EVAL_NIL}
-  handleInit args decs fact func meta
-  
+ 
 handleInit :: [ARGUMENT] -> [DECLARATION] -> (Closure -> EVAL) -> (META -> IO META) -> META -> IO META
 handleInit args decs fact func meta = do
   newMeta <- addNewScopeToMeta meta >>= handleMethodsEval decs
@@ -241,7 +257,7 @@ handleInit args decs fact func meta = do
   init <- findValueInClosureInMeta "init" thisMeta
   initMeta <- handleFunctionCall args init thisMeta
   additionalMeta <- func initMeta
-  deleteScopeFromMeta additionalMeta
+  deleteScopeFromMeta additionalMeta{eval=fact (closure additionalMeta)}
 
 
 handleChainCall :: CHAIN_LINK -> [CHAIN_LINK] -> Closure -> META -> IO META
