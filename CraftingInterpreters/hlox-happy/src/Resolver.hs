@@ -9,6 +9,17 @@ import Data.HashTable.IO as HT
 import Utils
 import Data.List.Unique as U
 
+-- Resolver's responsibility: 
+-- - In declaration, check if it is not already declared in the scope -> if not create a resolver error
+-- - In definition, check if it is declared in the scope, and what want to declare is type friendly (somewhat) -> if not create a resolver error
+--     - I only check if variable declaration exists and it is a variable declaration not a function or class declaration
+--   Handle function and class declaration
+-- - Resolve for and while loop and create a unified "LOOP" type after resolution
+-- - Check if "return" is in function body, "this" in class, "super" in subclass, "break" and "continue" in loop
+-- - Check if references are referencing existing declaration, and calls are referencing classes/function, and simple reference referencing variables
+-- - Check if parameters and method names are unique
+-- - Check if super- and subclass do not have the same name in declaration
+-- - Check if classes have "init" functions and in subclasses "init" functions call "super.init()"
 resolveProgram :: PROGRAM -> IO ResolverMeta
 resolveProgram (PROG decs) = createNewMeta >>= resolveDeclarations decs >>= reverseDeclarationsAndErrors
 
@@ -157,7 +168,10 @@ resolveBlock decs meta = do
   newMeta <- addBlockToMeta meta{declarations=[]} >>= resolveDeclarations decs >>= reverseDeclarationsAndErrors
   deleteBlockFromMeta (newMeta{declarations=DEC_STMT (BLOCK_STMT (declarations newMeta)):declarations meta})
 
-
+-- Declarations are a series of declaration, but expressions are trees
+-- Practically what I do here is I handle the leaf nodes and save them in the "newExpr" property in the meta object.
+-- For inner or root node I call the "resolveExpression" on the children, get the results from "newExpr" property,
+-- and using those, create the resolved inner/root expression, and save it to the meta "newExpr" property
 resolveExpression :: EXPRESSION -> ResolverMeta -> IO ResolverMeta
 resolveExpression (EXP_LITERAL (IDENTIFIER_REFERENCE iden)) meta = checkIfReferenceForDefinition iden (EXP_LITERAL . R_IDENTIFIER_REFERENCE iden) (EXP_LITERAL (R_REFERENCE_IN_CLOSURE iden)) meta
 resolveExpression (EXP_LITERAL x) meta = return meta{newExpr= EXP_LITERAL x}
@@ -185,13 +199,17 @@ resolveExpression (EXP_TERNARY (TERNARY pred tExp fExp)) meta = do
   let falseExpr = newExpr falseMeta
   return falseMeta{newExpr= EXP_TERNARY (TERNARY predExpr trueExpr falseExpr) }
 resolveExpression (EXP_CALL (CALL iden args)) meta = handleCall iden args meta
+-- Recursive type CALL_MULTI can have other CALL_MULTI in them
+-- And it will call it recursively till we find a CALL
 resolveExpression (EXP_CALL (CALL_MULTI call multiArgs)) meta = do
-  (newMultiArgs, newResErrs) <- handleArguments multiArgs meta
+  (resolvedArgs, newResErrs) <- handleArguments multiArgs meta
   (EXP_CALL newCall) <- newExpr <$> resolveExpression (EXP_CALL call) meta
   return meta{
-    newExpr=EXP_CALL (CALL_MULTI newCall newMultiArgs)
+    newExpr=EXP_CALL (CALL_MULTI newCall resolvedArgs)
     , resolverErrors=mconcat [newResErrs, resolverErrors meta]
   }
+-- Here I only check the first link, as it is the one that could be anything.
+-- The other links should be some property on the class referenced, or returned
 resolveExpression (EXP_CHAIN (CHAIN links)) meta = do
   let (firstLink:rest) = links
   case firstLink of
@@ -236,13 +254,17 @@ handleCall iden args meta = do
   (newArgs, newResErrs) <- handleArguments args meta
   checkIfCallReferenceForDefinition iden (EXP_CALL . R_CALL iden newArgs) (EXP_CALL (RC_CALL iden newArgs)) meta{resolverErrors=mconcat [newResErrs, resolverErrors meta]}
 
+-- I resolve the arguments one by one (trees where the roots are next to each other)
+-- And then I combine them and to get the resolved expression, and all the errors, and send it back to the caller
 handleArguments :: [ARGUMENT] -> ResolverMeta -> IO ([ARGUMENT], [TextType])
 handleArguments args meta = do
     newMetas <- mapM (`resolveExpression` meta{resolverErrors=[]}) args
     let newArgs = map newExpr newMetas
     let newResolverErrors = mconcat (map resolverErrors newMetas)
     return (newArgs, newResolverErrors)
-    
+
+-- I save the params into the functions' resolver closure
+-- Order does not really matter, because we will only use this for resolution
 handleParams :: [DECLARATION] -> ResolverMeta -> IO ResolverMeta
 handleParams (p:params) meta = do
    let (DEC_VAR (PARAM iden)) = p

@@ -11,6 +11,7 @@ import AST
 import Data.Vector as V
 import Data.List as L
 import Data.HashTable.IO as HT
+import NativeFunctionTypes
 
 evalProgram :: [DECLARATION] -> V.Vector EVAL -> IO META
 evalProgram x vector = createGlobalMeta vector >>= evalDeclarations x
@@ -94,7 +95,7 @@ evalDeclaration (DEC_STMT (LOOP expr stmt)) meta = evalExpression expr meta >>= 
 evalDeclaration (DEC_FUNC (R_FUNC_DEC iden params stmt id)) meta = functionDecEvalHelper (addUpdateValueToMeta id) iden params stmt id meta
 evalDeclaration (DEC_FUNC (RC_FUNC_DEC iden params stmt)) meta = functionDecEvalHelper (addUpdateScopeInMeta iden) iden params stmt NON_ID meta
 evalDeclaration (DEC_FUNC (METHOD_DEC iden params stmt)) meta = functionDecEvalHelper (addUpdateScopeInMeta iden) iden params stmt NON_ID meta
--- closure meta will be an empty list, so it could be an [] as well
+-- closure meta will be an empty list, when creating so it could be an [] as well
 evalDeclaration (R_DEC_CLASS (R_CLASS_DEC iden decs id)) meta = addUpdateValueToMeta id meta{eval=CLASS_DEC_EVAL iden decs (closure meta) id}
 evalDeclaration (R_DEC_CLASS (RC_CLASS_DEC iden decs)) meta = addUpdateScopeInMeta iden meta{eval=CLASS_DEC_EVAL iden decs (closure meta) NON_ID}
 evalDeclaration (R_DEC_CLASS (R_SUB_CLASS_DEC iden parentIden decs id parentId)) meta = addUpdateValueToMeta id meta{eval=SUB_CLASS_DEC_EVAL iden parentIden decs (closure meta) id parentId}
@@ -224,8 +225,10 @@ handleCallEval args findDec meta = do
   ev <- findDec meta
   case ev of 
     FUNC_DEC_EVAL {} -> handleFunctionCall args ev meta
-    _ -> evalInit args ev meta
-
+    NATIVE_FUNC_DEC_EVAL {} -> handleNativeFunctionCall args ev meta 
+    CLASS_DEC_EVAL {} -> evalInit args ev meta
+    SUB_CLASS_DEC_EVAL {} -> evalInit args ev meta
+    _ -> return meta{eval=RUNTIME_ERROR "Self recursive function name overwritten in block"}
   
 evalInit :: [ARGUMENT]  -> EVAL -> META -> IO META
 evalInit args classEval meta = do
@@ -287,6 +290,11 @@ handleFunctionCall args ev meta = do
 multiCallGetFunc :: META -> IO EVAL
 multiCallGetFunc meta = return (eval meta)  
 
+handleNativeFunctionCall :: [ARGUMENT] -> EVAL -> META -> IO META 
+handleNativeFunctionCall _ (NATIVE_FUNC_DEC_EVAL _ _ _ (CLOCK clock)) meta = do
+  val <- clock id
+  return meta{eval=EVAL_NUMBER (fromInteger val)}
+  
 handleArgumentsEval :: [DECLARATION] -> [EVAL] ->  META -> IO META
 handleArgumentsEval (p:params) (e:evals) meta = do
   let (DEC_VAR (PARAM iden)) = p

@@ -27,14 +27,8 @@ createGlobalVector = V.singleton (NATIVE_FUNC_DEC_EVAL
                                0
                                []
                                (CLOCK clock))
+                               
+createGlobalDeclaration :: V.Vector DECLARATION
+createGlobalDeclaration = V.singleton (DEC_FUNC (NATIVE_FUNC "clock" [] (ID 0)))
 
-
-createGlobalResolverTable :: IO GlobalResolverTable
-createGlobalResolverTable = do
-  table <- HT.new
-  HT.insert table "clock" (ID 0)
-  return table
-
-getGlobalVarId ::  GlobalResolverTable -> T.Text -> IO (Maybe ID)
-getGlobalVarId = HT.lookup
 

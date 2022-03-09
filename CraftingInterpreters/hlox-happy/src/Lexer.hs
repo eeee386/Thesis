@@ -5,6 +5,7 @@ import Data.Char
 
 type TextType = T.Text
 
+-- Maybe in the future I will use EOF and NOT_TOKEN
 data Token =  LEFT_PAREN | RIGHT_PAREN | LEFT_BRACE | RIGHT_BRACE |
                        COMMA | DOT | MINUS | PLUS | SEMICOLON | SLASH | STAR |
 
@@ -19,8 +20,6 @@ data Token =  LEFT_PAREN | RIGHT_PAREN | LEFT_BRACE | RIGHT_BRACE |
 
                        AND | CLASS | ELSE | FALSE | FUN | FOR | IF | NIL | OR |
                        PRINT | RETURN | SUPER | THIS | TRUE | VAR | WHILE | BREAK | CONTINUE |
-
-                       COMMENT | BLOCK_COMMENT | WHITE_SPACE |
 
                        EOF | NOT_TOKEN TextType deriving (Show, Eq, Ord)
 

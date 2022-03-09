@@ -1,5 +1,6 @@
-fun b(){}
-
-class A{
- init(){}
+fun a(){
+  var a = 0;
+  a();
 }
+
+a();

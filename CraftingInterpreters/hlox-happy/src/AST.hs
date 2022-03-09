@@ -42,6 +42,7 @@ data FUNCTION_DECLARATION = FUNC_DEC IDENTIFIER [DECLARATION] STATEMENT
                           | R_FUNC_DEC IDENTIFIER [DECLARATION] STATEMENT ID
                           | RC_FUNC_DEC IDENTIFIER [DECLARATION] STATEMENT
                           | METHOD_DEC IDENTIFIER [DECLARATION] STATEMENT
+                          | NATIVE_FUNC IDENTIFIER [DECLARATION] ID
                           deriving Eq
 
 instance Show FUNCTION_DECLARATION where
@@ -49,6 +50,7 @@ instance Show FUNCTION_DECLARATION where
   show (R_FUNC_DEC i p s _) = mconcat ["function name: ", show i,"params: " , show p, "statements: ", show s]
   show (RC_FUNC_DEC i p s) = mconcat ["function name: ", show i,"params: " , show p, "statements: ", show s]
   show (METHOD_DEC i p s) = mconcat ["method name: ", show i,"params: " , show p, "statements: ", show s]
+  show (NATIVE_FUNC iden p id) = mconcat ["native function name: ", show iden, "params: ", show p, "statements: ", "<<native code>>", "id:", show id]
 
 
 type PARENT_ID = ID
