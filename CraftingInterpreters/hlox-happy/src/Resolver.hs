@@ -20,6 +20,7 @@ import Data.List.Unique as U
 -- - Check if parameters and method names are unique
 -- - Check if super- and subclass do not have the same name in declaration
 -- - Check if classes have "init" functions and in subclasses "init" functions call "super.init()"
+-- TODO: I am not sure the resolverErrors, will be in the right order, maybe will update project to sequences
 resolveProgram :: PROGRAM -> IO ResolverMeta
 resolveProgram (PROG decs) = createNewMeta >>= resolveDeclarations decs >>= reverseDeclarationsAndErrors
 
@@ -42,13 +43,16 @@ resolveDeclaration (DEC_STMT (WHILE_STMT exp (BLOCK_STMT decs))) meta = do
   resMeta <- resolveExpression exp meta
   let resExp = newExpr resMeta
   resBlockMeta <- resolveBlock decs resMeta{declarations=[], isInLoop=True}
+  -- we use head because it would be a singleton list
   let (DEC_STMT resBlockStmt) = head (declarations resBlockMeta)
   return resBlockMeta{declarations=DEC_STMT (LOOP resExp resBlockStmt):declarations meta, isInLoop=isInLoop meta}
 resolveDeclaration (DEC_STMT (FOR_STMT (DEC_VAR varDec) exp1 varAss (BLOCK_STMT decs))) meta = do
   varMeta <- resolveVarDeclaration varDec meta
   resExpMeta <- resolveExpression exp1 varMeta
   let resExp = newExpr resExpMeta
+  -- I add the variable assignment to the end of the block
   resBlockMeta <- resolveBlock ((reverse . (:) varAss . reverse) decs ) resExpMeta{declarations=[], isInLoop=True}
+  -- we use head because it would be a singleton list
   let (DEC_STMT resBlockStmt) = head (declarations resBlockMeta)
   return resBlockMeta{declarations=DEC_STMT (LOOP resExp resBlockStmt):declarations varMeta, isInLoop=isInLoop meta}
 resolveDeclaration (DEC_STMT (IF_STMT exp (BLOCK_STMT decs))) meta = do
@@ -85,11 +89,19 @@ resolveVarDeclaration (THIS_VAR_DEF iden exp) meta = do
   exprMeta <- resolveExpression exp meta
   return (updateResolverErrorsByPredicate (isInClass meta) "'this' is called outside of class" exprMeta{declarations=R_DEC_VAR (R_THIS_VAR_DEF iden (newExpr exprMeta)):declarations meta})
 
--- Check if method is resolved properly
+
 resolveFunctionDeclaration :: FUNCTION_DECLARATION -> ResolverMeta -> IO ResolverMeta
 resolveFunctionDeclaration (FUNC_DEC iden params (BLOCK_STMT decs)) meta = resolveFunctionDeclarationHelper iden params decs functionMetaChanger meta
 resolveFunctionDeclaration (METHOD_DEC iden params (BLOCK_STMT decs)) meta = resolveFunctionDeclarationHelper iden params decs methodMetaChanger meta
 
+-- Check if that identifier is already saved in scope, if not save empty (get id -> will be used for the final dec)
+-- Save current function name (for self recursion)
+-- Add a new block to resolver environment and a new scope in closure
+-- Check if all the params are unique
+-- Resolve Function body (is inFunction is set True) and reverse the decs and errors
+-- Set current function name to ""
+-- Delete block from resEnv, delete scope closure,
+-- Call changer, which will set isInFunction to what was originally, saves the resolve errors, creates the final function declaration saves the function declaration to the original declarations
 resolveFunctionDeclarationHelper :: TextType -> [DECLARATION] -> [DECLARATION] -> (ID -> TextType -> [DECLARATION] -> ResolverMeta -> ResolverMeta -> IO ResolverMeta) -> ResolverMeta -> IO ResolverMeta
 resolveFunctionDeclarationHelper iden params decs changer meta = do
   (id, savedMeta) <- checkIfFunctionOrClassIsDefinedAndSaveEmpty iden meta
@@ -105,10 +117,16 @@ resolveFunctionDeclarationHelper iden params decs changer meta = do
 functionMetaChanger :: ID -> TextType -> [DECLARATION] -> ResolverMeta -> ResolverMeta -> IO ResolverMeta
 functionMetaChanger id iden params meta newMeta = updateFunctionOrClassDeclaration id iden dec newMeta{isInFunction = isInFunction meta, resolverErrors=resolverErrors newMeta, declarations=declarations meta}
   where dec = if isInFunction meta then DEC_FUNC (RC_FUNC_DEC iden params (BLOCK_STMT (declarations newMeta))) else DEC_FUNC (R_FUNC_DEC iden params (BLOCK_STMT (declarations newMeta)) id)
-    
+
+-- Methods can only be in classes, therefore always be in closure
 methodMetaChanger :: ID -> TextType -> [DECLARATION] -> ResolverMeta -> ResolverMeta -> IO ResolverMeta
 methodMetaChanger id iden params meta newMeta = return newMeta{isInFunction = isInFunction meta, declarations=DEC_FUNC (METHOD_DEC iden params (BLOCK_STMT (declarations newMeta))):declarations meta}
 
+-- Check if that identifier is already saved in scope, if not save empty (get id -> will be used for the final dec)
+-- set "isInClass" to true
+-- "handleClassSetup": adds new block to resEnv, new scope to closure, resolves methods
+-- Call "handleSaveClassDec" with the final class dec
+-- "handleSaveClassDec": sets the isInClass, isInSubClass, declarations to the original, save the final class dec into the original declarations
 resolveClassDeclaration :: CLASS_DECLARATION -> ResolverMeta -> IO ResolverMeta
 resolveClassDeclaration (CLASS_DEC iden methods) meta = do
   (id, updatedMeta) <- checkIfFunctionOrClassIsDefinedAndSaveEmpty iden meta
@@ -118,7 +136,7 @@ resolveClassDeclaration (CLASS_DEC iden methods) meta = do
     handleSaveClassDec id iden (R_DEC_CLASS (RC_CLASS_DEC iden newMethods)) meta newMeta
   else do
     handleSaveClassDec id iden (R_DEC_CLASS (R_CLASS_DEC iden newMethods id)) meta newMeta
-      
+-- Similar as above but we have a plus check, where we check if the parent the a child identifier is the same, and we set the "isInSubClass" to true
 resolveClassDeclaration (SUB_CLASS_DEC iden parentIden methods) meta = do
   let cMeta = updateResolverErrorsByPredicate (iden == parentIden) "Class name cannot be parent class name" meta
   (id, updatedMeta) <- checkIfFunctionOrClassIsDefinedAndSaveEmpty iden meta
@@ -140,9 +158,11 @@ resolveClassDeclaration (SUB_CLASS_DEC iden parentIden methods) meta = do
 parentNotInScopeError :: Maybe ID -> ResolverMeta -> ResolverMeta
 parentNotInScopeError maybeParentId = updateResolverErrorsByPredicate (isJust maybeParentId) "Parent class is not in scope"
 
+-- see in "resolveClassDeclaration"
 handleSaveClassDec :: ID -> TextType -> DECLARATION -> ResolverMeta -> ResolverMeta -> IO ResolverMeta
 handleSaveClassDec id iden dec oldMeta meta = deleteBlockFromMeta meta{isInClass=isInClass oldMeta, isInSubClass=isInSubClass oldMeta, declarations=declarations oldMeta} >>= updateFunctionOrClassDeclaration id iden dec
 
+-- see in "resolveClassDeclaration"
 handleClassSetup :: [DECLARATION] -> ResolverMeta -> IO ResolverMeta
 handleClassSetup methods meta = addBlockToMeta meta >>= addClosureToMeta >>= resolveMethods methods
 
@@ -163,6 +183,9 @@ resolveMethods methods meta = do
    declarations=[]
  }))) >>= reverseDeclarationsAndErrors
 
+-- Set the declarations to empty (this is where we will put the resolved block body declarations), 
+-- Add block to resEnv, resolve block body, reverse declarations
+-- Before returning, deleteBlock from resEnv, add the created block dec to the original declarations
 resolveBlock :: [DECLARATION] -> ResolverMeta -> IO ResolverMeta
 resolveBlock decs meta = do
   newMeta <- addBlockToMeta meta{declarations=[]} >>= resolveDeclarations decs >>= reverseDeclarationsAndErrors
