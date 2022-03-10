@@ -8,7 +8,6 @@ instance Show PROGRAM where
   show (PROG x) = show x
 
 -- DECLARATION
-
 data DECLARATION = DEC_STMT STATEMENT | DEC_VAR VARIABLE_DECLARATION | R_DEC_VAR RESOLVED_VARIABLE_DECLARATION | DEC_FUNC FUNCTION_DECLARATION | DEC_CLASS CLASS_DECLARATION | R_DEC_CLASS RESOLVED_CLASS_DECLARATION | EMPTY_DEC deriving Eq
 
 instance Show DECLARATION where
@@ -24,6 +23,12 @@ instance Show DECLARATION where
 type IDENTIFIER = TextType
 type PARAMETER = TextType
 
+-- VAR_DEC_DEF: var a = 5;
+-- VAR_DEC: var a;
+-- VAR_DEF: a = 5;
+-- PARAM: fun func(a){}
+-- CLASS_VAR_DEF: A.a = 5; (A is instance of class)
+-- THIS_VAR_DEF: this.a = 5;
 data VARIABLE_DECLARATION = VAR_DEC_DEF IDENTIFIER EXPRESSION
                           | VAR_DEC IDENTIFIER
                           | VAR_DEF IDENTIFIER EXPRESSION
@@ -36,8 +41,14 @@ instance Show VARIABLE_DECLARATION where
   show (VAR_DEC iden) = mconcat ["var", " ", show iden]
   show (VAR_DEF iden expr) = mconcat [show iden, " = ", show expr]
   show (PARAM iden) = show iden
+  show (CLASS_VAR_DEF cIden iden expr) = mconcat [show cIden, ".", show iden, "=", show expr]
+  show (THIS_VAR_DEF iden expr) = mconcat ["this.", show iden, "=", show expr]
 
-  
+-- FUNC_DEC: fun func(a,b){...} -> func is IDENTIFIER, a,b is [DECLARATION], function body is STATEMENT (and the parser only lets block statements)
+-- R_FUNC_DEC: same as FUNC_DEC, but it is resolved and has an id
+-- RC_FUNC_DEC: same as FUNC_DEC, but it is resolved, and in closure
+-- METHOD: in class: func(a,b){...}
+-- NATIVE_FUNC: Used to create AST nodes of native functions
 data FUNCTION_DECLARATION = FUNC_DEC IDENTIFIER [DECLARATION] STATEMENT
                           | R_FUNC_DEC IDENTIFIER [DECLARATION] STATEMENT ID
                           | RC_FUNC_DEC IDENTIFIER [DECLARATION] STATEMENT
@@ -55,6 +66,8 @@ instance Show FUNCTION_DECLARATION where
 
 type PARENT_ID = ID
 
+-- CLASS_DEC: class A{...} -> A is IDENTIFIER, class body is [DECLARATION] only methods in class body
+-- SUB_CLASS_DEC: class B < A {...} -> Plus one IDENTIFIER for parent
 data CLASS_DECLARATION = CLASS_DEC IDENTIFIER [DECLARATION] | SUB_CLASS_DEC IDENTIFIER IDENTIFIER [DECLARATION] deriving Eq
 instance Show CLASS_DECLARATION where 
   show (CLASS_DEC i methods) = mconcat ["class name: ", show i, "  methods: ", show methods]
@@ -72,12 +85,14 @@ instance Show RESOLVED_CLASS_DECLARATION where
   show (RC_CLASS_DEC i methods) = mconcat ["class name: ", show i, "  methods: ", show methods]
   show (RC_SUB_CLASS_DEC iden parentIden methods _) = mconcat ["class name: ", show iden, ", parent: ", show parentIden, ",  methods: ", show methods]
 
--- RC: in closure
+-- same as VARIABLE_DECLARATION, but it is resolveed
+-- R_ -> it is resolved with an index
+-- RC_ -> it is resolved in closure
 data RESOLVED_VARIABLE_DECLARATION = R_VAR_DEC_DEF IDENTIFIER EXPRESSION ID 
                                    | R_VAR_DEC IDENTIFIER ID 
                                    | R_VAR_DEF IDENTIFIER EXPRESSION ID
                                    | R_CLASS_VAR_DEF IDENTIFIER IDENTIFIER EXPRESSION ID
-                                   | R_THIS_VAR_DEF IDENTIFIER EXPRESSION
+                                   | RC_THIS_VAR_DEF IDENTIFIER EXPRESSION
                                    | RC_VAR_DEC_DEF IDENTIFIER EXPRESSION
                                    | RC_VAR_DEC IDENTIFIER
                                    | RC_VAR_DEF IDENTIFIER EXPRESSION
@@ -89,7 +104,7 @@ instance Show RESOLVED_VARIABLE_DECLARATION where
   show (R_VAR_DEC iden id) = mconcat ["var", " ", show iden, show id]
   show (R_VAR_DEF iden expr id) = mconcat [show iden, " = ", show expr, show id]
   show (R_CLASS_VAR_DEF cIden iden expr id) = mconcat [show cIden, ".", show iden, "=" , show expr, show id] 
-  show (R_THIS_VAR_DEF iden expr) = mconcat ["this.", show iden, "=", show expr]
+  show (RC_THIS_VAR_DEF iden expr) = mconcat ["this.", show iden, "=", show expr]
   show (RC_VAR_DEC_DEF iden expr) = mconcat ["var", " ", show iden, " = ", show expr, "RC"]
   show (RC_VAR_DEC iden) = mconcat ["var", " ", show iden]
   show (RC_VAR_DEF iden expr) = mconcat [show iden, " = ", show expr]

@@ -66,7 +66,7 @@ evalDeclaration (R_DEC_VAR (R_CLASS_VAR_DEF iden pIden expr classId)) meta = do
 evalDeclaration (R_DEC_VAR (RC_VAR_DEC_DEF iden expr)) meta = evalExpression expr meta >>= checkIfLastEvalIsRuntimeError (addUpdateScopeInMeta iden)
 evalDeclaration (R_DEC_VAR (RC_VAR_DEC iden)) meta = addUpdateScopeInMeta iden meta{eval=EVAL_NIL}
 evalDeclaration (R_DEC_VAR (RC_VAR_DEF iden expr)) meta = evalExpression expr meta >>= checkIfLastEvalIsRuntimeError (addUpdateClosureInMeta iden)
-evalDeclaration (R_DEC_VAR (R_THIS_VAR_DEF iden expr)) meta = do
+evalDeclaration (R_DEC_VAR (RC_THIS_VAR_DEF iden expr)) meta = do
   exprMeta <- evalExpression expr meta
   let exprEval = eval exprMeta
   classEval <- findValueInClosureInMeta "this" exprMeta
