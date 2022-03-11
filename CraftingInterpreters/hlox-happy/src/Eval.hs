@@ -114,6 +114,7 @@ evalDeclaration (DEC_STMT (LOOP expr stmt)) meta = evalExpression expr meta >>= 
                            else do
                              return newMeta
 
+-- Creating the function/class eval from the declaration, then saving it to either closure or variableVector
 evalDeclaration (DEC_FUNC (R_FUNC_DEC iden params stmt id)) meta = functionDecEvalHelper (addUpdateValueToMeta id) iden params stmt id meta
 evalDeclaration (DEC_FUNC (RC_FUNC_DEC iden params stmt)) meta = functionDecEvalHelper (addUpdateScopeInMeta iden) iden params stmt NON_ID meta
 evalDeclaration (DEC_FUNC (METHOD_DEC iden params stmt)) meta = functionDecEvalHelper (addUpdateScopeInMeta iden) iden params stmt NON_ID meta
@@ -122,10 +123,10 @@ evalDeclaration (R_DEC_CLASS (R_CLASS_DEC iden decs id)) meta = addUpdateValueTo
 evalDeclaration (R_DEC_CLASS (RC_CLASS_DEC iden decs)) meta = addUpdateScopeInMeta iden meta{eval=CLASS_DEC_EVAL iden decs (closure meta) NON_ID}
 evalDeclaration (R_DEC_CLASS (R_SUB_CLASS_DEC iden parentIden decs id parentId)) meta = addUpdateValueToMeta id meta{eval=SUB_CLASS_DEC_EVAL iden parentIden decs (closure meta) id parentId}
 evalDeclaration (R_DEC_CLASS (RC_SUB_CLASS_DEC iden parentIden decs parentId)) meta = addUpdateScopeInMeta iden meta{eval=SUB_CLASS_DEC_EVAL iden parentIden decs (closure meta) NON_ID parentId}
+
 evalDeclaration (DEC_STMT (RETURN exp)) meta = do 
   expMeta <- evalExpression exp meta
   return expMeta{eval=RETURN_EVAL (eval expMeta)}
-
 evalDeclaration dec meta = do
   return meta{eval=RUNTIME_ERROR "Unknown error"}
 
@@ -134,12 +135,15 @@ functionDecEvalHelper :: (META -> IO META) -> TextType -> [DECLARATION] -> STATE
 functionDecEvalHelper addUpdateFunc iden params stmt id meta = addUpdateFunc meta{eval=evalFunc}
   where evalFunc = FUNC_DEC_EVAL iden (L.length params) params stmt (closure meta) id
 
+
+
 evalExpression :: EXPRESSION -> META -> IO META
 evalExpression (EXP_LITERAL (NUMBER x)) meta = return meta{eval=EVAL_NUMBER x}
 evalExpression (EXP_LITERAL (STRING x)) meta = return meta{eval=EVAL_STRING x}
 evalExpression (EXP_LITERAL FALSE) meta = return meta{eval=EVAL_BOOL False}
 evalExpression (EXP_LITERAL TRUE) meta = return meta{eval=EVAL_BOOL True}
 evalExpression (EXP_LITERAL NIL) meta = return meta{eval=EVAL_NIL}
+-- Get value from closure or variableVector
 evalExpression (EXP_LITERAL (R_IDENTIFIER_REFERENCE _ id)) meta = do
   val <- findIndexedValueInMeta id meta
   return meta{eval=val}
@@ -176,12 +180,13 @@ evalExpression (EXP_BINARY (BIN_NOT_EQ left right)) meta = binaryBoolHelper left
 evalExpression (EXP_BINARY (BIN_AND left right)) meta = binaryBoolHelper left right createAnd meta
 evalExpression (EXP_BINARY (BIN_OR left right)) meta = binaryBoolHelper left right createOr meta
 evalExpression (EXP_TERNARY (TERNARY predi trueRes falseRes)) meta = evalExpression predi meta >>= evalTernary trueRes falseRes
-
+-- Call
 evalExpression (EXP_CALL (CALL call_iden args)) meta = handleCallEval args (findValueInClosureInMeta call_iden) meta
 evalExpression (EXP_CALL (R_CALL _ args id)) meta = handleCallEval args (findIndexedValueInMeta id) meta
 evalExpression (EXP_CALL (RC_CALL call_iden args)) meta = handleCallEval args (findValueInClosureInMeta call_iden) meta
 evalExpression (EXP_CALL (CALL_MULTI call args)) meta = evalExpression (EXP_CALL call) meta >>= handleCallEval args multiCallGetFunc
 
+-- handling "super.init" call
 evalExpression (EXP_CHAIN (CHAIN [LINK_SUPER,LINK_CALL (CALL "init" args)])) meta = do
   (SUB_CLASS_DEC_EVAL _ parentName _ _ _ parentId) <- findValueInClosureInMeta "this" meta
   parentClassEval <- findParentClass parentName parentId meta
@@ -241,7 +246,7 @@ getAllClosuresFromInheritance clos pClos = do
 
 
 
--- Resolver already adds the init function to the  
+
 handleCallEval :: [ARGUMENT] -> (META -> IO EVAL) -> META -> IO META
 handleCallEval args findDec meta = do
   ev <- findDec meta
