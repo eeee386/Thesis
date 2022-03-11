@@ -31,7 +31,7 @@ runLoxFile arg = do
   run text
 
 -- TODO: Prompt should remember all variables, and run should use it
--- So a helper function which has a list of argument (all new inputs are added into that)
+-- So a helper function which has a list of arguments (all new inputs are added into that)
 -- and after the scan, we scan if the tokens has the saved identifier, swap it with their values
 -- parse and evaluate
 runPrompt :: IO()

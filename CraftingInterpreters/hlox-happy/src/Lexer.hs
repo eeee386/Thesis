@@ -5,7 +5,7 @@ import Data.Char
 
 type TextType = T.Text
 
--- Maybe in the future I will use EOF and NOT_TOKEN
+-- Maybe in the future I will use EOF and NOT_TOKEN -> NOT_TOKEN as an error type
 data Token =  LEFT_PAREN | RIGHT_PAREN | LEFT_BRACE | RIGHT_BRACE |
                        COMMA | DOT | MINUS | PLUS | SEMICOLON | SLASH | STAR |
 
@@ -107,7 +107,7 @@ lexHandleLeftBrace [] = [RIGHT_BRACE]
 lexHandleLeftBrace (c:cs) =  if c == '*' then lexer afterCommentCs else LEFT_BRACE : lexer (c:cs)
   where afterCommentCs = findEndOfBlockComment cs
 
--- Could be a more elegant solution to the error
+-- IMPROVE: Could be a more elegant solution to the error
 findEndOfBlockComment :: String -> String
 findEndOfBlockComment ('*':'}':cs) = cs
 findEndOfBlockComment (_:cs) = findEndOfBlockComment cs

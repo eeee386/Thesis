@@ -19,11 +19,15 @@ evalProgram x vector = createGlobalMeta vector >>= evalDeclarations x
 evalBlock :: [DECLARATION]  -> META -> IO META
 evalBlock = evalDeclarations
 
+-- We only care about the last eval
+-- if return stop evaluating the declarations (function body), and return the return eval's eval
+-- if continue or break stop evaluation
+-- RUNTIME_ERROR -> print then stop evaluating the declarations return meta
+-- IMPROVE: Runtime error is written twice, if it is in function body
 evalDeclarations :: [DECLARATION] -> META -> IO META
-evalDeclarations decs meta = do
-  if L.null decs || EvalMeta.isReturn meta then do
-    return meta
-  else do
+evalDeclarations decs meta
+  | L.null decs || EvalMeta.isReturn meta = return meta
+  | otherwise = do
     let (current:rest) = decs
     newMeta <- evalDeclaration current meta
     let ev = eval newMeta
@@ -49,11 +53,16 @@ evalDeclaration (DEC_STMT (EXPR_STMT x)) meta = evalExpression x meta
 evalDeclaration (DEC_STMT BREAK) meta = return meta{eval=BREAK_EVAL}
 evalDeclaration (DEC_STMT CONTINUE) meta = return meta{eval=CONTINUE_EVAL}
 
-evalDeclaration (R_DEC_VAR (R_VAR_DEC_DEF iden expr id)) meta = evalExpression expr meta >>= handleVarDefinition iden id
+-- Indexed variables
+-- Evaluate expression -> it is saved in "eval" prop of "meta"
+-- R_VAR_DEC_DEF/R_VAR_DEF:handleIndexedVarDefinition -> check if last eval (expression eval) was runtimeerror -> if not save value to variableVector else return runtimeerror
+-- R_VAR_DEC -> we already resolved it, just add eval to meta
+-- R_CLASS_VAR_DEF -> save value to closure/update value in closure
+evalDeclaration (R_DEC_VAR (R_VAR_DEC_DEF iden expr id)) meta = evalExpression expr meta >>= handleIndexedVarDefinition iden id
 evalDeclaration (R_DEC_VAR (R_VAR_DEC iden id)) meta = return meta{eval=DEC_EVAL iden EVAL_NIL id}
-evalDeclaration (R_DEC_VAR (R_VAR_DEF iden expr id)) meta = evalExpression expr meta >>= handleVarDefinition iden id
+evalDeclaration (R_DEC_VAR (R_VAR_DEF iden expr id)) meta = evalExpression expr meta >>= handleIndexedVarDefinition iden id
 evalDeclaration (R_DEC_VAR (R_CLASS_VAR_DEF iden pIden expr classId)) meta = do
-    classEval <- findValueInMeta classId meta
+    classEval <- findIndexedValueInMeta classId meta
     let evalClassDec newMeta = case classEval of
           (CLASS_DEC_EVAL name evals clos id) -> do
             newClos <- updateScopeInClosure pIden (eval newMeta) clos
@@ -63,28 +72,41 @@ evalDeclaration (R_DEC_VAR (R_CLASS_VAR_DEF iden pIden expr classId)) meta = do
             addUpdateValueToMeta id newMeta{eval=SUB_CLASS_DEC_EVAL name parentName evals newClos id parentId}
           _ -> return newMeta{eval=RUNTIME_ERROR "Unknown error"}
     evalExpression expr meta >>= checkIfLastEvalIsRuntimeError evalClassDec
-evalDeclaration (R_DEC_VAR (RC_VAR_DEC_DEF iden expr)) meta = evalExpression expr meta >>= checkIfLastEvalIsRuntimeError (addUpdateScopeInMeta iden)
+-- Closure variables
+-- RC_VAR_DEC_DEF: handleVarDefinition -> if evaluated expression is runtimeerror then return runtimeerror else add iden with evaluated expression to scope
+-- RC_VAR_DEC: save iden to scope
+-- RC_VAR_DEC_DEF: handleVarDefinition -> if evaluated expression is runtimeerror then return runtimeerror else find iden in closure and update its value with evaluated expression
+-- RC_THIS_VAR_DEF: if evaluated expression is runtimeerror then return runtimeerror else find "this" in closure find iden in closure and update its value with evaluated expression
+evalDeclaration (R_DEC_VAR (RC_VAR_DEC_DEF iden expr)) meta = evalExpression expr meta >>= handleVarDefinition (\ev -> DEC_EVAL iden ev NON_ID) (addUpdateScopeInMeta iden)
 evalDeclaration (R_DEC_VAR (RC_VAR_DEC iden)) meta = addUpdateScopeInMeta iden meta{eval=EVAL_NIL}
-evalDeclaration (R_DEC_VAR (RC_VAR_DEF iden expr)) meta = evalExpression expr meta >>= checkIfLastEvalIsRuntimeError (addUpdateClosureInMeta iden)
-evalDeclaration (R_DEC_VAR (RC_THIS_VAR_DEF iden expr)) meta = do
-  exprMeta <- evalExpression expr meta
-  let exprEval = eval exprMeta
-  classEval <- findValueInClosureInMeta "this" exprMeta
-  case classEval of
-    (CLASS_DEC_EVAL classIden decs clos id) -> do
-      newClos <- updateScopeInClosure iden exprEval clos
-      addUpdateClosureInMetaWithEval "this" (CLASS_DEC_EVAL classIden decs newClos id) exprMeta
-    (SUB_CLASS_DEC_EVAL classIden parentIden decs clos id parentId ) -> do
-      newClos <- updateScopeInClosure iden exprEval clos
-      addUpdateClosureInMetaWithEval "this" (SUB_CLASS_DEC_EVAL classIden parentIden decs newClos id parentId) exprMeta  
+evalDeclaration (R_DEC_VAR (RC_VAR_DEF iden expr)) meta = evalExpression expr meta >>= handleVarDefinition (\ev -> DEC_EVAL iden ev NON_ID) (addUpdateClosureInMeta iden)
+evalDeclaration (R_DEC_VAR (RC_THIS_VAR_DEF iden expr)) meta = checkIfLastEvalIsRuntimeError func meta
+  where func pMeta = do
+              exprMeta <- evalExpression expr pMeta
+              let exprEval = eval exprMeta
+              classEval <- findValueInClosureInMeta "this" exprMeta
+              case classEval of
+                (CLASS_DEC_EVAL classIden decs clos id) -> do
+                  newClos <- updateScopeInClosure iden exprEval clos
+                  addUpdateClosureInMetaWithEval "this" (CLASS_DEC_EVAL classIden decs newClos id) exprMeta
+                (SUB_CLASS_DEC_EVAL classIden parentIden decs clos id parentId ) -> do
+                  newClos <- updateScopeInClosure iden exprEval clos
+                  addUpdateClosureInMetaWithEval "this" (SUB_CLASS_DEC_EVAL classIden parentIden decs newClos id parentId) exprMeta
+
 
 evalDeclaration (DEC_STMT (BLOCK_STMT x)) meta = evalBlock x meta
+-- Evaluate expression -> if expression runtime error then return runtime error else 
+-- check if expression truthy value if truthy evaluate block else just return the original meta  
 evalDeclaration (DEC_STMT (IF_STMT expr stmt)) meta = evalExpression expr meta >>= checkIfLastEvalIsRuntimeError evalIf
   where evalIf newMeta = if maybeEvalTruthy (eval newMeta) == Just True then do
                            evalDeclaration (createDecFromStatement stmt) newMeta
                          else return newMeta
+-- Evaluate expression -> if expression runtime error then return runtime error else 
+-- check if expression truthy value if truthy evaluate first block else evaluate second block
 evalDeclaration (DEC_STMT (IF_ELSE_STMT expr stmt1 stmt2)) meta = evalExpression expr meta >>= checkIfLastEvalIsRuntimeError evalIfElse
   where evalIfElse newMeta = if maybeEvalTruthy (eval newMeta) == Just True then evalDeclaration (createDecFromStatement stmt1) newMeta else evalDeclaration (createDecFromStatement stmt2) newMeta
+-- Evaluate expression -> if expression runtime error then return runtime error else 
+-- while expression truthy value or was not a break or runtimeerror in last evaluation of the block then eval block else return original meta  
 evalDeclaration (DEC_STMT (LOOP expr stmt)) meta = evalExpression expr meta >>= checkIfLastEvalIsRuntimeError evalLoop
   where lastEval = eval meta
         evalLoop newMeta = if maybeEvalTruthy (eval newMeta) == Just True && not (isBreak lastEval) && not (isRuntimeError lastEval) then do
@@ -119,9 +141,9 @@ evalExpression (EXP_LITERAL FALSE) meta = return meta{eval=EVAL_BOOL False}
 evalExpression (EXP_LITERAL TRUE) meta = return meta{eval=EVAL_BOOL True}
 evalExpression (EXP_LITERAL NIL) meta = return meta{eval=EVAL_NIL}
 evalExpression (EXP_LITERAL (R_IDENTIFIER_REFERENCE _ id)) meta = do
-  val <- findValueInMeta id meta
+  val <- findIndexedValueInMeta id meta
   return meta{eval=val}
-evalExpression (EXP_LITERAL (R_REFERENCE_IN_CLOSURE iden)) meta = do
+evalExpression (EXP_LITERAL (RC_IDENTIFIER_REFERENCE iden)) meta = do
   val <- findValueInClosureInMeta iden meta
   return meta{eval=val}
 
@@ -156,7 +178,7 @@ evalExpression (EXP_BINARY (BIN_OR left right)) meta = binaryBoolHelper left rig
 evalExpression (EXP_TERNARY (TERNARY predi trueRes falseRes)) meta = evalExpression predi meta >>= evalTernary trueRes falseRes
 
 evalExpression (EXP_CALL (CALL call_iden args)) meta = handleCallEval args (findValueInClosureInMeta call_iden) meta
-evalExpression (EXP_CALL (R_CALL _ args id)) meta = handleCallEval args (findValueInMeta id) meta
+evalExpression (EXP_CALL (R_CALL _ args id)) meta = handleCallEval args (findIndexedValueInMeta id) meta
 evalExpression (EXP_CALL (RC_CALL call_iden args)) meta = handleCallEval args (findValueInClosureInMeta call_iden) meta
 evalExpression (EXP_CALL (CALL_MULTI call args)) meta = evalExpression (EXP_CALL call) meta >>= handleCallEval args multiCallGetFunc
 
@@ -164,7 +186,7 @@ evalExpression (EXP_CHAIN (CHAIN [LINK_SUPER,LINK_CALL (CALL "init" args)])) met
   (SUB_CLASS_DEC_EVAL _ parentName _ _ _ parentId) <- findValueInClosureInMeta "this" meta
   parentClassEval <- findParentClass parentName parentId meta
   newMeta <- evalInit args parentClassEval meta
-  return meta{superClass=eval newMeta:superClass newMeta}
+  return meta{superClass=eval newMeta}
 
 
 evalExpression (EXP_CHAIN (CHAIN (l:links))) meta = do
@@ -187,7 +209,7 @@ evalExpression (EXP_CHAIN (CHAIN (l:links))) meta = do
         (SUB_CLASS_DEC_EVAL _ _ _ clos _ _) -> handleSubClassChain l links clos handleChainIdentifier meta
         _ -> return meta{eval=RUNTIME_ERROR "Dot operation is only permitted on classes"}
     (R_LINK_IDENTIFIER _ id) -> do
-      ev <- findValueInMeta id meta
+      ev <- findIndexedValueInMeta id meta
       evalExpression (EXP_CHAIN (CHAIN links)) meta{eval=ev}
     (RC_LINK_IDENTIFIER iden) -> do 
       ev <- findValueInClosureInMeta iden meta
@@ -243,9 +265,9 @@ evalInit args classEval meta = do
 
 addSuperToClosure :: META -> IO META
 addSuperToClosure initMeta = do
-  let (parentClass:rest) = superClass initMeta
+  let parentClass = superClass initMeta
   superMeta <- addUpdateScopeInMetaWithEval "super" parentClass initMeta
-  return superMeta{superClass=rest}
+  return superMeta{superClass=EVAL_NIL}
   
  
 handleInit :: [ARGUMENT] -> [DECLARATION] -> (Closure -> EVAL) -> (META -> IO META) -> META -> IO META
@@ -389,10 +411,15 @@ evalTernary trueRes falseRes meta
 
 
 -- Variable helpers
-handleVarDefinition :: TextType -> ID -> META -> IO META
-handleVarDefinition iden id meta = do
+handleIndexedVarDefinition :: TextType -> ID -> META -> IO META
+handleIndexedVarDefinition iden id = handleVarDefinition (\ev -> DEC_EVAL iden ev id) (addUpdateValueToMeta id)
+      
+handleVarDefinition :: (EVAL -> EVAL) -> (META -> IO META) -> META -> IO META
+handleVarDefinition ev saveFunc meta = do
   case eval meta of
     (RUNTIME_ERROR x) -> return (meta{eval=RUNTIME_ERROR x})
     _ -> do
-      newMeta <- addUpdateValueToMeta id meta
-      return newMeta{eval=DEC_EVAL iden (eval newMeta) id}
+      newMeta <- saveFunc meta
+      return newMeta{eval=ev (eval meta)}
+      
+ 

@@ -87,7 +87,7 @@ resolveVarDeclaration (VAR_DEF iden exp) meta = resolveExpression exp meta >>= c
 resolveVarDeclaration (CLASS_VAR_DEF iden pIden exp) meta = resolveExpression exp meta >>= checkIfDefinedForDefinitionWithExpr iden (\exp id -> R_DEC_VAR (R_CLASS_VAR_DEF iden pIden exp id)) (R_DEC_VAR . RC_CLASS_VAR_DEF iden pIden)
 resolveVarDeclaration (THIS_VAR_DEF iden exp) meta = do
   exprMeta <- resolveExpression exp meta
-  return (updateResolverErrorsByPredicate (isInClass meta) "'this' is called outside of class" exprMeta{declarations=R_DEC_VAR (R_THIS_VAR_DEF iden (newExpr exprMeta)):declarations meta})
+  return (updateResolverErrorsByPredicate (isInClass meta) "'this' is called outside of class" exprMeta{declarations=R_DEC_VAR (RC_THIS_VAR_DEF iden (newExpr exprMeta)):declarations meta})
 
 
 resolveFunctionDeclaration :: FUNCTION_DECLARATION -> ResolverMeta -> IO ResolverMeta
@@ -196,7 +196,7 @@ resolveBlock decs meta = do
 -- For inner or root node I call the "resolveExpression" on the children, get the results from "newExpr" property,
 -- and using those, create the resolved inner/root expression, and save it to the meta "newExpr" property
 resolveExpression :: EXPRESSION -> ResolverMeta -> IO ResolverMeta
-resolveExpression (EXP_LITERAL (IDENTIFIER_REFERENCE iden)) meta = checkIfReferenceForDefinition iden (EXP_LITERAL . R_IDENTIFIER_REFERENCE iden) (EXP_LITERAL (R_REFERENCE_IN_CLOSURE iden)) meta
+resolveExpression (EXP_LITERAL (IDENTIFIER_REFERENCE iden)) meta = checkIfReferenceForDefinition iden (EXP_LITERAL . R_IDENTIFIER_REFERENCE iden) (EXP_LITERAL (RC_IDENTIFIER_REFERENCE iden)) meta
 resolveExpression (EXP_LITERAL x) meta = return meta{newExpr= EXP_LITERAL x}
 resolveExpression (EXP_UNARY (UNARY_NEGATE exp)) meta = handleUnary UNARY_NEGATE exp meta
 resolveExpression (EXP_UNARY (UNARY_MINUS exp)) meta = handleUnary UNARY_MINUS exp meta

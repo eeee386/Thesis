@@ -231,3 +231,26 @@ class B < A{
 
 var c = B();
 c.cook();
+
+//
+class B{
+  init(){
+    this.name = "B";
+  }
+}
+
+class A{
+  init(){
+    this.bClass = B();
+    this.aName = "A";
+  }
+}
+var a = A();
+print a.bClass.name;
+// But this works:
+var a = A().bClass;
+print a.name;
+
+//
+
+//

@@ -6,7 +6,6 @@ import NativeFunctionTypes
 import Utils
 import qualified Data.HashTable.IO as HT
 
-
 -- Types
 type Arity = Int
 type Name = TextType
@@ -48,13 +47,6 @@ instance Show EVAL where
   show (THIS_EVAL _) = "this"
   show BREAK_EVAL = "break"
   show CONTINUE_EVAL = "continue"
-
-{-
-getLineError :: S.Seq TH.Token -> String
-getLineError tokens = if firstLine /= secondLine then mconcat [". Between lines: ", show firstLine, "-", show secondLine] else mconcat [". In line: ", show firstLine]
-  where firstLine = TH.line <$> S.lookup 0 tokens 
-        secondLine = TH.line <$> S.lookup (S.length tokens - 1) tokens
--}
 
 isRuntimeError :: EVAL -> Bool
 isRuntimeError (RUNTIME_ERROR _) = True

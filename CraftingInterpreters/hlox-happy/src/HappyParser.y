@@ -133,17 +133,20 @@ function_call  : IDENTIFIER '(' arguments ')'         { CALL $1 (reverse $3) }
                | function_call '(' arguments ')'      { CALL_MULTI $1 (reverse $3) }
                | function_call '(' ')'                { CALL_MULTI $1 [] }
 
-chain          : chaining                             { CHAIN (reverse $1)}
-chaining       : IDENTIFIER '.' IDENTIFIER            { [(LINK_IDENTIFIER $3), (LINK_IDENTIFIER $1)] }
-               | 'this' '.' IDENTIFIER                { [(LINK_IDENTIFIER $3), LINK_THIS] }
-               | IDENTIFIER '.' method_chain          { mconcat [$3, [(LINK_IDENTIFIER $1)]] }
-               | 'this' '.' method_chain              { mconcat [$3, [LINK_THIS]] }
-               | 'super' '.' method_chain             { mconcat [$3, [LINK_SUPER]] }
-               | method_chain '.' IDENTIFIER          { (LINK_IDENTIFIER $3) : $1 }
-               | method_chain '.' method_chain        { mconcat [$3, $1] }
+chain          : chaining                               { CHAIN (reverse $1)}
+chaining       : 'this' '.' identifier_chain            { mconcat [$3, [LINK_THIS]] }
+               | 'this' '.' method_chain                { mconcat [$3, [LINK_THIS]] }
+               | 'super' '.' method_chain               { mconcat [$3, [LINK_SUPER]] }
+               | identifier_chain '.' method_chain      { mconcat  [$3, $1] }
+               | method_chain '.' identifier_chain      { mconcat  [$3, $1] }
+               | identifier_chain                       { $1 }
+               | method_chain                           { $1 }
 
 method_chain   : method_chain '.' function_call        { (LINK_CALL $3) : $1 }
                | function_call                         { [LINK_CALL $1] }
+
+identifier_chain   : identifier_chain '.' IDENTIFIER          { (LINK_IDENTIFIER $3) : $1 }
+                   | IDENTIFIER                               { [LINK_IDENTIFIER $1] }
 
 arguments      : arguments ',' expression             { $3 : $1 }
                | expression                           { [$1] }

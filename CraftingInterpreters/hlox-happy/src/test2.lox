@@ -1,6 +1,14 @@
+fun d(){
+fun b() {
 fun a(){
-  var a = 0;
-  a();
+  -(true);
+
+}
+return a;
+}
+return b;
 }
 
-a();
+
+var c = d()()();
+print 5;

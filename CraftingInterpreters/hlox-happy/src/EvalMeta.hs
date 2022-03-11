@@ -23,14 +23,16 @@ deleteScopeFromClosure :: Closure -> Closure
 deleteScopeFromClosure closure = newClosure
   where (_:newClosure) = closure
 
--- We already checked in resolver
+-- Add or Update EVAL on scope
+-- We already checked in resolver, so we don't need to do a check if it is there or not
 updateScopeInClosure :: T.Text -> EVAL -> Closure -> IO Closure
 updateScopeInClosure iden eval closure  = do
   let (last:delClos) = closure
   HT.insert last iden eval
   return (last:delClos)
 
--- We already checked in resolver
+-- Look up value in the closure, update value
+-- We already checked in resolver, so we don't need to do a check if it is there or not
 updateInClosure :: T.Text -> EVAL -> Closure -> IO Closure
 updateInClosure iden eval closure  = do
   (first, rest) <- partitionClosure iden closure []
@@ -38,10 +40,11 @@ updateInClosure iden eval closure  = do
   HT.insert last iden eval
   return (mconcat [first, last:delClos])
 
-
+-- Find EVAL in scope by its name
 getEvalByIden :: T.Text -> Scope -> IO (Maybe EVAL)
 getEvalByIden iden scope = HT.lookup scope iden
 
+-- IMPROVE: I think this partition can be a one-liner, not sure
 partitionClosure :: TextType -> Closure -> Closure -> IO (Closure, Closure)
 partitionClosure iden (h:rest) first = do
   isFound <- isJust <$> getEvalByIden iden h
@@ -54,21 +57,31 @@ partitionClosure iden [] first = return (first, [])
 
 
 -- META
+-- variableValues: indexed values' EVAL are saved here
 data META = META {
+-- indexed values' EVAL are saved here
   variableValues :: V.Vector EVAL
+-- closure variables' EVAL are saved here
   , closure :: Closure
+-- The evaluated value
   , eval :: EVAL
+-- If the last eval was inside a return function (it's a helper for functions to know they should stop evaluating the remaining declarations)
   , isReturn :: Bool
-  , superClass :: [EVAL]
+-- superClass, this is for saving the values of called "super.init".
+-- When we call a subClasses "init" function it will call the superclasses "init" function recursively, till we reach a class
+-- When the class calls it it can finish its init method and can save its declaration here.
+-- Then the subclass which called the class takes out the superclass, saves it in its closure as super
+-- and saves itself into this prop, and it goes down till we get to the leaf child class
+  , superClass :: EVAL
                  } deriving Show
 
 
 createGlobalMeta ::  V.Vector EVAL -> IO META
 createGlobalMeta vector = do
-  return META { variableValues=vector, EvalMeta.closure=[], eval=SKIP_EVAL, EvalMeta.isReturn=False, superClass=[] }
+  return META { variableValues=vector, EvalMeta.closure=[], eval=SKIP_EVAL, EvalMeta.isReturn=False, superClass=EVAL_NIL }
 
-findValueInMeta :: ID -> META -> IO EVAL
-findValueInMeta (ID id) meta = return (variableValues meta V.! id)
+findIndexedValueInMeta :: ID -> META -> IO EVAL
+findIndexedValueInMeta (ID id) meta = return (variableValues meta V.! id)
 
 findValueInClosureInMeta :: T.Text -> META -> IO EVAL
 findValueInClosureInMeta iden meta = findValueInClosure iden (EvalMeta.closure meta)
@@ -79,8 +92,8 @@ findValueInClosure iden clos = do
   let val = find isJust values
   return (fromJust (fromJust val))
 
-maybeFindValueInFunction :: T.Text -> META -> IO (Maybe EVAL)
-maybeFindValueInFunction iden meta = maybeFindValueInClosure iden (EvalMeta.closure meta)
+maybeFindValueInClosureInMeta :: T.Text -> META -> IO (Maybe EVAL)
+maybeFindValueInClosureInMeta iden meta = maybeFindValueInClosure iden (EvalMeta.closure meta)
     
 maybeFindValueInClosure :: T.Text -> Closure -> IO (Maybe EVAL)
 maybeFindValueInClosure iden clos = do
@@ -96,7 +109,7 @@ findParentClass iden id meta = do
   if id == NON_ID then do
     findValueInClosureInMeta iden meta
   else do
-    findValueInMeta id meta
+    findIndexedValueInMeta id meta
 
 addUpdateValueToMeta :: ID -> META -> IO META
 addUpdateValueToMeta (ID id) meta = return meta{variableValues=V.update (variableValues meta) (V.singleton (id, eval meta))}

@@ -4,13 +4,9 @@
 module NativeFunctions where
 
 import System.Clock
-import GHC.IO.Handle (hFlush)
-import System.IO (stdout)
 import qualified Data.Vector as V
-import qualified Data.Text as T
 import EvalTypes
 import NativeFunctionTypes
-import qualified Data.HashTable.IO as HT
 import qualified Data.Sequence as S
 import AST
 import Utils
@@ -20,6 +16,8 @@ clock :: (Integer -> Integer) -> IO Integer
 clock f = do
   valInNanoSec <- toNanoSecs <$> getTime Realtime
   return (f (div valInNanoSec 1000000))
+
+-- This two function is called
 
 createGlobalVector :: V.Vector EVAL
 createGlobalVector = V.singleton (NATIVE_FUNC_DEC_EVAL

@@ -8,6 +8,7 @@ instance Show PROGRAM where
   show (PROG x) = show x
 
 -- DECLARATION
+-- Improve: either create "Resolved" (like RESOLVED_VARIABLE_DECLARATION) types or merge the resolved types into the unresolved types (like FUNCTION_DECLARATION)
 data DECLARATION = DEC_STMT STATEMENT | DEC_VAR VARIABLE_DECLARATION | R_DEC_VAR RESOLVED_VARIABLE_DECLARATION | DEC_FUNC FUNCTION_DECLARATION | DEC_CLASS CLASS_DECLARATION | R_DEC_CLASS RESOLVED_CLASS_DECLARATION | EMPTY_DEC deriving Eq
 
 instance Show DECLARATION where
@@ -29,6 +30,7 @@ type PARAMETER = TextType
 -- PARAM: fun func(a){}
 -- CLASS_VAR_DEF: A.a = 5; (A is instance of class)
 -- THIS_VAR_DEF: this.a = 5;
+-- IMPROVE: It does not support smth like -> A().bClass.name = 5; , but you can do -> var a = A().bClass; a.name = 5; 
 data VARIABLE_DECLARATION = VAR_DEC_DEF IDENTIFIER EXPRESSION
                           | VAR_DEC IDENTIFIER
                           | VAR_DEF IDENTIFIER EXPRESSION
@@ -49,6 +51,8 @@ instance Show VARIABLE_DECLARATION where
 -- RC_FUNC_DEC: same as FUNC_DEC, but it is resolved, and in closure
 -- METHOD: in class: func(a,b){...}
 -- NATIVE_FUNC: Used to create AST nodes of native functions
+-- R_ -> it is resolved with an index
+-- RC_ -> it is resolved in closure
 data FUNCTION_DECLARATION = FUNC_DEC IDENTIFIER [DECLARATION] STATEMENT
                           | R_FUNC_DEC IDENTIFIER [DECLARATION] STATEMENT ID
                           | RC_FUNC_DEC IDENTIFIER [DECLARATION] STATEMENT
@@ -74,6 +78,8 @@ instance Show CLASS_DECLARATION where
   show (SUB_CLASS_DEC iden parentIden methods) = mconcat ["class name: ", show iden, ", parent: ", show parentIden, ",  methods: ", show methods]
 
 -- I keep the PARENT_ID on the RC_SUB_CLASS as it can be child of a class not in the closure
+-- R_ -> it is resolved with an index
+-- RC_ -> it is resolved in closure
 data RESOLVED_CLASS_DECLARATION = R_CLASS_DEC IDENTIFIER [DECLARATION] ID 
                                 | R_SUB_CLASS_DEC IDENTIFIER IDENTIFIER [DECLARATION] ID PARENT_ID
                                 | RC_CLASS_DEC IDENTIFIER [DECLARATION] 
@@ -112,6 +118,15 @@ instance Show RESOLVED_VARIABLE_DECLARATION where
 
 
 -- STATEMENT
+-- EXPR_STMT: container of <expression>
+-- PRINT_STMT: print <expression>
+-- BLOCK_STMT: {...}
+-- IF_STMT: if (<expression>) STATEMENT
+-- IF_ELSE_STMT: if (<expression>) STATEMENT else STATEMENT -> dangling if else -> happy uses the 'longest parse' rule
+-- WHILE_STMT: while (<expression>) STATEMENT -> In resolver will be resolved into loop
+-- FOR_STMT: for(<(variable) declaration>;<expression>;<expression>) STATEMENT -> In resolver will be resolved into loop
+-- LOOP -> While and for loop will be resolved into this (basically while loop)
+-- RETURN: Returns <expression>
 data STATEMENT = EXPR_STMT EXPRESSION 
                | PRINT_STMT EXPRESSION 
                | BLOCK_STMT [DECLARATION]
@@ -139,6 +154,7 @@ instance Show STATEMENT where
 
 
 -- EXPRESSION
+-- See below
 data EXPRESSION = EXP_LITERAL LITERAL 
                 | EXP_UNARY UNARY
                 | EXP_BINARY BINARY
@@ -161,7 +177,12 @@ instance Show EXPRESSION where
   show EXP_THIS = "this"
   show EMPTY_EXP = ""
 
-data LITERAL = NUMBER Double | STRING TextType | TRUE | FALSE | NIL | IDENTIFIER_REFERENCE TextType | R_IDENTIFIER_REFERENCE TextType ID | R_REFERENCE_IN_CLOSURE TextType deriving Eq
+-- Terminals of the language
+-- Number, string, bool values, nil (or null)
+-- IDENTIFIER_REFERENCE: a + 5; in an expression
+-- R_IDENTIFIER_REFERENCE: resolved as indexed variable
+-- RC_IDENTIFIER_REFERENCE: resolved as closure variable
+data LITERAL = NUMBER Double | STRING TextType | TRUE | FALSE | NIL | IDENTIFIER_REFERENCE TextType | R_IDENTIFIER_REFERENCE TextType ID | RC_IDENTIFIER_REFERENCE TextType deriving Eq
 instance Show LITERAL where 
   show (NUMBER x) = show x
   show (STRING x) = T.unpack (T.concat [T.pack "\"", x, T.pack "\""])
@@ -170,16 +191,20 @@ instance Show LITERAL where
   show NIL = "nil"
   show (IDENTIFIER_REFERENCE x) = show x
   show (R_IDENTIFIER_REFERENCE x id) = show x ++ show id
-  show (R_REFERENCE_IN_CLOSURE x) = show x
+  show (RC_IDENTIFIER_REFERENCE x) = show x
 
 
-
+-- (<expression>)
 newtype GROUPING = GROUP EXPRESSION deriving Eq
 instance Show GROUPING where 
   show (GROUP x) = mconcat ["(", show x, ")"]
 
 type ARGUMENT = EXPRESSION
 
+-- CALL: func(5,6+1);
+-- R_CALL: call resolved as indexed
+-- RC_CALL: call resolved as closure
+-- CALL_MULTI: recursive type: func1(1,2)(3,4)(5,6) -> CALL_MULTI (CALL_MULTI (CALL func1 [1,2]) [3,4]) [5,6] from the parser 
 data CALL = CALL IDENTIFIER [ARGUMENT] | R_CALL IDENTIFIER [ARGUMENT] ID | RC_CALL IDENTIFIER [ARGUMENT] | CALL_MULTI CALL [ARGUMENT] deriving Eq
 instance Show CALL where
   show (CALL lit args) = mconcat [show lit, "(", show args, ")"]
@@ -188,6 +213,11 @@ instance Show CALL where
   show (CALL_MULTI call args) = mconcat [ show call, "(", show args, ")"]
   
 -- CHAIN data structure: list but the first and last element CAN be IDENTIFIERs, and this and super can only be first 
+-- a().b().c()
+-- this.a
+-- this.b()
+-- super.a()
+-- TODO: A().bClass.name; -> this fails in parser (bClass is a class saved on A), but this works "var a = A().bClass; print a.name;" 
 data CHAIN_LINK = LINK_CALL CALL | LINK_IDENTIFIER IDENTIFIER | R_LINK_IDENTIFIER IDENTIFIER ID | RC_LINK_IDENTIFIER IDENTIFIER | LINK_THIS | LINK_SUPER deriving Eq
 instance Show CHAIN_LINK where
   show (LINK_CALL x) = show x
@@ -201,7 +231,8 @@ newtype CHAIN = CHAIN [CHAIN_LINK] deriving Eq
 instance Show CHAIN where
   show (CHAIN links) = mconcat $ reverse $ foldl (\y x -> mconcat [show x, "."] : y) [] links
   
-
+-- UNARY_NEGATE: logical negate: !true -> false
+-- UNARY_MINUS: numerical negate: -5
 data UNARY = UNARY_NEGATE EXPRESSION |
              UNARY_MINUS EXPRESSION
              deriving Eq
@@ -236,7 +267,7 @@ instance Show BINARY where
   show (BIN_AND x z) = mconcat [show x, " and ", show z]
   show (BIN_OR x z) = mconcat [show x, " or ", show z]
 
-  
+-- <expression> ? <expression> : <expression>
 data TERNARY = TERNARY EXPRESSION EXPRESSION EXPRESSION deriving Eq
 instance Show TERNARY where 
   show (TERNARY x y z) = mconcat [show x, show y, show z]
