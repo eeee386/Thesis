@@ -137,7 +137,8 @@ data STATEMENT = EXPR_STMT EXPRESSION
                | LOOP EXPRESSION STATEMENT
                | BREAK
                | CONTINUE
-               | RETURN EXPRESSION deriving Eq
+               | RETURN EXPRESSION 
+               | EMPTY_STMT deriving Eq
 
 instance Show STATEMENT where 
   show (EXPR_STMT x) = show x
@@ -151,7 +152,7 @@ instance Show STATEMENT where
   show BREAK = "break"
   show CONTINUE = "continue"
   show (RETURN x) = "return " ++ show x
-
+  show EMPTY_STMT = ""
 
 -- EXPRESSION
 -- See below

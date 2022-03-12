@@ -252,5 +252,61 @@ var a = A().bClass;
 print a.name;
 
 //
+class B{
+  init(){
+    this.name = "B";
+  }
+  sayName(){
+    print this.name;
+  }
+}
 
+B().sayName();
 //
+
+
+// Runtime closure
+fun d(){
+fun b() {
+fun a(){
+  -(true);
+
+}
+return a;
+}
+return b;
+}
+
+var c = d()()();
+print 5;
+
+
+// different closures (does not parse)
+fun a() {
+    var e = 1;
+    fun b(){
+        e = e+1;
+        print e;
+        return e;
+    }
+    fun c(){
+        e = e+2;
+        print e;
+        return e;
+    }
+    class A{
+      init(){
+        this.b = b;
+        this.c = c;
+      }
+    }
+
+    return A;
+}
+
+var test1 = a();
+var test = test1();
+test.a();
+test.a();
+test.b();
+test.b();

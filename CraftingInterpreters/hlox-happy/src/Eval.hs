@@ -20,10 +20,10 @@ evalBlock :: [DECLARATION]  -> META -> IO META
 evalBlock = evalDeclarations
 
 -- We only care about the last eval
--- if return stop evaluating the declarations (function body), and return the return eval's eval
+-- if return type (RETURN_EVAL x), then stop evaluating the declarations (function body), and return the RETURN_EVAL's eval
 -- if continue or break stop evaluation
 -- RUNTIME_ERROR -> print then stop evaluating the declarations return meta
--- IMPROVE: Runtime error is written twice, if it is in function body
+-- IMPROVE: Runtime error is written twice, if it is in a closure
 evalDeclarations :: [DECLARATION] -> META -> IO META
 evalDeclarations decs meta
   | L.null decs || EvalMeta.isReturn meta = return meta
@@ -42,7 +42,8 @@ evalDeclarations decs meta
 
 
 
-
+-- Here when comes to statements, I did not create a specific "resolveStatement" as it is redundant
+-- Easy to switch between declarations and statements, and both would at the end become evals
 evalDeclaration :: DECLARATION -> META -> IO META
 evalDeclaration (DEC_STMT (PRINT_STMT x)) meta = do
   newMeta <- evalExpression x meta
@@ -115,10 +116,10 @@ evalDeclaration (DEC_STMT (LOOP expr stmt)) meta = evalExpression expr meta >>= 
                              return newMeta
 
 -- Creating the function/class eval from the declaration, then saving it to either closure or variableVector
+-- If it's in a closure save the closure on the eval as well
 evalDeclaration (DEC_FUNC (R_FUNC_DEC iden params stmt id)) meta = functionDecEvalHelper (addUpdateValueToMeta id) iden params stmt id meta
 evalDeclaration (DEC_FUNC (RC_FUNC_DEC iden params stmt)) meta = functionDecEvalHelper (addUpdateScopeInMeta iden) iden params stmt NON_ID meta
 evalDeclaration (DEC_FUNC (METHOD_DEC iden params stmt)) meta = functionDecEvalHelper (addUpdateScopeInMeta iden) iden params stmt NON_ID meta
--- closure meta will be an empty list, when creating so it could be an [] as well
 evalDeclaration (R_DEC_CLASS (R_CLASS_DEC iden decs id)) meta = addUpdateValueToMeta id meta{eval=CLASS_DEC_EVAL iden decs (closure meta) id}
 evalDeclaration (R_DEC_CLASS (RC_CLASS_DEC iden decs)) meta = addUpdateScopeInMeta iden meta{eval=CLASS_DEC_EVAL iden decs (closure meta) NON_ID}
 evalDeclaration (R_DEC_CLASS (R_SUB_CLASS_DEC iden parentIden decs id parentId)) meta = addUpdateValueToMeta id meta{eval=SUB_CLASS_DEC_EVAL iden parentIden decs (closure meta) id parentId}
@@ -130,7 +131,7 @@ evalDeclaration (DEC_STMT (RETURN exp)) meta = do
 evalDeclaration dec meta = do
   return meta{eval=RUNTIME_ERROR "Unknown error"}
 
-
+-- Save the function as a FUNC_DEC_EVAL with the closure the function is currently in.
 functionDecEvalHelper :: (META -> IO META) -> TextType -> [DECLARATION] -> STATEMENT -> ID -> META -> IO META
 functionDecEvalHelper addUpdateFunc iden params stmt id meta = addUpdateFunc meta{eval=evalFunc}
   where evalFunc = FUNC_DEC_EVAL iden (L.length params) params stmt (closure meta) id
@@ -187,13 +188,18 @@ evalExpression (EXP_CALL (RC_CALL call_iden args)) meta = handleCallEval args (f
 evalExpression (EXP_CALL (CALL_MULTI call args)) meta = evalExpression (EXP_CALL call) meta >>= handleCallEval args multiCallGetFunc
 
 -- handling "super.init" call
+-- We have already saved the "this" in the class when we call the super.init();
+-- Find parent class, eval it save it superClass so that the subclass can save it into its super
 evalExpression (EXP_CHAIN (CHAIN [LINK_SUPER,LINK_CALL (CALL "init" args)])) meta = do
   (SUB_CLASS_DEC_EVAL _ parentName _ _ _ parentId) <- findValueInClosureInMeta "this" meta
   parentClassEval <- findParentClass parentName parentId meta
   newMeta <- evalInit args parentClassEval meta
   return meta{superClass=eval newMeta}
 
-
+-- Evaling this one link at a time with evalExpression, till the links are empty
+-- A().name -> eval A() class initialization, we save it eval, 
+-- then next link checks if the previous eval is a classEval, 
+-- then check the closure of initialized A class, for that identifier
 evalExpression (EXP_CHAIN (CHAIN (l:links))) meta = do
   case l of
     LINK_THIS -> do
@@ -207,7 +213,7 @@ evalExpression (EXP_CHAIN (CHAIN (l:links))) meta = do
         (CLASS_DEC_EVAL _ _ clos _) -> handleChainCall l links clos meta
         (SUB_CLASS_DEC_EVAL _ _ _ clos _ _) -> handleSubClassChain l links clos handleChainCall meta
         _ -> handleChainCall l links (closure meta) meta
-    -- Link Identifier is the ending of the chain
+    -- Inner link    
     (LINK_IDENTIFIER x) -> do
       case eval meta of
         (CLASS_DEC_EVAL _ _ clos _) -> handleChainIdentifier l links clos meta
@@ -227,6 +233,9 @@ evalExpression EXP_THIS meta = do
 evalExpression exp meta = do
   return meta{eval=RUNTIME_ERROR "Expression cannot be evaluated"}
 
+-- What we do here is create a merged closure of the inheritance chain's all closure
+-- First being the subclass that the prop or method is called, and going up merging them one-by-one
+-- And then calling the handler for chain call or prop, which will find the method/prop in merged closure, and eval it.
 handleSubClassChain :: CHAIN_LINK -> [CHAIN_LINK] -> Closure -> (CHAIN_LINK -> [CHAIN_LINK] -> Closure -> META -> IO META) -> META -> IO META
 handleSubClassChain l links clos func meta = do
   parentClassEval <- findValueInClosure "super" clos
@@ -236,6 +245,7 @@ handleSubClassChain l links clos func meta = do
       newClos <- getAllClosuresFromInheritance clos parentClos
       func l links newClos meta
 
+-- Helper function is getting all the closure from the inheritance chain
 getAllClosuresFromInheritance :: Closure -> Closure -> IO Closure
 getAllClosuresFromInheritance clos pClos = do
   parentClassEval <- findValueInClosure "super" pClos
@@ -268,6 +278,9 @@ evalInit args classEval meta = do
       let fact = (\clos -> SUB_CLASS_DEC_EVAL iden pIden decs clos id pId)      
       handleInit args decs fact addSuperToClosure meta
 
+-- Pair of the evalExpression, which evals the super.init()
+-- Before we return the initialized class in the eval of the meta
+-- We save the superclass (which is filled when the init calls super.init())
 addSuperToClosure :: META -> IO META
 addSuperToClosure initMeta = do
   let parentClass = superClass initMeta
@@ -279,6 +292,7 @@ handleInit :: [ARGUMENT] -> [DECLARATION] -> (Closure -> EVAL) -> (META -> IO ME
 handleInit args decs fact func meta = do
   newMeta <- addNewScopeToMeta meta >>= handleMethodsEval decs
   -- Class's this declaration will not have this in it but the parser already filters out "this.this/super.this" structure
+  -- TODO: This should not really work because we save a closure that has only methods, and yet we have props and functions when I check it later in this function...
   thisMeta <- addUpdateScopeInMetaWithEval "this" (fact (closure newMeta)) newMeta
   init <- findValueInClosureInMeta "init" thisMeta
   initMeta <- handleFunctionCall args init thisMeta
@@ -303,7 +317,14 @@ handleChainIdentifier link links clos meta = do
   else do
     evalExpression (EXP_CHAIN (CHAIN links)) meta{eval=fromJust eval}
 
-
+-- Check arity
+-- Save how many closures the function is already in (saved closures on FUNC_DEC_EVAL)
+-- Add the saved closures and a new closure
+-- Eval arguments (they are expressions)
+-- Check if any of the arguments are RuntimeErrors, if runtime send return the meta with an eval of runtime error
+-- Pair up the params with the arguments (save the iden of the params and the eval result of arguments as pairs in the closure)
+-- Eval function body
+-- Clean up function (isReturn is set to False, delete that new closure and the saved closure)
 handleFunctionCall :: [ARGUMENT] -> EVAL -> META -> IO META
 handleFunctionCall args ev meta = do
   let (FUNC_DEC_EVAL _ arity params stmt clos _) = ev
@@ -322,6 +343,7 @@ handleNativeFunctionCall _ (NATIVE_FUNC_DEC_EVAL _ _ _ (CLOCK clock)) meta = do
   val <- clock id
   return meta{eval=EVAL_NUMBER (fromInteger val)}
   
+-- Pair up the params and the arguments, save them to the current closure (function's)
 handleArgumentsEval :: [DECLARATION] -> [EVAL] ->  META -> IO META
 handleArgumentsEval (p:params) (e:evals) meta = do
   let (DEC_VAR (PARAM iden)) = p
@@ -333,6 +355,8 @@ handleMethodsEval :: [DECLARATION] -> META -> IO META
 handleMethodsEval (d:decs) meta = evalDeclaration d meta >>= handleMethodsEval decs
 handleMethodsEval [] meta = return meta
 
+-- isReturn set to False, delete new scope, delete FUNC_DEC_EVALs saved closure
+-- TODO: check how does this work if we have to functions saving the same closure (the two closure are to different object)
 cleanUpFunction :: Int -> META -> IO META
 cleanUpFunction numberOfClos meta = setReturnToFalse meta >>= deleteScopeFromMeta >>= deleteSavedClosure numberOfClos
 

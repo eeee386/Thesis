@@ -31,52 +31,8 @@ resolveDeclarations (x:xs) meta = resolveDeclaration x meta >>= resolveDeclarati
 resolveDeclaration :: DECLARATION -> ResolverMeta -> IO ResolverMeta 
 resolveDeclaration (DEC_VAR x) meta = resolveVarDeclaration x meta
 resolveDeclaration (DEC_CLASS x) meta = resolveClassDeclaration x meta
-resolveDeclaration (DEC_STMT (BLOCK_STMT x)) meta = resolveBlock x meta
-resolveDeclaration (DEC_STMT (RETURN exp)) meta = do
-  resMeta <- resolveExpression exp meta
-  let resExp = newExpr resMeta
-  return (updateResolverErrorsByPredicate (isInFunction meta) "Return is not in function" resMeta{
-    declarations=DEC_STMT (RETURN resExp):declarations meta
-})
+resolveDeclaration (DEC_STMT stmt) meta = resolveDecStatement stmt meta
 resolveDeclaration (DEC_FUNC x) meta = resolveFunctionDeclaration x meta
-resolveDeclaration (DEC_STMT (WHILE_STMT exp (BLOCK_STMT decs))) meta = do
-  resMeta <- resolveExpression exp meta
-  let resExp = newExpr resMeta
-  resBlockMeta <- resolveBlock decs resMeta{declarations=[], isInLoop=True}
-  -- we use head because it would be a singleton list
-  let (DEC_STMT resBlockStmt) = head (declarations resBlockMeta)
-  return resBlockMeta{declarations=DEC_STMT (LOOP resExp resBlockStmt):declarations meta, isInLoop=isInLoop meta}
-resolveDeclaration (DEC_STMT (FOR_STMT (DEC_VAR varDec) exp1 varAss (BLOCK_STMT decs))) meta = do
-  varMeta <- resolveVarDeclaration varDec meta
-  resExpMeta <- resolveExpression exp1 varMeta
-  let resExp = newExpr resExpMeta
-  -- I add the variable assignment to the end of the block
-  resBlockMeta <- resolveBlock ((reverse . (:) varAss . reverse) decs ) resExpMeta{declarations=[], isInLoop=True}
-  -- we use head because it would be a singleton list
-  let (DEC_STMT resBlockStmt) = head (declarations resBlockMeta)
-  return resBlockMeta{declarations=DEC_STMT (LOOP resExp resBlockStmt):declarations varMeta, isInLoop=isInLoop meta}
-resolveDeclaration (DEC_STMT (IF_STMT exp (BLOCK_STMT decs))) meta = do
-  resMeta <- resolveExpression exp meta
-  let resExp = newExpr resMeta
-  resBlockMeta <- resolveBlock decs resMeta{declarations=[]}
-  let (DEC_STMT resBlockStmt) = head (declarations resBlockMeta)
-  return resBlockMeta{declarations=DEC_STMT (IF_STMT resExp resBlockStmt):declarations meta}
-resolveDeclaration (DEC_STMT (IF_ELSE_STMT exp (BLOCK_STMT ifdecs) (BLOCK_STMT elsedecs))) meta = do
-  resMeta <- resolveExpression exp meta
-  let resExp = newExpr resMeta
-  resIfBlockMeta <- resolveBlock ifdecs resMeta{declarations=[]}
-  let (DEC_STMT resIfBlockStmt) = head (declarations resIfBlockMeta)
-  resElseBlockMeta <- resolveBlock elsedecs resIfBlockMeta{declarations=[]}
-  let (DEC_STMT resElseBlockStmt) = head (declarations resElseBlockMeta)
-  return resElseBlockMeta{declarations=DEC_STMT (IF_ELSE_STMT resExp resIfBlockStmt resElseBlockStmt):declarations meta}
-resolveDeclaration (DEC_STMT BREAK) meta =  return (updateResolverErrorsByPredicate (isInLoop meta) "The 'break' statement should be inside a loop" meta{declarations=DEC_STMT BREAK:declarations meta})
-resolveDeclaration (DEC_STMT CONTINUE) meta =  return (updateResolverErrorsByPredicate (isInLoop meta) "The 'continue' statement should be inside a loop" meta{declarations=DEC_STMT CONTINUE:declarations meta})
-resolveDeclaration (DEC_STMT (PRINT_STMT x)) meta = do 
-  expMeta <- resolveExpression x meta
-  return expMeta{declarations=DEC_STMT (PRINT_STMT (newExpr expMeta)):declarations expMeta} 
-resolveDeclaration (DEC_STMT (EXPR_STMT x)) meta = do 
-  expMeta <- resolveExpression x meta
-  return expMeta{declarations=DEC_STMT (EXPR_STMT (newExpr expMeta)):declarations expMeta} 
 resolveDeclaration EMPTY_DEC meta = return meta
 resolveDeclaration x meta = return meta{declarations=x:declarations meta}
 
@@ -182,6 +138,60 @@ resolveMethods methods meta = do
    updateResolverErrorsByPredicate isUniqueMethodNames "Method names are not unique" meta{
    declarations=[]
  }))) >>= reverseDeclarationsAndErrors
+ 
+ -- Resolvestatement in resolveStatement and add it to the declarations
+resolveDecStatement :: STATEMENT -> ResolverMeta -> IO ResolverMeta
+resolveDecStatement stmt meta = resolveStatement stmt meta >>= buildDecStmt
+ 
+buildDecStmt :: ResolverMeta -> IO ResolverMeta
+buildDecStmt meta = return meta{declarations=DEC_STMT (newStmt meta):declarations meta, newStmt=EMPTY_STMT}
+ 
+resolveStatement :: STATEMENT -> ResolverMeta -> IO ResolverMeta
+resolveStatement (BLOCK_STMT x) meta = resolveBlock x meta
+resolveStatement (RETURN x) meta = do
+  resMeta <- resolveExpression x meta
+  let resExp = newExpr resMeta
+  return (updateResolverErrorsByPredicate (isInFunction meta) "Return is not in function" resMeta{newStmt=RETURN resExp})
+resolveStatement (WHILE_STMT exp stmt) meta = do
+  resMeta <- resolveExpression exp meta
+  let resExp = newExpr resMeta
+  resStmtMeta <- resolveStatement stmt resMeta{isInLoop=True}
+  return resStmtMeta{newStmt=LOOP resExp (newStmt resStmtMeta), isInLoop=isInLoop meta}
+resolveStatement (FOR_STMT (DEC_VAR varDec) exp1 varAss (BLOCK_STMT decs)) meta = do
+  -- Resolve variable declaration and add it to block before the loop
+  varMeta <- resolveVarDeclaration varDec meta
+  resExpMeta <- resolveExpression exp1 varMeta
+  let resExp = newExpr resExpMeta
+  -- I add the variable assignment (i=i+1) to the end of the block
+  resBlockMeta <- resolveBlock ((reverse . (:) varAss . reverse) decs) resExpMeta{isInLoop=True}
+  return resBlockMeta{newStmt=LOOP resExp (newStmt resBlockMeta), isInLoop=isInLoop meta}
+resolveStatement (FOR_STMT (DEC_VAR varDec) exp1 varAss stmt) meta = do
+  varMeta <- resolveVarDeclaration varDec meta
+  resExpMeta <- resolveExpression exp1 varMeta
+  let resExp = newExpr resExpMeta
+  -- create a block with the stmt and the variable assignment
+  resBlockMeta <- resolveBlock (DEC_STMT stmt:[varAss]) resExpMeta{isInLoop=True}
+  return resBlockMeta{newStmt=LOOP resExp (newStmt resBlockMeta), isInLoop=isInLoop meta}
+resolveStatement (IF_STMT exp stmt) meta = do
+  resMeta <- resolveExpression exp meta
+  let resExp = newExpr resMeta
+  resStmtMeta <- resolveStatement stmt resMeta
+  return resStmtMeta{newStmt=IF_STMT resExp (newStmt resStmtMeta)}
+resolveStatement (IF_ELSE_STMT exp ifStmt elseStmt) meta = do
+  resMeta <- resolveExpression exp meta
+  let resExp = newExpr resMeta
+  resIfStmtMeta <- resolveStatement ifStmt resMeta
+  resElseStmtMeta <- resolveStatement elseStmt resIfStmtMeta
+  return resElseStmtMeta{newStmt=IF_ELSE_STMT resExp (newStmt resIfStmtMeta) (newStmt resElseStmtMeta)}
+resolveStatement BREAK meta =  return (updateResolverErrorsByPredicate (isInLoop meta) "The 'break' statement should be inside a loop" meta{newStmt=BREAK})
+resolveStatement CONTINUE meta =  return (updateResolverErrorsByPredicate (isInLoop meta) "The 'continue' statement should be inside a loop" meta{newStmt=CONTINUE})
+resolveStatement (PRINT_STMT x) meta = do 
+  expMeta <- resolveExpression x meta
+  return expMeta{newStmt=PRINT_STMT (newExpr expMeta)} 
+resolveStatement (EXPR_STMT x) meta = do 
+  expMeta <- resolveExpression x meta
+  return expMeta{newStmt=EXPR_STMT (newExpr expMeta)} 
+
 
 -- Set the declarations to empty (this is where we will put the resolved block body declarations), 
 -- Add block to resEnv, resolve block body, reverse declarations
@@ -189,7 +199,8 @@ resolveMethods methods meta = do
 resolveBlock :: [DECLARATION] -> ResolverMeta -> IO ResolverMeta
 resolveBlock decs meta = do
   newMeta <- addBlockToMeta meta{declarations=[]} >>= resolveDeclarations decs >>= reverseDeclarationsAndErrors
-  deleteBlockFromMeta (newMeta{declarations=DEC_STMT (BLOCK_STMT (declarations newMeta)):declarations meta})
+  deleteBlockFromMeta (newMeta{newStmt=BLOCK_STMT (declarations newMeta), declarations=declarations meta})
+
 
 -- Declarations are a series of declaration, but expressions are trees
 -- Practically what I do here is I handle the leaf nodes and save them in the "newExpr" property in the meta object.

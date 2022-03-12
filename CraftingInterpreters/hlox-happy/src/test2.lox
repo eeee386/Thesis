@@ -1,14 +1,5 @@
-fun d(){
-fun b() {
-fun a(){
-  -(true);
+fun b(){}
 
+class A{
+ init(){}
 }
-return a;
-}
-return b;
-}
-
-
-var c = d()()();
-print 5;

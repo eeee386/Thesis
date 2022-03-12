@@ -37,6 +37,9 @@ data ResolverMeta = ResolverMeta {
   -- This is a helper for resolving more complex expression 
   -- (expressions are a tree -> from the "root expr" we call the child expr and we save it here, the more complex expr take the resolved, and puts themselves in this property)
   , newExpr :: EXPRESSION
+  -- Helper for resolving for complex statement
+  -- Statements are trees similar to expression, root stmt calls the child stmt, save it here, the more complex stmt takes the child stmt from here, and puts themselves here
+  , newStmt :: STATEMENT
   -- Is in function: helps to check if we need to check the indexed variables or the closure variables, and to check if we call the "return" properly
   -- If true check in closure and returns are valid, if not check in indexed variables and returns are not valid
   , isInFunction :: Bool
@@ -66,6 +69,7 @@ createNewMeta = do
   , declarations=[]
   , resolverErrors=[]
   , newExpr = EMPTY_EXP
+  , newStmt = EMPTY_STMT
   , isInFunction = False
   , isInClass = False
   , isInSubClass = False
