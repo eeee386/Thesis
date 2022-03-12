@@ -310,3 +310,7 @@ test.a();
 test.a();
 test.b();
 test.b();
+
+//
+var a = 5;
+if (a == 5) print a;
