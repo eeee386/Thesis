@@ -106,10 +106,10 @@ fun a(b, c){
           print b;
         }
     }
-    return new Animal;
+    return Animal;
 }
-var d = a(1,2)
-d.hello()
+var d = a(1,2)();
+d.hello();
 //
 
 //
@@ -247,9 +247,7 @@ class A{
 }
 var a = A();
 print a.bClass.name;
-// But this works:
-var a = A().bClass;
-print a.name;
+//
 
 //
 class B{

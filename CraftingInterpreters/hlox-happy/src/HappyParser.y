@@ -134,19 +134,20 @@ function_call  : IDENTIFIER '(' arguments ')'         { CALL $1 (reverse $3) }
                | function_call '(' ')'                { CALL_MULTI $1 [] }
 
 chain          : chaining                               { CHAIN (reverse $1)}
-chaining       : 'this' '.' identifier_chain            { mconcat [$3, [LINK_THIS]] }
-               | 'this' '.' method_chain                { mconcat [$3, [LINK_THIS]] }
-               | 'super' '.' method_chain               { mconcat [$3, [LINK_SUPER]] }
-               | identifier_chain '.' method_chain      { mconcat  [$3, $1] }
-               | method_chain '.' identifier_chain      { mconcat  [$3, $1] }
-               | identifier_chain                       { $1 }
-               | method_chain                           { $1 }
-
-method_chain   : method_chain '.' function_call        { (LINK_CALL $3) : $1 }
-               | function_call                         { [LINK_CALL $1] }
-
-identifier_chain   : identifier_chain '.' IDENTIFIER          { (LINK_IDENTIFIER $3) : $1 }
-                   | IDENTIFIER                               { [LINK_IDENTIFIER $1] }
+chaining       : 'this' '.' chaining                    { mconcat [$3, [LINK_THIS]] }
+               | 'this' '.' IDENTIFIER                  { [(LINK_IDENTIFIER $3), (LINK_CALL $1)] }
+               | 'this' '.' function_call               { [(LINK_IDENTIFIER $3), (LINK_THIS)] }
+               | 'super' '.' chaining                   { mconcat [$3, [LINK_SUPER]] }
+               | 'super' '.' function_call              { [(LINK_CALL $3), LINK_SUPER] }
+               | 'super' '.' IDENTIFIER                 { [(LINK_IDENTIFIER $3), (LINK_SUPER)] }
+               | chaining '.' chaining                  { mconcat  [$3, $1] }
+               | chaining '.' function_call             { (LINK_CALL $3):$1 }
+               | chaining '.' IDENTIFIER                { (LINK_IDENTIFIER $3):$1 }
+               | function_call '.' chaining             { mconcat [$3, [(LINK_CALL $1)]] }
+               | IDENTIFIER '.' chaining                { mconcat [$3, [(LINK_IDENTIFIER $1)]] }
+               | IDENTIFIER '.' IDENTIFIER              { [(LINK_IDENTIFIER $3), (LINK_IDENTIFIER $1)] }
+               | IDENTIFIER '.' function_call           { [(LINK_CALL $3), (LINK_IDENTIFIER $1)] }
+               | function_call '.' IDENTIFIER           { [(LINK_IDENTIFIER $3), (LINK_CALL $1)] }
 
 arguments      : arguments ',' expression             { $3 : $1 }
                | expression                           { [$1] }

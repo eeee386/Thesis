@@ -144,8 +144,8 @@ addNewScopeToMeta meta = do
 
 deleteScopeFromMeta :: META -> IO META
 deleteScopeFromMeta meta = do
-    let clos = deleteScopeFromClosure (EvalMeta.closure meta)
-    return meta{EvalMeta.closure=clos}
+  let clos = deleteScopeFromClosure (EvalMeta.closure meta)
+  return meta{EvalMeta.closure=clos}
 
 addSavedClosure :: Closure -> META -> IO META
 addSavedClosure clos meta = return meta{EvalMeta.closure=mconcat [clos, EvalMeta.closure meta]}

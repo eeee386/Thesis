@@ -218,8 +218,8 @@ instance Show CALL where
 -- this.a
 -- this.b()
 -- super.a()
--- TODO: A().bClass.name; -> this fails in parser (bClass is a class saved on A), but this works "var a = A().bClass; print a.name;" 
--- Not all calls and identifiers are resolved, those in the tail if the chain are not resolved, they will be handle in eval (they will use the result of the chain link before them) 
+-- A().bClass.name;
+-- Not all calls and identifiers are resolved, those in the tail if the chain are not resolved, they will be handle in eval (they will use the result of the chain link before them)
 data CHAIN_LINK = LINK_CALL CALL | LINK_IDENTIFIER IDENTIFIER | R_LINK_IDENTIFIER IDENTIFIER ID | RC_LINK_IDENTIFIER IDENTIFIER | LINK_THIS | LINK_SUPER deriving Eq
 instance Show CHAIN_LINK where
   show (LINK_CALL x) = show x

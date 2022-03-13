@@ -182,6 +182,7 @@ evalExpression (EXP_BINARY (BIN_AND left right)) meta = binaryBoolHelper left ri
 evalExpression (EXP_BINARY (BIN_OR left right)) meta = binaryBoolHelper left right createOr meta
 evalExpression (EXP_TERNARY (TERNARY predi trueRes falseRes)) meta = evalExpression predi meta >>= evalTernary trueRes falseRes
 -- Call
+-- Unresolved Call is from a chain
 evalExpression (EXP_CALL (CALL call_iden args)) meta = handleCallEval args (findValueInClosureInMeta call_iden) meta
 evalExpression (EXP_CALL (R_CALL _ args id)) meta = handleCallEval args (findIndexedValueInMeta id) meta
 evalExpression (EXP_CALL (RC_CALL call_iden args)) meta = handleCallEval args (findValueInClosureInMeta call_iden) meta
@@ -266,16 +267,19 @@ handleCallEval args findDec meta = do
     CLASS_DEC_EVAL {} -> evalInit args ev meta
     SUB_CLASS_DEC_EVAL {} -> evalInit args ev meta
     _ -> return meta{eval=RUNTIME_ERROR "Self recursive function name overwritten in block"}
-  
+
+-- The only interesting thing here is that we take the closure the class was saved in 
+-- and when the init runs and creates the closure and calls this fact function
+-- it will merge the closure the class was declared in and the class's own newly created closure
 evalInit :: [ARGUMENT]  -> EVAL -> META -> IO META
 evalInit args classEval meta = do
   case classEval of
-    (CLASS_DEC_EVAL iden decs _ id) -> do
-      let fact = (\clos -> CLASS_DEC_EVAL iden decs clos id)
+    (CLASS_DEC_EVAL iden decs clos id) -> do
+      let fact = (\pClos -> CLASS_DEC_EVAL iden decs (mconcat [pClos, clos]) id)
       let func initMeta = return initMeta
       handleInit args decs fact func meta
-    (SUB_CLASS_DEC_EVAL iden pIden decs _ id pId) -> do
-      let fact = (\clos -> SUB_CLASS_DEC_EVAL iden pIden decs clos id pId)      
+    (SUB_CLASS_DEC_EVAL iden pIden decs clos id pId) -> do
+      let fact = (\pClos -> SUB_CLASS_DEC_EVAL iden pIden decs (mconcat [pClos, clos]) id pId)      
       handleInit args decs fact addSuperToClosure meta
 
 -- Pair of the evalExpression, which evals the super.init()

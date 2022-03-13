@@ -14,6 +14,7 @@ type ErrorMessage = TextType
 type Scope = HT.BasicHashTable TextType EVAL
 type Closure = [Scope]
 
+-- IMPROVE: Maybe create a different class eval which after creating an instance
 data EVAL = EVAL_NUMBER Double
           | EVAL_STRING TextType
           | EVAL_BOOL Bool
