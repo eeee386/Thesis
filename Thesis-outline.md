@@ -137,7 +137,7 @@ for (var i = 0; i < 20; i = i + 1) {
 
 ### Háromszintes öröklődés
 
-- Superclass-ok kezelés
+- Superclass-ok kezelése
 - Superclass metódus hívása
 
 ```Lox
@@ -194,6 +194,17 @@ counter();
 ### Edgecase-ek javítása
 
 - Még mindig vannak benne hibák -> Nem volt időm levelezősként javítani
+
+### Array
+
+- Dinamikus tömbök készítése
+- Lehetséges megoldás: Natív osztály
+
+### IO
+
+### Modulok
+
+
 
 
 
