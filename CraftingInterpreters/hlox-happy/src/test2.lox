@@ -1,5 +1,14 @@
-fun b(){}
+fun a(b, c){
+    class Animal{
+        init(){
+          print 1;
+        }
 
-class A{
- init(){}
+        hello() {
+          print b;
+        }
+    }
+    return Animal;
 }
+var d = a(1,2)();
+d.hello();

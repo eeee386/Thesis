@@ -95,7 +95,7 @@ class A{
 }
 //
 
-//
+// This edgecase does not work right now
 fun a(b, c){
     class Animal{
         init(){

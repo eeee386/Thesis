@@ -135,8 +135,8 @@ function_call  : IDENTIFIER '(' arguments ')'         { CALL $1 (reverse $3) }
 
 chain          : chaining                               { CHAIN (reverse $1)}
 chaining       : 'this' '.' chaining                    { mconcat [$3, [LINK_THIS]] }
-               | 'this' '.' IDENTIFIER                  { [(LINK_IDENTIFIER $3), (LINK_CALL $1)] }
-               | 'this' '.' function_call               { [(LINK_IDENTIFIER $3), (LINK_THIS)] }
+               | 'this' '.' IDENTIFIER                  { [(LINK_IDENTIFIER $3), (LINK_THIS)] }
+               | 'this' '.' function_call               { [(LINK_CALL $3), (LINK_THIS)] }
                | 'super' '.' chaining                   { mconcat [$3, [LINK_SUPER]] }
                | 'super' '.' function_call              { [(LINK_CALL $3), LINK_SUPER] }
                | 'super' '.' IDENTIFIER                 { [(LINK_IDENTIFIER $3), (LINK_SUPER)] }
@@ -148,6 +148,7 @@ chaining       : 'this' '.' chaining                    { mconcat [$3, [LINK_THI
                | IDENTIFIER '.' IDENTIFIER              { [(LINK_IDENTIFIER $3), (LINK_IDENTIFIER $1)] }
                | IDENTIFIER '.' function_call           { [(LINK_CALL $3), (LINK_IDENTIFIER $1)] }
                | function_call '.' IDENTIFIER           { [(LINK_IDENTIFIER $3), (LINK_CALL $1)] }
+               | function_call '.' function_call        { [(LINK_CALL $3), (LINK_CALL $1)] }
 
 arguments      : arguments ',' expression             { $3 : $1 }
                | expression                           { [$1] }
