@@ -5,6 +5,7 @@ Rewrite of the hlox but using happy parser
 ## Basics
 
 ### Start project
+- `stack install happy`
 - `stack build happy` 
   - (only first time, use bash, I did not test it on windows)
   - If it does not work install happy globally and try it that way
@@ -19,4 +20,4 @@ Rewrite of the hlox but using happy parser
   - src/test2.lox can be used as an example
 
 ### Generate HappyParser file
-- `happy src/HappyParser.y -i`
+- `happy src/HappyParser.y -i -o src/Generated/HappyParser.hs`

@@ -11,4 +11,4 @@ fun a(b, c){
     return Animal;
 }
 var d = a(1,2)();
-d.hello();
+d.hello();V

@@ -19,7 +19,9 @@
 
 #### Felbukkanó problémák
 
-- Side-effektek hiánya és hatásai
+- Imperatív vs Funkcionális
+  - Side-effektek hiánya és hatásai (State kezelés)
+  - Lazy IO (Runner.hs and clock)
 
 ### Projekt
 
@@ -66,9 +68,9 @@
 
 #### Első megoldás bemutatása
 
-- Főleg, hogy milyen szépen dokumentálja magát
-
 #### Kettő összehasonlítása
+
+- Főleg, hogy milyen szépen dokumentálja magát
 
 ## Resolver
 

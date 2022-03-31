@@ -29,6 +29,7 @@ library
       Eval
       EvalMeta
       EvalTypes
+      Generated.HappyParser
       HappyParser
       Lexer
       NativeFunctions

@@ -11,7 +11,7 @@ import System.IO (stdout)
 import Eval
 import ResolverTypes
 import Resolver
-import qualified HappyParser as H 
+import qualified Generated.HappyParser as H
 
 
 run :: T.Text -> IO()
