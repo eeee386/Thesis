@@ -6,7 +6,7 @@ Rewrite of the hlox but using happy parser
 
 ### Setup haskell (Ubuntu 20.04 LTS)
 - install GHCup
-- if it fails run: `sudo apt-get update -y && sudo apt-get install build-essential curl libffi-dev libffi7 libgmp-dev libgmp10 libncurses-dev libncurses5 libtinfo5 -y`
+- if it fails run: `sudo apt update -y && sudo apt install build-essential curl libffi-dev libffi7 libgmp-dev libgmp10 libncurses-dev libncurses5 libtinfo5 -y`
 - Fix paths (`export PATH="$PATH:$HOME/.cabal/bin:$HOME/.ghcup/bin:$PATH"`)
 - `stack install happy` (and fix paths)
 - Fix path`export PATH="$PATH:$HOME/.local/bin/happy"`
