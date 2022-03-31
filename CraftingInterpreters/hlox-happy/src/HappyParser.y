@@ -1,5 +1,5 @@
 {
-module HappyParser where
+module Generated.HappyParser where
 
 import Data.Char
 import AST
