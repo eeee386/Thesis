@@ -275,6 +275,7 @@ evalInit :: [ARGUMENT]  -> EVAL -> META -> IO META
 evalInit args classEval meta = do
   case classEval of
     (CLASS_DEC_EVAL iden decs clos id) -> do
+      -- TODO: if class is defined in function and returned, the original function closure is lost from the class
       let fact = (\pClos -> CLASS_DEC_EVAL iden decs (mconcat [pClos, clos]) id)
       let func initMeta = return initMeta
       handleInit args decs fact func meta

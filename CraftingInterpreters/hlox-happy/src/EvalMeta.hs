@@ -88,6 +88,9 @@ findValueInClosureInMeta iden meta = findValueInClosure iden (EvalMeta.closure m
 
 findValueInClosure :: T.Text -> Closure -> IO EVAL
 findValueInClosure iden clos = do
+  --print iden
+  --val <- mapM HT.toList clos
+  --print val
   values <- mapM (getEvalByIden iden) clos
   let val = find isJust values
   return (fromJust (fromJust val))

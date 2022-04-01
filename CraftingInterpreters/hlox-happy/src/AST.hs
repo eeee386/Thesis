@@ -15,7 +15,7 @@ instance Show DECLARATION where
   show (DEC_STMT x) = show x
   show (DEC_VAR x) = show x
   show (R_DEC_VAR x) = show x
-  show (DEC_FUNC x) = "function: " ++ show x
+  show (DEC_FUNC x) = show x
   show (DEC_CLASS x) = "class: " ++ show x
   show (R_DEC_CLASS x) = "class: " ++ show x
   show EMPTY_DEC = "empty"
@@ -61,11 +61,11 @@ data FUNCTION_DECLARATION = FUNC_DEC IDENTIFIER [DECLARATION] STATEMENT
                           deriving Eq
 
 instance Show FUNCTION_DECLARATION where
-  show (FUNC_DEC i p s) = mconcat ["function name: ", show i,"params: " , show p, "statements: ", show s]
-  show (R_FUNC_DEC i p s _) = mconcat ["function name: ", show i,"params: " , show p, "statements: ", show s]
-  show (RC_FUNC_DEC i p s) = mconcat ["function name: ", show i,"params: " , show p, "statements: ", show s]
-  show (METHOD_DEC i p s) = mconcat ["method name: ", show i,"params: " , show p, "statements: ", show s]
-  show (NATIVE_FUNC iden p id) = mconcat ["native function name: ", show iden, "params: ", show p, "statements: ", "<<native code>>", "id:", show id]
+  show (FUNC_DEC i p s) = mconcat ["FUNCTION name: ", show i,"params: " , show p, "statements: ", show s]
+  show (R_FUNC_DEC i p s _) = mconcat ["FUNCTION name: ", show i,"params: " , show p, "statements: ", show s]
+  show (RC_FUNC_DEC i p s) = mconcat ["FUNCTION name: ", show i,"params: " , show p, "statements: ", show s]
+  show (METHOD_DEC i p s) = mconcat ["METHOD name: ", show i,"params: " , show p, "statements: ", show s]
+  show (NATIVE_FUNC iden p id) = mconcat ["NATIVE FUNCTION name: ", show iden, "params: ", show p, "statements: ", "<<native code>>", "id:", show id]
 
 
 type PARENT_ID = ID
