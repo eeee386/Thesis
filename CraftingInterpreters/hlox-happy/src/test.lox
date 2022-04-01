@@ -304,10 +304,10 @@ fun a() {
 
 var test1 = a();
 var test = test1();
-test.a();
-test.a();
 test.b();
 test.b();
+test.c();
+test.c();
 
 //
 var a = 5;

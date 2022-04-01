@@ -1,14 +1,28 @@
-fun a(b, c){
-    class Animal{
-        init(){
-          print 1;
-        }
-
-        hello() {
-          print b;
-        }
+fun a() {
+    var e = 1;
+    fun b(){
+        e = e+1;
+        print e;
+        return e;
     }
-    return Animal;
+    fun c(){
+        e = e+2;
+        print e;
+        return e;
+    }
+    class A{
+      init(){
+        this.b = b;
+        this.c = c;
+      }
+    }
+
+    return A;
 }
-var d = a(1,2)();
-d.hello();V
+
+var test1 = a();
+var test = test1();
+test.b();
+test.b();
+test.c();
+test.c();

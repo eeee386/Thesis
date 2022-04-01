@@ -14,7 +14,6 @@ Rewrite of the hlox but using happy parser
 ### Start project
 - `stack build happy` 
   - (only first time, use bash, I did not test it on windows)
-  - If it does not work install happy globally and try it that way
 - `stack build`
 
 ### Run Interpreter
