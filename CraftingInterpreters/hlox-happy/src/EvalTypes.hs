@@ -1,7 +1,6 @@
 module EvalTypes where
 
 import AST
-import qualified Data.Sequence as S
 import NativeFunctionTypes
 import Utils
 import qualified Data.HashTable.IO as HT

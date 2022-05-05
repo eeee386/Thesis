@@ -7,7 +7,6 @@ import System.Clock
 import qualified Data.Vector as V
 import EvalTypes
 import NativeFunctionTypes
-import qualified Data.Sequence as S
 import AST
 import Utils
 
