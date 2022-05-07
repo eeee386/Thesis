@@ -123,6 +123,7 @@ print count(1);
 ### Rekurzív Fibonacci
 
 - Closure kezelés, self-recursion
+- Indexed és Closure változók
 - if kezelés
 
 ```Lox
