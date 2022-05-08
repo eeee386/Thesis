@@ -10,7 +10,7 @@ import Lexer as L
 %tokentype { Token }
 %error { parseError }
 
-%left '='
+%right '='
 %nonassoc '?' ':'
 %left 'and' 'or'
 %left '==' '!='

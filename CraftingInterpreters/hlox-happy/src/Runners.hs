@@ -14,6 +14,7 @@ import Resolver
 import qualified Generated.HappyParser as H
 
 
+-- TODO: Use string here or use text in the lexer
 run :: T.Text -> IO()
 run text = do
   let ast = H.happyParser (T.unpack text)

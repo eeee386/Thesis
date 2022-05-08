@@ -431,6 +431,24 @@ print a.bClass.name;
 - Egy függvény a `clock`, amivel az aktuális időt tudjuk lekérni
 - És idő mérésre lehet használni a két hívást különbségét kiértékeljük
 
+### Művelet precedencia és asszociativitás
+
+- A tetején a legkisebb precedenciájú művelet
+- Alján meg a legnagyobb
+
+|     Művelet    | Asszociativitás | Operandusok száma |
+|----------------|-----------------|-------------------|
+|        =       |      jobb       |         2         |
+|       ? :      |      nincs      |         3         |
+|     and/or     |      bal        |         2         |
+|      ==/!=     |      bal        |         2         |
+|    > < >= <=   |      bal        |         2         |
+|       + -      |      bal        |         2         |
+|       * /      |      bal        |         2         |
+|       ! -      |      jobb       |         1         |
+| függvény hívás |       -         |         -         |
+
+
 ### jLox és hLox különbségei (!)
 #### Aritás ellenőrzsé -> újra gondolni
 #### Init
@@ -519,8 +537,9 @@ readFromRepl = putStr "Lox> "
 
 - Egy rövid rövid függvény elágazással, tanulva az előző koncepció bonyolultságából
 - `HappyParser.hs` `happyParser` nevű függvénye az eredménye a happy parser használatának, ez végzi a Szkennelést és a Parsert is. A hibakezelést a happy forrásfájlban (happyParser.y) megtudjuk adni.
+  - A happyParsernél, `String` típus használtam a lexernél/scannernél, de ott az jól működik 
 - Meghívjuk a rezolváló függvényt (resolveProgram)
-  - Rezolváló függvényt végig futtatjuk és összeszedjuük, az összes felbukkanó hibát
+  - Rezolváló függvényt végig futtatjuk és összeszedjük, az összes felbukkanó hibát
   - Ha van benne hiba, akkor kiírjuk a hibákat, és befejezzük a futást
 - Meghívjuk a Kiértékelő függvényt, ami le is futtatja a forráskód parancsait.
   - Ha bármi hiba történik a futáson belül, akkor a kiértékelés megszakad és kiírja a hiba okát.
@@ -539,7 +558,7 @@ run text = do
 
 ## Scanner/Lexer
 
-### Első megoldás
+### Első megoldás (Scanner.hs)
 
 #### Alaptípusok, amivel jellemezhetjük a tokeneket
 
@@ -597,6 +616,10 @@ createToken tType tLength tNewLines = TokenReader {token=tType, len=tLength, num
 ```
 
 #### scanTokens függvény
+
+- Meghívja a scanTokensWithData függvényt, ami végig megy a beolvasott forrás szövegen létrehozva a token szekvenciát
+- Ezt le szűrjük, kiszedjük belőle a `WHITE_SPACE` és `COMMENT` típusú tokeneket
+  - Az adatok megtartása végett (token hossz, mennyi sort foglal el), hozzuk létre a `WHITE_SPACE` és `COMMENT` típusú tokeneket
 
 ##### scanTokensWithData
 - Első sorban meghívjuk a `scanTokensWithData` nevű belül definiált függvényt 
@@ -685,5 +708,67 @@ createIdentifier text
   where chunk = createIdentifierChunk text
 ```
 
+### Az új megoldás
 
+#### Alaptípusok
+- Tokentípus, hasonló az előzőekben ismertetett TokenType-hoz
+```haskell
+data Token =  LEFT_PAREN | RIGHT_PAREN | LEFT_BRACE | RIGHT_BRACE |
+    {-...-}
+    deriving (Show, Eq, Ord)
+```
+
+#### lexer
+
+
+- Ennél a megoldásnál kihasználom, a haskell lista működését
+  - Minden lexer hívás végén csinálok egy `TOKEN : lexer cs` hívást, ebből pedig, további `TOKEN : lexer cs` hívások lesznek, amik a legvégén, amikor elfogy a beolvasott szöveg akkor `TOKEN : TOKEN : ... : TOKEN : []`, válik, ami létrehozza a token listát
+
+```haskell
+lexer :: String -> [Token]
+lexer (c:cs)
+      | isSpace c = lexer cs
+      | isAlpha c = lexKeyword (c:cs)
+      | isDigit c = lexNum (c:cs)
+lexer ('=':cs) = lexHandleEqual cs
+lexer ('!':cs) = lexHandleBang cs
+lexer ('<': cs) = lexHandleLess cs
+lexer ('>': cs) = lexHandleGreater cs
+lexer ('/':cs) = lexHandleSlash cs
+lexer ('+':cs) = PLUS : lexer cs
+lexer ('-':cs) = MINUS : lexer cs
+{-...-}
+lexer ('\"': cs) = lexString cs
+lexer (_:cs) = lexer cs
+lexer [] = []
+
+lexNum :: String -> [Token]
+lexNum cs = NUMBER (read num) : lexer rest
+      where (num,rest) = span isDigit cs
+
+lexKeyword :: String -> [Token]
+lexKeyword cs =
+   case span (\x -> isAlpha x || isDigit x) cs of
+      ("var",rest) -> VAR : lexer rest
+      ("true", rest) -> TRUE : lexer rest
+      {-...-}
+      (var,rest)   -> IDENTIFIER (T.pack var) : lexer rest
+```
+
+- Ezt a függvényt a happyParser-en belül hívjuk meg
+  - ami, így néz ki: `happyParser = parser . lexer`
+
+
+## Parser
+
+### Descent Parser és LR bemutatása
+
+#### Descent Parser
+- Felülről lefelé parser
+- A legkisebb precedenciájú műveleteket keresi először, ha talál, akkor leválasztja az előtte lévő részt, és abban keres magasabb precedenciájú műveletet
+
+#### LR
+
+
+### Első megoldás
 
