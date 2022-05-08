@@ -81,8 +81,6 @@ printResolveErrorOrContinue prog = do
   else do
     let newProgStack = newDeclarations resolved
     let (newProg, _) = pop newProgStack
-    print "resolve: "
-    print newProg
     printEvalErrorOrContinue (PROG newProg) (variableVector resolved)
 
 printEvalErrorOrContinue :: AST.PROGRAM -> V.Vector EVAL  -> IO ()

@@ -256,7 +256,8 @@ Ez egy dinamikus típusosságot használó, imperatív, objektum orientált prog
 `
 #### Változó deklarációk
 - változók létrehozása a `var` kulcsszóval
-- Csak betűkből állhat a változó név
+- Csak betűvel kezdődhet
+- De számokat is tartalmazhat
 - Ha nincs definiálva az értéke automatikusan null értéket kap
 - Ha pedig a változó deklarálva van, akkor a változónévvel lehet hivatkozni rá.
  `
@@ -422,6 +423,10 @@ var a = A();
 print a.bClass.name;
 `
 
+#### Komment írás
+
+- a Komment írás történhet `//` jellel, ami csak sor komment lesz, vagy pedig `/*  */` jellel (két jel között lehet bármi), és az pedig egy blokk komment lesz
+
 #### Beépített függvények (!clock implementáció újra gondolása)
 - Egy függvény a `clock`, amivel az aktuális időt tudjuk lekérni
 - És idő mérésre lehet használni a két hívást különbségét kiértékeljük
@@ -438,5 +443,247 @@ print a.bClass.name;
   3. Kötelező az init függvény:
      - Könnyű volt implementálni, és teljesen átlátható a felhasználónak
 #### Error kezelés -> újra gondolni
+
+## Lox feldolgozás részei
+- Forrásfájl beolvasása
+  - `Runners.hs`, ebben a fileban vannak azok a függvények, mely a forrásfájl beolvasását és feldolgozó függvények hívását végzik
+- Szkennelés, tokenizálás
+  - Az átadott forráskódból tokeneket hoz létre, amit később a parsernek átadunk, hogy AST-t építsen belőle.
+
+## Forrásfájl beolvasása
+
+### Közös részek
+
+- `Main.hs` fájlban csak egy függvény található, ez pedig a `startFromTerminal`:
+```haskell
+main :: IO ()
+main = startFromTerminal
+```
+
+- `Runners.hs` fájlben pedig megtalálhatók mindazok a függvények, amely a fájl beolvasását, vagy REPL-t végzik
+  - Az első ilyen függvény a `startFromTerminal`
+    - Összeszedi az shell argumentumokat
+    - Meghívja a `startLox` függvényt
+  
+```haskell
+startFromTerminal :: IO()
+startFromTerminal = do
+    args <- getArgs
+    let newArgs = map T.pack args
+    startLox newArgs
+```
+
+  - `startLox`
+    - Ha nem kap paramétert, akkor meghívja a shellt
+    - ha egy paramétert kap meghívja a fájlt feldolgozó függvényt
+    - Ha ennél több argumentum van, akkor kiírja, hogy "Egy, vagy annál kevesebb kell használni"
+  
+```haskell
+startLox :: [T.Text] -> IO ()
+startLox args
+  | argsLength == 1 = runLoxFile (head args)
+  | argsLength > 1 = putStrLn "Use one or less args"
+  | otherwise = runPrompt
+  where argsLength = length args
+```
+
+  - Mind a `runLoxFile`, mind a `runPrompt` a `run` függvényt hívja meg
+    - A `runPrompt` miután lefutott a `run`, újra meghívja magát, így kapunk egy REPL-t
+
+```haskell
+runLoxFile :: T.Text -> IO ()
+runLoxFile arg = do
+  text <- TIO.readFile (T.unpack arg)
+  run text
+
+runPrompt :: IO()
+runPrompt = do
+  input <- readFromRepl
+  run (T.pack input)
+  runPrompt
+
+readFromRepl :: IO String
+readFromRepl = putStr "Lox> "
+     >> hFlush stdout
+     >> getLine
+```
+
+- A `run` különböző féleképpen működik a két megoldásban
+
+### Első megoldás
+
+- A bejövő adat feldolgozását, és a következő lépés indítását, egy-egy függvény hívásával érjük el.
+- Ezeket a lépéseknél mélyebben leírom
+
+### Új megoldás
+
+- Egy rövid rövid függvény elágazással, tanulva az előző koncepció bonyolultságából
+- `HappyParser.hs` `happyParser` nevű függvénye az eredménye a happy parser használatának, ez végzi a Szkennelést és a Parsert is. A hibakezelést a happy forrásfájlban (happyParser.y) megtudjuk adni.
+- Meghívjuk a rezolváló függvényt (resolveProgram)
+  - Rezolváló függvényt végig futtatjuk és összeszedjuük, az összes felbukkanó hibát
+  - Ha van benne hiba, akkor kiírjuk a hibákat, és befejezzük a futást
+- Meghívjuk a Kiértékelő függvényt, ami le is futtatja a forráskód parancsait.
+  - Ha bármi hiba történik a futáson belül, akkor a kiértékelés megszakad és kiírja a hiba okát.
+```haskell
+run :: T.Text -> IO()
+run text = do
+  let ast = H.happyParser (T.unpack text)
+  resolverMeta <- resolveProgram ast
+  if not (null (resolverErrors resolverMeta)) then do
+    mapM_ print (resolverErrors resolverMeta)
+  else do
+    evalProgram (declarations resolverMeta) (variableVector resolverMeta)
+    return ()
+
+```
+
+## Scanner/Lexer
+
+### Első megoldás
+
+#### Alaptípusok, amivel jellemezhetjük a tokeneket
+
+- Tokentípus, ez mutatja, hogy pontosan milyen token
+  - A látható `NOT_TOKEN` az minden olyan dolog, amit a scanner nem tudott felismerni.
+  - `EOF` end-of-file
+
+```haskell
+data TokenType = LEFT_PAREN | RIGHT_PAREN | LEFT_BRACE | RIGHT_BRACE | 
+    {-...-}
+    EOF | NOT_TOKEN TextType deriving (Show, Eq, Ord)
+```
+
+- Token, igazából két értéket tárol, tokennek a típusát, és azt, hogy hányadik sorban található
+  - Ezeknek a sorozatát, fogjuk átadni a parsernek
+```haskell
+data Token = Token {
+tokenType :: TokenType
+, line :: Int
+} deriving Eq
+```
+
+#### Run
+- Elsőként a `run` függvény fog meghívódni 
+  - Meghívja a scanTokens nevűfüggvényt, ami visszaad egy token szekvenciát
+  - Majd utána az error lekezelő, vagy parse hívó függvényt
+  - Error kezelés: Ha talál olyan tokent, ami `NOT_TOKEN` típusú, akkor kiírja, hogy melyik token az, ami a hibát okozta, és ebben benne van, hogy melyik sorban történt az eset.
+```haskell
+run :: T.Text -> IO()
+run text = do
+  let tokens = scanTokens text
+  printScanErrorOrContinue tokens
+  
+printScanErrorOrContinue :: S.Seq Token -> IO ()
+printScanErrorOrContinue tokens = if null scanError then printResolveErrorOrContinue parsed else print scanError
+  where scanError = S.filter (isNotToken . tokenType) tokens
+        parsed = parse tokens
+```
+
+
+#### TokenReader: egy segítő adatstruktúra
+- `createToken` függvény, igazából segítség, hogy könnyen létre lehessen hozni token típusú rekordokat
+- a `len` a token hosszát adja meg (ezt arra haszáltam volna, hogy soron belül megadjam, hol a hiba)
+- a `token` a token fajtája 
+
+```haskell
+data TokenReader = TokenReader {
+len :: Int
+, token :: TokenType
+, numberOfNewLines :: Int
+} deriving Show
+
+createToken :: TokenType -> Int -> Int -> TokenReader
+createToken tType tLength tNewLines = TokenReader {token=tType, len=tLength, numberOfNewLines=tNewLines}
+```
+
+#### scanTokens függvény
+
+##### scanTokensWithData
+- Első sorban meghívjuk a `scanTokensWithData` nevű belül definiált függvényt 
+  - A paraméterül kapott indexszel megnézzük, hogy a beolvasott forrásfájl végén vagyunk-e
+    - Ha igen, visszadjuk a Token szekvenciát (list), amit létrehoztunk
+    - Ha nem:
+      - `recognizeToken` fogja létrehozni a `tokenScanned` változót, ami egy `TokenReader` típusú rekord
+      - Ennek hosszát lemérjük (lenP)
+      - Elmentjük az új `Token`-t
+        - Tokentype a TokenReaderből
+        - line: sor amiben a token elhelyezkedik
+      - Az indexet frissítjük (newCurrent)
+      - Az új sor értéket felvesszük
+        - Itt lesz a fontos az, hogy elmentettük, mennyi sort hozott létre az új token
+        - Ezekkel az új adatokkal meghívjuk ugyanezt a függvényt
+          - az új index
+          - az új sorszám
+          - az új szekvencia, amihez hozzáadjuk a létrehozott tokent
+          - Az szöveg, amiből kivettük azokat a részeket, ami az új tokenhez tartozik 
+
+```haskell
+scanTokens :: T.Text -> S.Seq Token
+scanTokens src = S.filter (\x -> tokenType x /= WHITE_SPACE && tokenType x /= COMMENT) (scanTokensWithData 0 1 S.empty src)
+  where
+    isAtEnd current = current == T.length src
+    scanTokensWithData :: Int -> Int -> S.Seq Token -> T.Text -> S.Seq Token
+    scanTokensWithData current lineP list text =
+          let tokenScanned = recognizeToken text
+              lenP = len tokenScanned
+              tokenP = Token {tokenType= token tokenScanned, line=lineP}
+              numberOfNewLinesP = numberOfNewLines tokenScanned
+              newCurrent = current + lenP
+              newLineNumber = lineP + numberOfNewLinesP
+          in
+            if isAtEnd current then list else scanTokensWithData newCurrent newLineNumber ((S.|>) list tokenP) (T.drop lenP text)
+```
+
+##### recognizeToken
+- Ez hozza létre  a `tokenScanned` változót, amit a `recognizeToken` nevű függvénnyel hozunk létre
+  - Ez egy óriási switch case, ami létrehozza a tokeneket
+  - Itt lerövidítettem, de a teljes kód olvasható github oldalamon
+  
+```haskell
+recognizeToken :: T.Text -> TokenReader
+recognizeToken text
+  | tok == ")" = createNoNewLineToken RIGHT_PAREN 1
+  | tok == "(" = createNoNewLineToken LEFT_PAREN 1
+  | tok == "}" = createNoNewLineToken RIGHT_BRACE 1
+  {- ... -}
+  | tok == "!" = checkIfTwoLengthToken twoTok "!=" BANG_EQUAL BANG
+  | tok == "=" = checkIfTwoLengthToken twoTok "==" EQUAL_EQUAL EQUAL
+  | tok == "<" = checkIfTwoLengthToken twoTok "<=" LESS_EQUAL LESS
+  | tok == ">" = checkIfTwoLengthToken twoTok ">=" GREATER_EQUAL GREATER
+  | tok == "/" = checkIfCommentOrDivision text
+  | tok == " " = handleWhiteSpace
+  | tok == "\t" = handleWhiteSpace
+  | tok == "\n" = createNewLine
+  | tok == "\"" = createString text
+  | isDigit (T.head tok) = createNumber text
+  | isAlpha (T.head tok) = createIdentifier text
+  | otherwise = createNoNewLineToken (NOT_TOKEN tok) 1
+  where tok = T.take 1 text 
+        twoTok = T.take 2 text 
+```
+    - További függvények amiket meghív:
+      - `createNoNewLineToken` olyan token létrehozása, ami nem hoz létre új sort
+        - Az első paramétere azt mondja meg milyen tokent, hoz létre, második meg, hogy milyen hosszú lesz a token
+      - `checkcheckIfTwoLengthToken` megnézi, hogy ha még egy karaktert hozzáveszünk a elkészítendő tokenhez, akkor másik token lesz-e belőle vagy sem
+      - `handleWhiteSpace` lértrehoz egy whitespace tokent (space, tab)
+      - `createNewLine` létrehoz egy új sor tokent (whitespace, de van új sor)
+      - `checkIfCommentOrDivision` itt megnézi, hogy a "/" jel, csak az osztáshoz tartozik, vagy pedig "//" vagy "/*" ami mindakettő kommentet jelöl
+      - `createString`, karakter sorozat létrehozása
+      - `createIdentifier`, pedig kulcsszavak vagy azonosítók létrehozására szolgál
+        - `createIdentifierChunk`, az gyakorlatilag létrehoz egy identifiert, amibe lehetnek betűk és számok is
+        - `createKeyword`, egy új `TokenReader`-t hoz létre
+      
+```haskell
+createIdentifier :: T.Text -> TokenReader
+createIdentifier text
+  | chunk == "and" = createKeyWord AND
+  | chunk == "or" = createKeyWord OR
+  | chunk == "if" = createKeyWord IF
+  {-...-}
+  | chunk == "while" = createKeyWord WHILE
+  | otherwise = createNoNewLineToken (IDENTIFIER chunk) (T.length chunk)
+  where chunk = createIdentifierChunk text
+```
+
 
 

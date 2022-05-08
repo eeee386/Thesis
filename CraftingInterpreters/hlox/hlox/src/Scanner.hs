@@ -10,7 +10,7 @@ import qualified Text.Read as TR
 import Data.Maybe
 
 data TokenReader = TokenReader {
-len :: Int
+  len :: Int
 , token :: TokenType
 , numberOfNewLines :: Int
 } deriving Show
