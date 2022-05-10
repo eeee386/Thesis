@@ -19,6 +19,11 @@ Ezen mutatja be az AST (Abstract Syntax Tree) interpretert, és a modernebb Virt
 Első részben a Robert Nystrom Javában írja meg az AST interpretert, amiben bemutatja egy nyelv legfőbb jellemzőit, és hogy működnek az alap egységei egy nyelvnek.
 Második részben pedig C-ben megírja ugyanezt és itt már jobban fókuszál a Virtual Machine-ek működésére.
 
+### AST (Abstract Syntax Tree) (!)
+
+Absztrakt Szintaktikai fa: Fa reprezentációja egy szöveg struktúrájának.
+- Absztrakt, abból a szempontból, hogy nem jeleníti meg minden apró részletét az igazi szintaxisnak, csak a struktúrális és tartalmi részeket
+
 ### Funkcionális programozás alapjai
 
 #### Listák
@@ -307,11 +312,13 @@ for (var a = 1; a < 10; a = a + 1) {
 #### Függvények
 ##### Deklaráció: 
 `fun` kulcsszóval
+
 `
 fun printOne(){
     print 1;
 }
 `
+
 - Paramétereket képes fogadni a zárójelek között
 - `return` kulcsszóval lehet a függvényből visszatérni
 `
@@ -321,7 +328,7 @@ fun add(a, b){
 `
 
 ##### Függvényhívás
-- függvény nevével és zárójel, az zárójelben tudjuk átadni az argumentumokat
+- függvény nevével és zárójel, az zárójelben tudjuk átadni az argumentumokat, amelyek kifejezések lehetnek
 `
 printOne();
 add(2,3)`
@@ -659,7 +666,7 @@ scanTokens src = S.filter (\x -> tokenType x /= WHITE_SPACE && tokenType x /= CO
 
 ##### recognizeToken
 - Ez hozza létre  a `tokenScanned` változót, amit a `recognizeToken` nevű függvénnyel hozunk létre
-  - Ez egy óriási switch case, ami létrehozza a tokeneket
+  - Ez egy óriási pattern matching, ami létrehozza a tokeneket
   - Itt lerövidítettem, de a teljes kód olvasható github oldalamon
   
 ```haskell
@@ -720,9 +727,9 @@ data Token =  LEFT_PAREN | RIGHT_PAREN | LEFT_BRACE | RIGHT_BRACE |
 
 #### lexer
 
-
 - Ennél a megoldásnál kihasználom, a haskell lista működését
   - Minden lexer hívás végén csinálok egy `TOKEN : lexer cs` hívást, ebből pedig, további `TOKEN : lexer cs` hívások lesznek, amik a legvégén, amikor elfogy a beolvasott szöveg akkor `TOKEN : TOKEN : ... : TOKEN : []`, válik, ami létrehozza a token listát
+- Hasonlóan az előző megoldáshoz, ez is egy nagy pattern matching
 
 ```haskell
 lexer :: String -> [Token]
@@ -772,3 +779,85 @@ lexKeyword cs =
 
 ### Első megoldás
 
+#### Alaptípusok
+
+##### AST
+- AST.hs-ben található az összes típus, amit használtam a fejlesztés során
+- Itt nem fogom az összes típust felsorolni csak ízelítőt akarok adni, hogy milyen jellegű adatstruktúrában tároltam a különböző nyelvi elemeket.
+
+- Látható az alábbi példában, hogy a program deklarációk sorozatából épül fel.
+- Ezen belül a `DECLARATION` type definiálja milyen jellegű, deklarációk lehetnek a programon belül
+  - itt láthatjuk, hogy megadtam a `instance Show DECLARATION` typeclasst, amivel definiálom mit írjon ki az outputra, ha kiíratom ezeket, nagyrésze csak számomra volt a könnyebb fejlesztés érdekében, de a `PARSE_ERROR`-nál pedig ezt használom, hogy a felhasználónak Parser hibaüzeneteket írja ki.
+  - Az `S.Seq Token` használata a típusoknál is a könnyebb fejlesztés miatt volt, kivéve a `PARSE_ERROR` típusnál
+- `VARIABLE_DECLARATION` type-nál, ami érdekes, az az ID, amit a parse-nél már hozzáadok a változóhoz, és az új megoldásban pedig azt a resolverre bízom, ez majd segít a kilrtlkelésnél minden olyan változónál, amit nem függvényen belül hoztak létre.
+  - Ezt majd a resolver-nél tárgyalom 
+  - Ennek párjaként a `LITERAL` `IDENTIFIER` típusánál is van egy ID, ami segít a kiértékelésnél
+- Ebben érdekességképen a `CALL` `S.Seq ARGUMENTS` van ami maga is egy szekvencia
+  - Ez az első próbálkozás arra, hogy megoldjam a `fuggveny(a,b)(c,d,e)(f)` jellegű kifejezéseket
+
+```haskell
+newtype PROGRAM = PROG (S.Seq DECLARATION)
+instance Show PROGRAM where
+  show (PROG x) = show x
+
+data DECLARATION = DEC_STMT STATEMENT | DEC_VAR VARIABLE_DECLARATION | DEC_FUNC FUNCTION_DECLARATION | DEC_CLASS CLASS_DECLARATION | PARSE_ERROR TextType (S.Seq Token) | SKIP_DEC deriving Eq
+
+instance Show DECLARATION where
+  show (DEC_STMT x) = show x
+  show (DEC_VAR x) = show x
+  show (PARSE_ERROR errMsg tokens) = mconcat ["ParseError: ", show errMsg, ". In line: " ,show (line (S.index tokens (S.length tokens-1)))]
+  {-...-}
+
+data VARIABLE_DECLARATION = VAR_DEC_DEF IDENTIFIER EXPRESSION (S.Seq Token) ID | VAR_DEC IDENTIFIER (S.Seq Token) ID | VAR_DEF IDENTIFIER EXPRESSION (S.Seq Token) ID | PARAM_DEC IDENTIFIER (S.Seq Token) ID deriving Eq
+instance Show VARIABLE_DECLARATION where
+  show (VAR_DEC_DEF iden expr _ id) = mconcat ["var", " ", show iden, " = ", show expr, ";id: ", show id]
+  {-...-}
+
+data STATEMENT = EXPR_STMT EXPRESSION 
+               | PRINT_STMT EXPRESSION 
+               | BLOCK_STMT (S.Seq DECLARATION)
+               | IF_STMT EXPRESSION STATEMENT 
+               | IF_ELSE_STMT EXPRESSION STATEMENT STATEMENT
+               | WHILE_STMT EXPRESSION STATEMENT
+               | FOR_STMT DECLARATION EXPRESSION DECLARATION STATEMENT
+               | LOOP EXPRESSION DECLARATION STATEMENT
+               | RETURN_NIL | RETURN EXPRESSION deriving Eq
+{-...-}
+data EXPRESSION = EXP_LITERAL LITERAL 
+                | EXP_UNARY UNARY (S.Seq Token) 
+                | EXP_BINARY BINARY (S.Seq Token) 
+                | EXP_TERNARY TERNARY (S.Seq Token) 
+                | EXP_GROUPING GROUPING
+                | EXP_CALL CALL
+                | NON_EXP String (S.Seq Token) deriving Eq
+                
+data LITERAL = NUMBER Double | STRING TextType | TRUE | FALSE | NIL | IDENTIFIER TextType (S.Seq Token) ID deriving Eq
+{-...-}
+data CALL = CALL_FUNC EXPRESSION (S.Seq ARGUMENTS) ID deriving Eq
+{-...-}
+data BINARY = BIN EXPRESSION OPERATOR EXPRESSION deriving Eq
+{-...-}
+data TERNARY = TERN EXPRESSION OPERATOR EXPRESSION OPERATOR EXPRESSION deriving Eq  
+{-...-}
+data ARGUMENTS = ARGS (S.Seq EXPRESSION) | INVALID_ARGS TextType (S.Seq Token) deriving Eq
+{-...-}
+data OPERATOR = EQUAL_EQUAL | BANG_EQUAL | LESS | LESS_EQUAL | GREATER | GREATER_EQUAL
+               | PLUS  | MINUS | STAR | SLASH | QUESTION_MARK | COLON | BANG | AND | OR deriving Eq
+
+```
+
+##### ParserMeta
+
+Segéd adatstruktúra, amiben elmentettem a jelenlegi állapotát a parsernek.
+
+- `declaration`: a elkészített deklaráció
+- `tokensLeft`: a deklaráció elkészítése után maradt tokenek
+- `currentVarId`: Ez az a változó, ami tárolja, hogy jelenleg melyik változó azonosítónál járunk
+
+```haskell
+data ParserMeta = ParserMeta {
+    declaration :: DECLARATION
+  , tokensLeft :: S.Seq Token
+  , currentVarId :: Int
+  }
+```

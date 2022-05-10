@@ -33,7 +33,7 @@ createDeclaration meta
   | isWhile = handleWhile meta
   | isFor = handleFor meta
   | isFunction = handleFunction meta
-  | isReturn = handleReturn meta
+  | isReturn = handleReturmeta
   | isBlockDec = handleBlock meta
   | isClass = handleClass meta
   | otherwise = handleSimpleDeclaration meta
@@ -61,12 +61,12 @@ handleBlock meta
 
 handleSimpleDeclaration :: ParserMeta -> ParserMeta
 handleSimpleDeclaration meta
-  | isNothing index = updateDecAndTokens (PARSE_ERROR "Statement is not terminated" expr) rest meta
+  | isNothing index = updateDecAndTokens (PARSE_ERROR "Statement is not terminated" exprTokens) rest meta
   | otherwise = updateParserMeta dec rest newId meta
   where tokens = tokensLeft meta
         index = S.findIndexL (tokenIsType SEMICOLON) tokens
         isTerminated = isJust index
-        (expr, rest) = if isTerminated then S.splitAt (fromJust index+1) tokens else synchronize tokens
+        (exprTokens, rest) = if isTerminated then S.splitAt (fromJust index+1) tokens else synchronize tokens
         (dec, newId) = buildSimpleDecFromTokens expr (currentVarId meta)
 
 buildSimpleDecFromTokens :: S.Seq Token -> Int -> (DECLARATION, Int)
