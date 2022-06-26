@@ -457,7 +457,7 @@ print a.bClass.name;
 
 
 ### jLox és hLox különbségei (!)
-#### Aritás ellenőrzsé -> újra gondolni
+#### Aritás ellenőrzés -> újra gondolni
 #### Init
 (!jLox-ban megnézni, miért nincs ez így implementálva)
 - Én a hLoxban kötelelző tettem az `init` függvényt, mert mi van akkor, ha a ősosztálynak van `init` függvénye, de a gyerek osztálynak nincs
@@ -853,6 +853,11 @@ Segéd adatstruktúra, amiben elmentettem a jelenlegi állapotát a parsernek.
 - `declaration`: a elkészített deklaráció
 - `tokensLeft`: a deklaráció elkészítése után maradt tokenek
 - `currentVarId`: Ez az a változó, ami tárolja, hogy jelenleg melyik változó azonosítónál járunk
+  - Ez az azonosító, arra lesz jó, hogy az Eval-nál könnyebb lesz megtalálni az olyan változókat, melyek nincsenek closure-ben. Erre a rezolvációnal létrehozok egy tömböt, amiben gyorsan tudom keresni az adatokat, és az Evalnál, meg segít a megtalálsban és frissítésében
+
+Nem fogom az összes segéd függvényt felsorolni de kettőt érdemes hozzá adni:
+- `createParserMeta`: Ez hozza létre a meta objektumot, ami érdekes, hogy az első deklarációt üresnek inicializálja
+- `updateParserMeta`: Ez frissíti az új adatokkal a meta objektumot
 
 ```haskell
 data ParserMeta = ParserMeta {
@@ -860,4 +865,486 @@ data ParserMeta = ParserMeta {
   , tokensLeft :: S.Seq Token
   , currentVarId :: Int
   }
+  
+
+createParserMeta :: S.Seq Token -> ParserMeta
+createParserMeta tokens = ParserMeta{declaration=SKIP_DEC, tokensLeft=tokens, currentVarId=0} 
+
+
+updateParserMeta :: DECLARATION -> S.Seq Token -> Int -> ParserMeta -> ParserMeta
+updateParserMeta dec tokens cVarId meta = meta{declaration=dec, tokensLeft=tokens, currentVarId=cVarId} 
 ```
+
+#### Parser
+
+A legfőbb függvények itt láthatók a parsernek
+Ami itt látszik, az, hogy a `createDeclarations` megnézi, hogy el fogyasztottuk-e az összes tokent, vagy hibára futottunk, ekkor kilép
+Ha pedig nem akkor `createDeclaration` hívódik meg ami ellenőrzi az első elemet, és ez alapján fogja feldolgozni a tokeneket
+Ennél kihasználtam azt, hogy az első kulcsszó kvázi determinálja, hogy milyen jellegű lesz a deklaráció alakja.
+Ha az első kulcsszó például `class` akkor osztályként kezdi el kezelni, és aszerint keresi meg a megfelelő nyelvi elemeket, ha ez nem sikerül, akkor parse error és egy szinkronizációt is végez.
+
+A szinkronizáció az a művelet, ahol egy hibára futás után egy nyelvi elemet keresve visszapróbáljuk állítani egy olyan állapotra, ami utána tovább feldolgozható.
+
+```haskell
+parse :: S.Seq Token -> PROGRAM
+parse = createProgram
+
+createProgram :: S.Seq Token -> PROGRAM
+createProgram tokens = PROG (createDeclarations (createParserMeta tokens) S.empty)
+
+createDeclarations :: ParserMeta -> S.Seq DECLARATION -> S.Seq DECLARATION
+createDeclarations meta decSeq
+  | isLastParseError || S.null (tokensLeft meta) = S.drop 1 (decSeq S.|> dec)
+  | otherwise = createDeclarations newMeta (decSeq S.|> dec)
+  where isLastParseError = (isParseError <$> getLast decSeq) == Just True
+        newMeta = createDeclaration meta
+        dec = declaration meta
+        
+createDeclaration :: ParserMeta -> ParserMeta
+createDeclaration meta
+  | isIf = handleIf meta
+  | isWhile = handleWhile meta
+  | isFor = handleFor meta
+  | isFunction = handleFunction meta
+  | isReturn = handleReturmeta
+  | isBlockDec = handleBlock meta
+  | isClass = handleClass meta
+  | otherwise = handleSimpleDeclaration meta
+  where firstToken = S.lookup 0 (tokensLeft meta)
+        firstTokenType = tokenType <$> firstToken
+        secondToken = S.lookup 1 (tokensLeft meta)
+        secondTokenType = tokenType <$> secondToken
+        isIf = firstTokenType == Just IF
+        isBlockDec = firstTokenType == Just LEFT_BRACE
+        isWhile = firstTokenType == Just WHILE
+        isFor = firstTokenType == Just FOR
+        isFunction = firstTokenType == Just FUN
+        isReturn = firstTokenType == Just TokenHelper.RETURN
+        isClass = firstTokenType == Just CLASS
+        
+synchronize :: S.Seq Token -> (S.Seq Token, S.Seq Token)
+synchronize tokens = if isJust maybeIndex then S.splitAt (fromJust maybeIndex) tokens else (tokens, S.empty)
+  where syncFunc = S.findIndexL (\x -> tokenType x `elem` [CLASS, FUN, VAR, FOR, IF, WHILE, PRINT, TokenHelper.RETURN])
+        startIndex = syncFunc tokens
+        maybeIndex = if startIndex == Just 0 then syncFunc (S.drop 1 tokens) else startIndex
+
+```
+
+Nem fogom minden parsert, amit létrehoztam bemutatni, mert nagyon sok idő lenne, csak néhányat, és bemutatni, hogy miért volt nehezen fenntartható a fejlesztés
+- Amit fontos látni, az az, hogy feltételezem, hogy egy függvény jellegű nyelvi elemet kapok, így aszerint próbálom mintailleszteni minden egyes függvényben lévő element. Ha sikerül, feldolgozom a benne lévő nyelvi elemeket, és létrehozom az új deklarációt az `id`-val együtt. Ha nem, akkor hibát mentek el.
+- Fontos itt látni, hogy előbb dolgozom fel a benne lévő elemeket, így azok előbb kapnak `id` értéket, mint a függvény
+- Teljesség kedvéért hozzáadtam a blokk feldolgozást is, de az igazából igencsak egyértelmű:
+  - Ha van a nyitóhoz záró, akkor feldolgozzuk a benne lévő deklarációkat, és elmentjük az új Deklarációba, ami egy Block statement, ami tartalmazza, az új benne feldolgozott deklarációkat 
+
+Sorrend:
+- Tudjuk, hogy függvény mert a `fun` kulcsszóra mintaillesztettünk
+- Ha nincs azonosító név, vagyis valami más van helyette ott ahol gondolnánk, akkor hiba mert az egy hibásan megírt függvény
+- Ha van, akkor zárójelet keresünk, és ha megtaláljuk a párjával együtt, akkor a benne lévő elemekre tudjuk, hogy csak paraméterek lehetnek, ezért `handleBuildParams` függvényt hívjuk meg.
+- Itt egy "érdekes" design döntést hoztam meg, amit utólag nézve nem gondolom, hogy egy jó ötlet volt: Ha paraméter feldolgozó függvény elhasal, nem próbálom meg parse hibaként beállítani, hanem csak berakok egy `Invalid Parameter` type-ot, és nem kezdek vele semmit itt, ahelyett, hogy itt a függvény készítésben lekezelném, és parse hibát készítenék belőle. Persze akkor a függvény feldolgozásba még több elágazás lett volna.
+- Ha ez megvan a függvény blokkot dolgozom fel, amit először belewrappelek egy declarationbe és utána dolgozom fel a `createDeclaration`-nel. Ebből kiszedem a feldologzott blokkot, ha van a blokkon belül hiba azt felhozom a függvénybe, és ParseError-ként mentem
+
+
+
+```haskell
+handleFunction :: ParserMeta -> ParserMeta
+handleFunction meta
+  | not isIden = updateDecAndTokens (PARSE_ERROR "Identifier is missing after 'fun' keyword" err) rest meta
+  | not isLeftParen = updateDecAndTokens (PARSE_ERROR "Parenthesis should be after function header" err) rest meta
+  | not isRightParen = updateDecAndTokens (PARSE_ERROR "Parenthesis is not closed" err) rest meta
+  | isNothing stmt = updateDecAndTokens (PARSE_ERROR "Parse error on block" err) rest meta
+  | otherwise = updateParserMeta (DEC_FUNC (FUNC_DEC (fromJust maybeIdenType) params (FUNC_STMT (fromJust stmt)) (LOCAL_ID id))) funRest (id+1) newPMF
+  where id = currentVarId meta
+        tokens = tokensLeft meta
+        maybeIden = S.lookup 1 tokens
+        maybeIdenType = tokenType <$> maybeIden
+        isIden = (ParseExpressions.isIdentifier <$> maybeIdenType) == Just True
+        maybeLeftParen = S.lookup 2 tokens
+        isLeftParen = (tokenType <$> maybeLeftParen) == Just LEFT_PAREN
+        rightParenIndex = S.findIndexL (tokenIsType RIGHT_PAREN) (S.drop 3 tokens)
+        isRightParen = isJust rightParenIndex
+        paramTokens = S.drop 3 (S.takeWhileL (not . tokenIsType RIGHT_PAREN) tokens)
+        params = handleBuildParams paramTokens (PARAMETERS S.empty paramTokens)
+        stmtRest = S.drop 1 (S.dropWhileL (not . tokenIsType RIGHT_PAREN) tokens)
+        newPMF = createDeclaration (updateTokens stmtRest meta)
+        dec = declaration newPMF
+        funRest = tokensLeft newPMF
+        stmt = getStmtFromDec dec
+        (err, rest) = synchronize tokens
+        
+handleBuildParams :: S.Seq Token -> PARAMETERS -> PARAMETERS
+handleBuildParams tokens (PARAMETERS idens paramTokens)
+ | S.null tokens = PARAMETERS idens tokens
+ | S.null idenTokens = INVALID_PARAMS "Empty parameter" paramTokens
+ | not isIden = INVALID_PARAMS "Parameters can only be identifiers" paramTokens
+ | otherwise = handleBuildParams rest (PARAMETERS (idens S.|> newIden) paramTokens)
+ where idenTokens = S.takeWhileL (not . tokenIsType COMMA) tokens
+       maybeIden = tokenType (S.index idenTokens 0)
+       isIden = ParseExpressions.isIdentifier maybeIden
+       newIden = DEC_VAR (PARAM_DEC (tokenType (S.index idenTokens 0)) idenTokens PARAM)
+       rest = S.drop (S.length idenTokens+1) tokens
+
+handleBlock :: ParserMeta -> ParserMeta
+handleBlock meta
+  | isClosed = updateDecAndTokens (DEC_STMT (BLOCK_STMT (createDeclarations (updateTokens innerDecTokens meta) S.empty))) right meta
+  | otherwise = updateDecAndTokens (PARSE_ERROR "Block is not closed" tokens) right meta
+  where tokens = tokensLeft meta
+        index = findMatchingBraceIndex tokens
+        isClosed = isJust index
+        (left, right) = if isJust index then S.splitAt (fromJust index+1) tokens else synchronize tokens
+        innerDecTokens = S.drop 1 (S.take (fromJust index) left)
+
+```
+
+
+Itt is hasonló a logika, a "binary" operátor nyelvi elemeit próbálom darabjaiban mintailleszteni, majd pedig a benne operandusokat feldolgozni, miután feldolgoztam, létre hozom a "binary" operátort
+- Itt ami érdekesebb, az maga a generalizálása a logikának, mivel 5-ször végeztem el majdnem teljesen ugyanazt a műveletet, így kihoztam a közös logikát egy függvénybe, és meghívtam a megfelelő
+- Ami itt nehezebben látható és meggondolandó, hogy ez egy `Expression`, mivel egy `Expression` nem lehet végtelen hosszú, és mindig egy véges deklaráción belül helyezkedik el, amit lezár egy pontos vessző.
+- Vegyük a `2+3*4 > 15 > 4+2;` kifejezést
+- Precedenciák: 15, 4, 3*, 2+, >
+- Először az `createLogic` (`and`,`or`), utána a `createEquality` (`==`), majd a `createComparison`(`>`-`<`), `createTerm`(`+`,`-`),createFactor(`*`-`/`)
+- Először lefut az `createLogic`, nincs benne a sajátja, így meghívja a nextPrec-et, ami a `createEquality` és mivel az sincs benne, így az meghívja a nextPrec-et, `createComparison`.
+- Ez megtalálja az első jelet, ami hozzá tartozik, így felbontja a kifejezést `2+3*4` és `15 > 4+2` műveletre az `>` operáció mentén. Az első részre mivel tudjuk, hogy csak magasabb precedenciájú lehet benne, ezért meghívja a `nextPrec` függvényt, ami a `createTerm` lesz ebben az esetben.
+- Majd a meghívja a `thisPrec`-et pedig a második - a maradék, mivel több is lehet - részre, így elértük, azt, a bal asszociatív a művelet
+- Igazából a második rész is hasonlóan fut, mint az egész, csak itt a művelet már csak `15 > 4+2`, így bontja `15`-re és `4+2`-re, és folytatódik hasnlóan
+- Folytassuk a `createTerm`-mel, az megkapta a `2+3*4` kifejezést, bontjuk `2`-re és `3*4`-re, és itt is az elsőről tudjuk, hogy magasabb rendű, ezért nextPrec-cel (`createFactor`-ral) meghívjuk, majd pedig a második részre - `3*4` - meghívjuk a thisPrec-et (`createTerm`-et) és abban nem találunk, összeadás vagy kivonást, meghívjuk rá a következőt precedenciájút.
+- Igazából ez a Recursive Descent logika lényege, ami ezeken a kisebb nyelvi elemeken nagyon jól működik a magasabb nyelvi elemekre már nehézkessé válik (legalábbis, úgy, ahogy én írtam).
+
+- És itt a hasonlóan rossz megoldásom a argumentumok kezelése, ami tükrözi a paraméter kezelést
+
+
+
+
+```haskell
+createBinaryExpressions :: M.Map TokenType OPERATOR -> (S.Seq Token -> (EXPRESSION, S.Seq Token)) -> (S.Seq Token -> (EXPRESSION, S.Seq Token)) -> S.Seq Token -> (EXPRESSION, S.Seq Token)
+createBinaryExpressions tokenExpMap thisPrec nextPrec tokens
+  | S.null firstRest || isNothing maybeOp = (firstExpr, firstRest)
+  | otherwise = ((EXP_BINARY (BIN firstExpr op secondExpr) tokens), secondRest)
+  where (firstExpr, firstRest) = nextPrec tokens
+        maybeOp = M.lookup (tokenType $ S.index firstRest 0) tokenExpMap
+        op = fromJust maybeOp
+        (secondExpr, secondRest) = thisPrec (S.drop 1 firstRest)
+
+createLogic :: S.Seq Token -> (EXPRESSION, S.Seq Token)
+createLogic = createBinaryExpressions (M.fromList [(TokenHelper.AND, AST.AND), 
+                                                   (TokenHelper.OR, AST.OR)]) createLogic createEquality
+
+createEquality :: S.Seq Token -> (EXPRESSION, S.Seq Token)
+createEquality = createBinaryExpressions (M.fromList [(TokenHelper.EQUAL_EQUAL, AST.EQUAL_EQUAL), 
+                                                      (TokenHelper.BANG_EQUAL, AST.BANG_EQUAL)]) createEquality createComparison
+
+-- Should create a PARSE_WARNING type, when arguments are more than 255
+buildArgs :: S.Seq Token -> S.Seq EXPRESSION -> ARGUMENTS
+buildArgs tokens exprs
+ | S.null tokens = ARGS exprs
+ | S.null exprTokens = INVALID_ARGS "Empty argument" tokens
+ | otherwise = buildArgs rest (exprs S.|> newExpr)
+ where exprTokens = S.takeWhileL (not . tokenIsType COMMA) tokens
+       newExpr = createExpression exprTokens
+       rest = S.drop (S.length exprTokens+1) tokens
+
+```
+### Második megoldás
+
+#### Alaptípusok
+
+##### AST
+Hasonló felépítés mint az előzőnél, de itt külön választottam a Rezolválás előtti és utáni adattípusokat
+Itt nem sikerült dönteni teljes szétválasztás és összeolvasztás között, szóval, van ami együtt van (Rezolválás előtti és utáni), de valamelyik meg külön
+- A függvények deklarációnál és a változó deklarációnál jól látható a dilemma, míg a függvényeknél nem volt probléma, hogy együtt kezeljem a kettőt, a változóknál, már zavaró volt a sok különféle, rezolvált és nem rezolvált változó.
+- Itt fontos, hogy a parser nem végzi el a besorolást és id adást, (vagyis az előző megoldásban félig-meddig volt ott megoldva), hanem a rezolver fogja ezeket kezelni.
+- Látható, hogy jobban elkülönül a függvény scope-ban deklarált változó (`R_` előjel) és a nem függvény scope-ban (`RC_`) deklarált változó.
+- Hasonlóan van a `R_` mint az előző, esetben. Kap egy ID-t amivel, majd könnyedén lehet a Evalban címezi, és frissíteni az értékét. Ezt a rezolverben hozom létre, és adom át az Evalnak. 
+
+- Ami új az a `Chain expression`, ami gyakorlatilag a "dot" operátor, hogy könnyen el lehessen érni különböző osztály példányain belül az értékeket. 
+  - `this`, `super`, függvény hívás (ami egy példányosít egy osztályt) vagy a példány azonosítója (megint csak rezolvált verzók is vannak itt) lehet a kezdő érték.
+  - a láncon belül lehet metódus hívás vagy attribútum lekérés 
+- A `CALL` felépítése, pedig nem egy argumentum listák, listája, hanem függvény hívások listája. Theát `függvény[(a,b)][(c,d)]` -> `((függvény(a,b))(c,d))`
+- Az előző megoldáshoz képest megszűntek az operációk, és helyette új típusokat hoztam létre. Ezt így másodjára jobban átláthatóbbnak látom.
+- Ami itt érdekes, az, hogy még nem implementáltam a chain deklarációt, sem parser, sem típus szintjén. Ami igazából egy "Quality of Life" változtatás lenne.
+
+
+```haskell
+newtype PROGRAM = PROG [DECLARATION]
+instance Show PROGRAM where
+  show (PROG x) = show x
+
+data DECLARATION = DEC_STMT STATEMENT | DEC_VAR VARIABLE_DECLARATION | R_DEC_VAR RESOLVED_VARIABLE_DECLARATION | DEC_FUNC FUNCTION_DECLARATION | DEC_CLASS CLASS_DECLARATION | R_DEC_CLASS RESOLVED_CLASS_DECLARATION | EMPTY_DEC deriving Eq
+
+type IDENTIFIER = TextType
+type PARAMETER = TextType
+
+-- VAR_DEC_DEF: var a = 5;
+-- VAR_DEC: var a;
+-- VAR_DEF: a = 5;
+-- PARAM: fun func(a){}
+-- CLASS_VAR_DEF: A.a = 5; (A is instance of class)
+-- THIS_VAR_DEF: this.a = 5;
+-- IMPROVE: It does not support smth like -> A().bClass.name = 5; , but you can do -> var a = A().bClass; a.name = 5; 
+data VARIABLE_DECLARATION = VAR_DEC_DEF IDENTIFIER EXPRESSION
+                          | VAR_DEC IDENTIFIER
+                          | VAR_DEF IDENTIFIER EXPRESSION
+                          | PARAM IDENTIFIER
+                          | CLASS_VAR_DEF IDENTIFIER IDENTIFIER EXPRESSION
+                          | THIS_VAR_DEF IDENTIFIER EXPRESSION
+                          deriving Eq
+
+-- same as VARIABLE_DECLARATION, but it is resolveed
+-- R_ -> it is resolved with an index
+-- RC_ -> it is resolved in closure
+data RESOLVED_VARIABLE_DECLARATION = R_VAR_DEC_DEF IDENTIFIER EXPRESSION ID 
+                                   | R_VAR_DEC IDENTIFIER ID 
+                                   | R_VAR_DEF IDENTIFIER EXPRESSION ID
+                                   | R_CLASS_VAR_DEF IDENTIFIER IDENTIFIER EXPRESSION ID
+                                   | RC_THIS_VAR_DEF IDENTIFIER EXPRESSION
+                                   | RC_VAR_DEC_DEF IDENTIFIER EXPRESSION
+                                   | RC_VAR_DEC IDENTIFIER
+                                   | RC_VAR_DEF IDENTIFIER EXPRESSION
+                                   | RC_CLASS_VAR_DEF IDENTIFIER IDENTIFIER EXPRESSION
+                                   deriving Eq
+
+
+-- FUNC_DEC: fun func(a,b){...} -> func is IDENTIFIER, a,b is [DECLARATION], function body is STATEMENT (and the parser only lets block statements)
+-- R_FUNC_DEC: same as FUNC_DEC, but it is resolved and has an id
+-- RC_FUNC_DEC: same as FUNC_DEC, but it is resolved, and in closure
+-- METHOD: in class: func(a,b){...}
+-- NATIVE_FUNC: Used to create AST nodes of native functions
+-- R_ -> it is resolved with an index
+-- RC_ -> it is resolved in closure
+data FUNCTION_DECLARATION = FUNC_DEC IDENTIFIER [DECLARATION] STATEMENT
+                          | R_FUNC_DEC IDENTIFIER [DECLARATION] STATEMENT ID
+                          | RC_FUNC_DEC IDENTIFIER [DECLARATION] STATEMENT
+                          | METHOD_DEC IDENTIFIER [DECLARATION] STATEMENT
+                          | NATIVE_FUNC IDENTIFIER [DECLARATION] ID
+                          deriving Eq
+
+
+-- CALL: func(5,6+1);
+-- R_CALL: call resolved as indexed
+-- RC_CALL: call resolved as closure
+-- CALL_MULTI: recursive type: func1(1,2)(3,4)(5,6) -> CALL_MULTI (CALL_MULTI (CALL func1 [1,2]) [3,4]) [5,6] from the parser 
+data CALL = CALL IDENTIFIER [ARGUMENT] | R_CALL IDENTIFIER [ARGUMENT] ID | RC_CALL IDENTIFIER [ARGUMENT] | CALL_MULTI CALL [ARGUMENT] deriving Eq
+instance Show CALL where
+  show (CALL lit args) = mconcat [show lit, "(", show args, ")"]
+  show (R_CALL lit args id) = mconcat [show lit, "(", show args, ")", " ", show id]
+  show (RC_CALL lit args) = mconcat [show lit, "(", show args, ")"]
+  show (CALL_MULTI call args) = mconcat [ show call, "(", show args, ")"]
+  
+-- CHAIN data structure: list but the first and last element CAN be IDENTIFIERs, and this and super can only be first 
+-- a().b().c()
+-- this.a
+-- this.b()
+-- super.a()
+-- A().bClass.name;
+-- Not all calls and identifiers are resolved, those in the tail if the chain are not resolved, they will be handle in eval (they will use the result of the chain link before them)
+data CHAIN_LINK = LINK_CALL CALL | LINK_IDENTIFIER IDENTIFIER | R_LINK_IDENTIFIER IDENTIFIER ID | RC_LINK_IDENTIFIER IDENTIFIER | LINK_THIS | LINK_SUPER deriving Eq
+instance Show CHAIN_LINK where
+  show (LINK_CALL x) = show x
+  show (LINK_IDENTIFIER x) = show x
+  show (R_LINK_IDENTIFIER x _) = show x
+  show (RC_LINK_IDENTIFIER x) = show x
+  show LINK_THIS = "this"
+  show LINK_SUPER = "super"
+
+newtype CHAIN = CHAIN [CHAIN_LINK] deriving Eq
+instance Show CHAIN where
+  show (CHAIN links) = mconcat $ reverse $ foldl (\y x -> mconcat [show x, "."] : y) [] links
+  
+  
+-- UNARY_NEGATE: logical negate: !true -> false
+-- UNARY_MINUS: numerical negate: -5
+data UNARY = UNARY_NEGATE EXPRESSION |
+             UNARY_MINUS EXPRESSION
+             deriving Eq
+instance Show UNARY where 
+  show (UNARY_NEGATE x) = mconcat ["!", show x]
+  show (UNARY_MINUS x) = mconcat ["-", show x]
+
+
+data BINARY = BIN_ADD EXPRESSION EXPRESSION |
+              BIN_SUB EXPRESSION EXPRESSION |
+              {-...-}
+              BIN_OR EXPRESSION EXPRESSION
+              deriving Eq
+
+-- <expression> ? <expression> : <expression>
+data TERNARY = TERNARY EXPRESSION EXPRESSION EXPRESSION deriving Eq
+instance Show TERNARY where 
+  show (TERNARY x y z) = mconcat [show x, show y, show z]
+```
+
+#### Parser
+
+##### A parser szabályok összessége: happyParser.y
+
+Happy-t használtam, ami egy yacc-, vagy bison-szerű megoldás, de haskellben írták, haskell modul fájlt generál a szabályokból, ami közvetlenül felhasználható a projetemben
+- Hasonlóan nem fogok mindent leírni, de a legfontosabb szeleteket bemutatom
+  - A komment írás happy-ben `%%  %%` jelek között történik
+1. rész
+   - Első részében, adhatunk meg a kapcsos zárójelek között Haskellben logikát és dependenciákat, amiket szeretnék, hogy használjon a generált fájl.
+   - module-ban, ekként a modulként szeretnénk ráhivatkozni
+   - Data.Char, néhány segéd művelethez
+   - AST, a típusok megadásához.
+   - Lexer átadjuk, lexer meghívása utána parser-t megtudjuk hívni
+
+2. rész
+- %name -> Itt megadjuk a mi legyen a parser függvény neve, amivel a szabályok által generált függvényt megtudjuk hívni
+- %tokentype -> Milyen típusként keresse a tokeneket
+- %error -> milyen függvény kezelje le az errort
+
+3. rész
+- Itt megadhatók a különböző asszociációk.
+- Minél magasabban van, annál kisebb precedenciája.
+- nonassoc, az igazából csak placehorder, hogy ha nem akarunk kifejezett asszociációt, de szeretnénk precedenciát.
+- `UN` pedig egy azonosító, amit áttudunk adni bizonyos műveleteknek
+  - itt azért lett új, mert a `-` már használva lett és így specifikusabban, meg lehet mondani, melyik műveletre melyik asszociáció és precedencia legyen érvényes.
+
+
+
+```happy
+{
+module Generated.HappyParser where
+
+import Data.Char
+import AST
+import Lexer as L
+}
+
+%name parser
+%tokentype { Token }
+%error { parseError }
+
+%right '='
+%nonassoc '?' ':'
+%left 'and' 'or'
+%left '==' '!='
+%left '>' '<' '<=' '>='
+%left '+' '-'
+%left '*' '/'
+%right UN
+%nonassoc call
+```
+4. rész
+- Tokenek deklarációja az végtelenül egyszerű
+```happy
+
+%token
+      NUMBER          { L.NUMBER $$ }
+      STRING          { L.STRING $$ }
+      IDENTIFIER      { L.IDENTIFIER $$ }
+      '='             { L.EQUAL }
+      '+'             { L.PLUS }
+      '-'             { L.MINUS }
+      '*'             { L.STAR }
+      %% ... %%
+```
+
+5. rész
+- Szabályok definiálása
+  - Hasonló a BCNF (??) -hez és kiválóan dokumentálja a parser logikáját
+  - Amit fontos megjegyezni ebben, hogy a haskelles típusokat itt hozzuk létre, és a `${num}`-mal hivatkozunk arra az elemre, amit használni, akarunk a tokenizált kifejezésekből.
+  - `reverse` függvényt gyakran használom, mivel haskell-es listáb mentem el a dolgokat és az akkor hatékony, ha fejére mentünk a listának (egysezeres lista)
+    - Lehetett volna szekvenciát használni, de nem láttam akkora előnyét (csak a reverse-t spóroltam volna meg vele.)
+```happy
+program        : declarations                 { PROG (reverse $1) }
+
+declarations   : declarations declaration     { $2 : $1 }
+               | {- empty -}                  { [] }
+
+declaration    : statement                               { DEC_STMT $1 }
+               | variable_declaration_assignment ';'     { DEC_VAR $1 }
+               | function_declaration                    { DEC_FUNC $1 }
+               | class_declaration                       { DEC_CLASS $1 }
+
+statement      : expression_statement              { $1 }
+               | print_statement                   { $1 }
+               | block_statement                   { $1 }
+               | conditional_statement             { $1 }
+               | while_statement                   { $1 }
+               | for_statement                     { $1 }
+               | return_statement                  { $1 }
+               | break_statement                   { $1 }
+               | continue_statement                { $1 }
+
+expression_statement  : expression ';'                    { EXPR_STMT $1 }
+print_statement       : 'print' expression ';'            { PRINT_STMT $2 }
+block_statement       : '{' declarations '}'              { BLOCK_STMT (reverse $2) }
+conditional_statement : 'if' '(' expression ')' statement                         { IF_STMT $3 $5}
+%% ... %%
+
+%% ... %%
+
+variable_declaration_assignment       : variable_declaration                 { $1 }
+                                      | variable_assignment                  { $1 }
+                                      | class_variable_assignment            { $1 }
+
+
+variable_declaration                  : 'var' IDENTIFIER '=' expression   { VAR_DEC_DEF $2 $4 }
+                                      | 'var' IDENTIFIER                  { VAR_DEC $2 }
+variable_assignment                   : IDENTIFIER '=' expression         { VAR_DEF $1 $3 }
+class_variable_assignment             : IDENTIFIER '.' IDENTIFIER '=' expression            { CLASS_VAR_DEF $1 $3 $5 }
+                                      | 'this' '.' IDENTIFIER '=' expression                { THIS_VAR_DEF $3 $5 }
+
+class_declaration          : 'class' IDENTIFIER '{' methods '}'   { CLASS_DEC $2 (map (DEC_FUNC) (reverse $4)) }
+                           | 'class' IDENTIFIER '<' IDENTIFIER '{' methods '}' { SUB_CLASS_DEC $2 $4 (map (DEC_FUNC) (reverse $6)) }
+methods                    : {- empty -}                          { [] }
+                           | methods method_declaration           { $2 : $1 }
+
+function_declaration       : 'fun' IDENTIFIER '(' parameters ')' block_statement     { FUNC_DEC $2 (reverse $4) $6 }
+                           | 'fun' IDENTIFIER '(' ')' block_statement                { FUNC_DEC $2 [] $5 }
+method_declaration         : IDENTIFIER '(' parameters ')' block_statement           { METHOD_DEC $1 (reverse $3) $5 }
+                           | IDENTIFIER '(' ')' block_statement                      { METHOD_DEC $1 [] $4 }
+
+parameters                 : parameters ',' IDENTIFIER            { (DEC_VAR (PARAM $3)) : $1 }
+                           | IDENTIFIER                           { [(DEC_VAR (PARAM $1))] }
+
+%%...%%
+
+expression     : literal        {EXP_LITERAL $1}
+               | unary          {EXP_UNARY $1}
+               | binary         {EXP_BINARY $1}
+               | ternary        {EXP_TERNARY $1}
+               | grouping       {EXP_GROUPING $1}
+               | function_call  {EXP_CALL $1}
+               | chain          {EXP_CHAIN $1}
+               | 'this'         {EXP_THIS}
+
+literal        : NUMBER         {AST.NUMBER $1}
+               | STRING         {AST.STRING $1}
+               | 'true'         {AST.TRUE}
+               | 'false'        {AST.FALSE}
+               | 'nil'          {AST.NIL}
+               | IDENTIFIER     {IDENTIFIER_REFERENCE $1}
+
+grouping       : '(' expression ')'              {GROUP $2}
+unary          : '-' expression %prec UN         {UNARY_MINUS $2}
+               | '!' expression %prec UN         {UNARY_NEGATE $2}
+binary         : expression '==' expression      {BIN_EQ $1 $3}
+               | expression '!=' expression      {BIN_NOT_EQ $1 $3}
+               | expression '+' expression       {BIN_ADD $1 $3}
+               %%...%%
+
+```
+
+6. rész
+- Igazából itt hívjuk meg a definiált parseError függvényt, ami le kezelné a hbákat, de sajnos nem jutottam el oda, hogy befejezzem.
+- És a függvény ami alapján tudunk, majd hivatkozni a projektemben, erre a logikára, a `happyParser`
+
+```happy
+{
+parseError :: [Token] -> a
+parseError tokens = error ("Parse error" ++ show tokens)
+
+
+happyParser = parser . lexer
+
+}
+```
+##### Generálás
+
+- `happy src/HappyParser.y -i -o src/Generated/HappyParser.hs`
+- Létrehozza a fájlt, amit a `Runner.hs`-nél behúztunk.
+- `-i` kapcsoló pedig létrehozza a `HappyParser.info`-t, amiben leírja, az összes hibát, többértelmű nyelvtant (dangling else), és a szabályok különböző kombinációját (???)
+
+
+### Eval
+
