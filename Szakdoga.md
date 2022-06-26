@@ -1348,6 +1348,30 @@ happyParser = parser . lexer
 
 ## Rezolver
 
+### Feladata
+
+- Deklarációnál ellenőrizni, hogy már deklarált-e a változó
+  - Elsőnél, bárhol, nincs shadowing
+  - Másodiknál pedig egy scope-on belül
+- Definicíónál ellenőrizni, hogy létezik-e már az a változó, amit definiálni akarunk
+- Függvény és Osztály deklarációk lekezelése
+- Ciklusok feldolgozása
+  - Második megoldásnál, egy közös `LOOP` típus létrehozás a `WHILE` és `FOR` loopokból
+- A kulcsszavak ellenőrzése
+  - `break` és `continue` cikluson belül
+  - `return` függvényen belül
+  - `this` osztályon belül
+  - `super` gyerekosztályon belül
+- Referenciák ellenőrzése
+  - Csak már létrehozott változókra legyen referencia
+  - Függvényhívások csak függvényeket és osztályokat (inicializálás) hívjanak
+- Szülő és gyerek osztály ne használja ugyanazt a nevet
+- Osztályoknak van `init` metódus, és a gyerek osztályok ebben meghívják a `super.init()` metódust
+
+#### Új elnevezés
+- Indexelt változó: nem függvény vagy osztályon belül deklarált változó
+- closure változó: függvényen vagy osztályon belül deklarált változó
+
 ### Első Megoldás
 
 #### Alaptípusok
@@ -1368,8 +1392,9 @@ Menjünk végig mi mire való:
   - Metódusban elfogadott a `this`, `super`, `return`
   - Függvényben csak `return`, más blokkokhoz képest
   - Ha nem vagyunk függvényben, akkor nem fogadjuk el ezen kulcsszavak egyiké sem.
-- `resolverEnv`: ez pedig a jelenleg érvényben lévő scope-ok halmaza, ebben tudjuk megtalálni a blokkokon belül mentett lokális változókat
-  - Ennek segítségével nézzük meg, hogy a blokkban mentett változóknál van-e duplikáció, vagy értelmes-e a referecia 
+- `resolverEnv`: ez pedig a jelenleg érvényben lévő scope-ok halmaza, ebben tudjuk megtalálni a blokkokon belül mentett indexelt változókat
+  - Ennek segítségével nézzük meg, hogy a blokkban mentett változóknál van-e duplikáció, vagy értelmes-e a referecia
+  - És az id-t ennek segítségével állítjuk be
 - `idenSequence`: Szerintem ez csak benne maradt, majd törlöm
 - `newDeclarations`: a feldolgozott deklarációk
   - A stack alján: Globális scope, az összes eddig feldolgozott, mivel amikor végeztünk a feldolgozott blokkok, ide kerülnek
@@ -1625,7 +1650,104 @@ addBinaryExpr (op, tokens) meta = return meta{newExpressions=newExprs}
 
 ### Második megoldás
 
+Fontos különbség az előző megoldáshoz képest, hogy itt végezzük az id osztást a változóknak, nem pedig a parserben
+
 #### Alaptípusok
+
+##### AST
 Ezekről volt szó a parsernél.
 
+##### ResolverMeta
+
+Nézzük meg mire valók a változók:
+- `resolverEnv`: egy hasító tábla lista, amiben az indexelt változókat tároljuk
+  - Egy változó definiálásánal azt nézzük, hogy van-e ugyanolyan nevű a jelenlegi környezetben. Ha hibánk van, akkor nem mentjük az id-jával
+  - Egy indexelt változónál felmegyünk a resolver környezetekben, és megkeressük a legközelebbi változót és az lesz az id-ja a referenciának
+  - Ez egy megoldás az alábbi hibára: `{var a = 5;} {a = 4;} print a;` Minden blokkra új blokk is készül, és ha rezolváltuk, akkor töröljük, ha csak simán a `variableVector` lenne, akkor az `a` az négy lenne.
+  - `currentVariableId`, ez lesz az indexelt változó id-ja, ezt a `variableVector`-ban és a `declarationVector`-ban használjuk
+  - `variableVector`, a változókat mentjük el ebben, egy üres `EVAL` típussal, hogy az eval logikában tudjuk majd gyorsan megtalálni az értékeket
+  - `declarationVector`, a változók deklarációt mentjük el az id-jukkal együtt, azért, hogy tudjuk ellenőrizni, hogy hívható vagy sem a deklaráció
+  - `declarations`, deklarációk listája
+  - `resolverErrors`, összes hiba gyűjteménye
+  - `newExpr`, ez egy segéd változó, hogy bonyolultabb kifejezéseket feltudjunk dolgozni.
+    - hasonló az elgondolás az előzőhöz képest, hasonlóan egy faként tekintek a kifejezésekre, csak itt nem elmentem egy listába, hanem csak magát mentem el, és kiveszem, amikor szükségem van rá, és az újat létrehozom az elmentett értékekből
+    - Utólag a korábbi megoldásomat szebbnek ítélem (!check! -> Lehet, hogy át is írom arra, bár ott lehetnek sorrendiségi problémák -> (Nem hogyha sequence-szel van megoldva))
+  - `newStmt`
+    - Hasonlóan faszerkezetűek a állítások, és hasonló működés mint a kifejezéseknél
+  - `isInFunction`, függvény testben vagyunk-e, ha igen, akkor `return` kulcsszót elfogadjuk
+  - `isInClass`, osztály testben vagyunk-e, ha igen, akkor a `this` kulcsszót elfogadjuk
+  - `isInSubClass`, osztály testben vagyunk-e, ha igen, akkor a `super` kulcsszót elfogadjuk. Csak `isInClass` attribútummal.
+  - `isInLoop`, ciklusban vagyunk-e, elfogadjuk-e a `break` és `continue` kulcssazavakat
+  - `closure`, closure változók deklarációja, arra való, hogy a deklarációt lmentjük, és tudjuk ellenőrizni, hogy hívható-e a deklaráció, vagy sem.
+    - 
+```haskell
+type ResolverBlockEnvironment = (HT.BasicHashTable T.Text Int)
+type ResolverEnvironment = [ResolverBlockEnvironment]
+type ResolverClosure = [HT.BasicHashTable TextType DECLARATION]
+
+data ResolverMeta = ResolverMeta {
+  -- A list of map to check indexed variables
+  --   - for a variable declaration we will check if we have any with the same in the current envieroment -> if we have error, if we don't save it with the id (currentVariableId) 
+  --   - for a indexed reference, we will go up the resolver env find the closest variable and use its id to be id of the reference
+  -- this is a solution for the following problem {var a = 5;} {a = 4;} print a; -> for every new block a new block env is created , and if a block is resolved, then it is deleted
+  resolverEnv :: ResolverEnvironment
+  -- This property will be the indexed variable's id, and the variable's index in the variableVector and declarationVector
+  , currentVariableId :: Int
+  -- An array where we save a new empty eval for an new variable declaration
+  -- In the eval, we update them (so a "var a = 4 (ID 4)" is saved in the resolver as a EMPTY_EVAL, but in the evaluation it will updated to "EVAL_NUMBER 4")
+  , variableVector :: V.Vector EVAL
+  -- An array where we save the new indexed variables' declaration, for checking types (if callable or not) when doing resolution
+  , declarationVector :: V.Vector DECLARATION
+  -- The current scope's declaration or the global declarations depending what scope are we in.
+  , declarations :: [DECLARATION]
+  -- All the errors are collected here
+  , resolverErrors :: [TextType]
+  -- This is a helper for resolving more complex expression 
+  -- (expressions are a tree -> from the "root expr" we call the child expr and we save it here, the more complex expr take the resolved, and puts themselves in this property)
+  , newExpr :: EXPRESSION
+  -- Helper for resolving for complex statement
+  -- Statements are trees similar to expression, root stmt calls the child stmt, save it here, the more complex stmt takes the child stmt from here, and puts themselves here
+  , newStmt :: STATEMENT
+  -- Is in function: helps to check if we need to check the indexed variables or the closure variables, and to check if we call the "return" properly
+  -- If true check in closure and returns are valid, if not check in indexed variables and returns are not valid
+  , isInFunction :: Bool
+    -- Is in function: helps to check if we need to check the indexed variables or the closure variables, and to check if we call the "this" properly
+    -- If true check in closure and "this" are valid, if not check in indexed variables and "this" are not valid
+  , isInClass :: Bool
+  -- Only used with "isInClass", but if this is true "super" is valid
+  , isInSubClass :: Bool
+  -- To check if "break" and "continue" are valid
+  , isInLoop :: Bool
+  -- a list of hashtables where we save closure variables, and in the reference resolution checking their types (callable or not)
+  , closure :: ResolverClosure
+  -- A helper for self recursion.
+  -- we don't save the resolved declaration only after we did the body declarations, 
+  -- so we save this property and know when it is referenced it should not be looked up, but checked with this
+  , currentFunctionName :: TextType
+} deriving Show
+
+createNewMeta :: IO ResolverMeta
+createNewMeta = do
+  resEnv <- createNewResEnv
+  return ResolverMeta {
+    resolverEnv=resEnv
+  , currentVariableId=1
+  , variableVector=createGlobalVector
+  , declarationVector=createGlobalDeclaration
+  , declarations=[]
+  , resolverErrors=[]
+  , newExpr = EMPTY_EXP
+  , newStmt = EMPTY_STMT
+  , isInFunction = False
+  , isInClass = False
+  , isInSubClass = False
+  , isInLoop = False
+  , closure = []
+  , currentFunctionName = ""
+  }
+ 
+```
+
 #### Rezolválás logika
+
+
