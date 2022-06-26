@@ -1346,5 +1346,286 @@ happyParser = parser . lexer
 - `-i` kapcsoló pedig létrehozza a `HappyParser.info`-t, amiben leírja, az összes hibát, többértelmű nyelvtant (dangling else), és a szabályok különböző kombinációját (???)
 
 
-### Eval
+## Rezolver
 
+### Első Megoldás
+
+#### Alaptípusok
+
+##### AST 
+Itt az Parsernél látott AST-t fogjuk használni, itt nem részletezném
+
+##### ResolverMeta
+
+Menjünk végig mi mire való:
+- `varIden`: ez egy segéd változó, ami segít abban, hogy feldolgozzuk a következő deklarációkat: `var a = a + 1;`
+  - Mivel előbb rekurzív hívásokkal a darabjaira bontjuk, és azon végezzük a feldolgozásokat.
+  - `var a`-t előbb felvesszük és hozzáadjuk a ResolverEnvironmenthez (a scope amiben vagyunk)
+  - Utána feldolgozzuk az `a+1` kifejezést, mivel felvettük az `a` változót már így kell valami alapján, ami alapján tudjuk, hogy ez még nincs definiálva
+  - (Rájöttem, hogy fordítva és lehetett volna hívni, előbb a kifejezést és utána a változó deklarációt. És így felesleges a varIden)
+- `rErrors`: Ebben gyűjtjük az az összes resolver által kidobott hibát
+- `funcType`: Jelöli milyen függvény típusban vagyunk jelenleg. 
+  - Metódusban elfogadott a `this`, `super`, `return`
+  - Függvényben csak `return`, más blokkokhoz képest
+  - Ha nem vagyunk függvényben, akkor nem fogadjuk el ezen kulcsszavak egyiké sem.
+- `resolverEnv`: ez pedig a jelenleg érvényben lévő scope-ok halmaza, ebben tudjuk megtalálni a blokkokon belül mentett lokális változókat
+  - Ennek segítségével nézzük meg, hogy a blokkban mentett változóknál van-e duplikáció, vagy értelmes-e a referecia 
+- `idenSequence`: Szerintem ez csak benne maradt, majd törlöm
+- `newDeclarations`: a feldolgozott deklarációk
+  - A stack alján: Globális scope, az összes eddig feldolgozott, mivel amikor végeztünk a feldolgozott blokkok, ide kerülnek
+  - A stack tetején: Lokális scope-ban pedig ebben a scope-ban lévő feldolgozott deklarációk
+- `newExpressions`: Ebben tárolom ez éppen feldolgozott kifejezéseket
+  - Először elmentem a kisebbeket, majd pedig a nagyobbhoz felhasználom ezeket. Kiugrasztom a veremből és összerakom belőle a nagyobbat.
+  - Lásd lentebb
+- `variableVector`: Ebben gyűjtjük a id-zott változókat, tehát mindent, ami nem függvényen, vagy osztályon belül van.
+  - Ebben a verzióban nem engedek meg változó shadowingot, ami egyszerűsített a definíciókat, és elég volt csak az id-kkal dolgozni
+- `globalResolverTable`: (Ez is csak benne maradt, mivel mindent, `variableVector`-ban, vagy function scope hashtable-ben tárolunk)
+  
+
+```haskell
+data ResolverMeta = ResolverMeta {
+   varIden :: Maybe T.Text
+  , rErrors :: S.Seq ResolverError
+  , funcType :: FunctionTypes
+  , resolverEnv :: ResolverEnvironment
+  , idenSequence :: S.Seq T.Text
+  , newDeclarations :: Stack (S.Seq DECLARATION)
+  , newExpressions :: Stack EXPRESSION
+  , variableVector :: V.Vector EVAL
+  , globalResolverTable :: GlobalResolverTable
+  } deriving (Show)
+  
+createResolverMeta :: IO ResolverMeta
+createResolverMeta = do
+  resEnv <- createNewResEnv
+  globTable <- createGlobalResolverTable
+  return ResolverMeta {
+    varIden=Nothing,
+    rErrors=S.empty,
+    funcType=NONE,
+    resolverEnv=resEnv,
+    idenSequence=S.empty,
+    newDeclarations= push S.empty createStack,
+    newExpressions=createStack,
+    variableVector=V.empty,
+    globalResolverTable=globTable
+    }
+
+
+
+data ResolverError = RESOLVER_ERROR T.Text (S.Seq TH.Token) deriving Show
+
+data FunctionTypes = NONE | FUNCTION | METHOD deriving (Show, Eq)
+
+type ResolverBlockEnvironment = HT.BasicHashTable T.Text ID
+
+type ResolverEnvironment = Stack ResolverBlockEnvironment
+
+
+```
+
+#### Rezolválás logika
+
+- Itt már kicsit több tapasztalattal indultam neki, és látszik, hogy egy jobban olvasható kód lett a végeredmény
+- Itt maga a programnak egy feldolgozásának részlete látható.
+- Sok helyen `resolve` vagy `resolveExpression` függvény látható, itt kihasználtam a haskell pattern matching funkcionalitását 
+
+##### Blokk rezolválás
+- Menjünk egy blokk feldolgozásán
+  1. `addBlockToMeta`
+     - Az `addNewBlockToResEnv` függvény igazából létrehoz egy hastable-t, amit hozzáadunk a `resEnv`-hez
+     - Hozzáadunk egy a `newDeclarations`-höz egy új `Sequence`-t, amiben a eltároljuk majd a feldolgozott deklarációkat
+  2. `resolveMulti`: feldolgozza a deklarációkat
+  3. `addBlockDecToMeta`: Miután feldolgoztuk a blokkban lévő deklarációkat elmentjük a blokkot, abban a scope-ban, amivel definiáltuk (alatta lévő hashtable-ben a `resEnv`-ben) (!Check! -> Szerintem nem teljesen azt csinálja a függvény, amit eredetileg szerettem volna, check `handleBlockStatementSave`)
+     - A `newDeclarations` veremből kipattintjuk a blokkban mentett deklarációkat. 
+     - Létrehozzuk a Blokk deklarációt a blokkban mentett deklarációkból
+     - Módosítjuk a `newDeclarations` legfelső elemét a létrehozott blokk deklarációval (abban hozták létre)
+  4. Töröljük a blokk környzetét a `resEnv`-ből
+     
+```haskell
+-- Resolver.hs
+resolveProgram :: PROGRAM -> IO ResolverMeta
+resolveProgram (PROG x) = createResolverMeta >>= resolveMulti x
+
+resolveMulti ::  S.Seq DECLARATION -> ResolverMeta -> IO ResolverMeta
+resolveMulti decs meta
+  | S.null decs = return meta
+  | otherwise =  resolve dec meta >>= resolveMulti (S.drop 1 decs)
+  where dec = S.index decs 0
+
+resolve :: DECLARATION -> ResolverMeta -> IO ResolverMeta
+resolve (DEC_STMT (BLOCK_STMT decs)) meta = addBlockToMeta meta >>= resolveMulti decs >>= addBlockDecToMeta >>= deleteBlockFromMeta
+{-...-}
+```
+
+```haskell
+-- ResolverTypes.hs
+import qualified Data.HashTable.IO as HT
+
+addBlockToMeta :: ResolverMeta -> IO ResolverMeta
+addBlockToMeta meta = do
+  newEnv <- addNewBlockToResEnv (resolverEnv meta)
+  return meta{resolverEnv=newEnv, newDeclarations=(push S.empty (newDeclarations meta))}
+
+addBlockDecToMeta :: ResolverMeta -> IO ResolverMeta
+addBlockDecToMeta meta = do
+  let (newBlockStmt, last, delDecs) = handleBlockStatementSave meta
+  let lastUpdated = last S.|> DEC_STMT newBlockStmt
+  return meta{newDeclarations= push lastUpdated delDecs}
+
+deleteBlockFromMeta :: ResolverMeta -> IO ResolverMeta
+deleteBlockFromMeta meta = return meta{resolverEnv=(deleteBlockFromResEnv (resolverEnv meta))}
+
+
+handleBlockStatementSave :: ResolverMeta -> (STATEMENT, S.Seq DECLARATION, Stack (S.Seq DECLARATION))
+handleBlockStatementSave meta = (BLOCK_STMT currentBlockDecs, last, delDecs)
+  where (currentBlockDecs, delDecs) = pop (newDeclarations meta)
+        last = peek delDecs
+
+addNewBlockToResEnv :: ResolverEnvironment -> IO ResolverEnvironment
+addNewBlockToResEnv resEnv = do
+  block <- createResolverBlockEnvironment
+  return (push block resEnv)
+
+deleteBlockFromResEnv :: ResolverEnvironment -> ResolverEnvironment
+deleteBlockFromResEnv resEnv = newResEnv
+  where (_,newResEnv) = pop resEnv 
+
+createResolverBlockEnvironment :: IO ResolverBlockEnvironment
+createResolverBlockEnvironment = HT.new
+```
+
+
+##### Függvény rezolválás
+Nézzünk egy függvény definíciót (!check! -> szerintem kell a `deleteBlockFromMeta` a  végéről)
+1. `checkHandleIfAlreadyAdded` egy általános függvény, ami megnézi létrehozták-e már a változót, ha igen hibát dob (ebben a verzióban még nem engedtem változó shadowing-ot)
+2. elmentjük a régi `funcType` a metáról
+3. `handleFunction` felépítése
+4. `updateBlockInResEnv` elmentjük a jelenlegi környezetben a változót.
+5. `addVariableToVector` elmentjük vektorban a változót
+6. `updateFunctionType` frissítjük a `funcType`-ot, függvény típusra, így ha return kulcsszó van a függvényben nem dobunk hibát, (ha rendeltetésszerűen használják).
+7. `addBlockToMeta` a függvény törzshöz hozzárendelünk egy resolverEnvironmentet
+8. `resolveParams` ezért kellett külön venni és nem csak felhasználtuk a blokk rezolver függvényt
+   - így a param feldolgozás a függvény testen belül van, így gyakorlatilag olyan, minthogyha ott lennének deklarálva
+   - Az érték adás majd amúgy is az Eval logikában lesz
+9. `resolveMulti` feldolgozzuk a függvény testet
+10. `addFunctionDecToMeta`, 
+    - kiugrasztjuk a függvény által mentett deklarációkat és új függvény deklaráció mentése a felette lévő scope-ba
+    - Függvény `resEnv` eltávolítása
+    - A régi függvény típus visszaállítása (lehetséges függvény deklarálása függvényen vagy metóduson belül)
+- 
+
+```haskell
+-- Resolver.hs
+{-...-}
+resolve  (DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) parameters (FUNC_STMT (BLOCK_STMT decs)) (LOCAL_ID id))) meta = checkHandleIfAlreadyAdded handleFunction S.empty iden meta 
+  where oldFuncType = funcType meta
+        handleFunction meta iden = updateBlockWithFunctionOrClassInMeta (LOCAL_ID id) iden meta >>= printFunc >>= addVariableToVector iden id >>= updateFunctionType FUNCTION >>= addBlockToMeta >>= resolveParams parameters >>= resolveMulti decs >>= addFunctionDecToMeta iden parameters (LOCAL_ID id) oldFuncType
+{-...-}
+
+resolveParams :: PARAMETERS -> ResolverMeta -> IO ResolverMeta
+resolveParams (PARAMETERS params tokens) meta
+  | S.null params = return meta
+  | otherwise = checkHandleIfAlreadyAdded (callResolveParams params) tokens iden meta
+  where param = S.index params 0
+        (DEC_VAR (PARAM_DEC (TH.IDENTIFIER iden) tokens pid)) = param
+        callResolveParams params meta iden = updateBlockInMeta pid iden meta >>= cleanVarMeta >>= resolveParams (PARAMETERS (S.drop 1 params) tokens)
+
+
+```
+```haskell
+-- ResolverTypes.hs
+updateBlockWithFunctionOrClassInMeta :: ID -> T.Text -> ResolverMeta -> IO ResolverMeta
+updateBlockWithFunctionOrClassInMeta id iden meta = do
+  newEnv <- updateBlockInResEnv iden id (resolverEnv meta)
+  return meta{resolverEnv=newEnv}
+
+updateBlockInResEnv :: T.Text -> ID ->  ResolverEnvironment -> IO ResolverEnvironment
+updateBlockInResEnv iden id resEnv  = do
+  let (last, delResEnv) = pop resEnv 
+  HT.insert last iden id
+  return (push last delResEnv)
+
+checkHandleIfAlreadyAdded :: (ResolverMeta -> T.Text -> IO ResolverMeta) -> S.Seq TH.Token -> T.Text -> ResolverMeta -> IO ResolverMeta
+checkHandleIfAlreadyAdded f tokens iden meta  = do
+   res <- checkIfVarAlreadyAdded meta iden
+   if res then do
+     addError (RESOLVER_ERROR "Variable already added in scope" tokens) meta
+   else f meta iden
+
+checkIfVarAlreadyAdded :: ResolverMeta -> T.Text -> IO Bool
+checkIfVarAlreadyAdded meta iden = isJust <$> getIdOfIden iden currentBlock
+  where currentBlock = peek resEnv
+        resEnv = resolverEnv meta
+
+getIdOfIden :: T.Text -> ResolverBlockEnvironment -> IO (Maybe ID)
+getIdOfIden iden resEnv = HT.lookup resEnv iden
+
+updateFunctionType :: FunctionTypes -> ResolverMeta -> IO ResolverMeta
+updateFunctionType fType meta = return meta{funcType=fType}
+```
+
+##### Kifejezés rezolválás
+- Ezek jóval egyszeűbb logika alapján mennek, mint az előzőek
+- `addSimpleExpression`, hozzáadja a jelenlegi egyszerű kifejezést a veremhez
+- Bináris kifejezés:
+  - Először a jobboldalt dolgozzuk fel, bekerül a verem aljára, majd pedig a baloldalit, az bekerül a verem tetejére
+  - Utána fogjuk az elemeket és kivesszük a veremből és új kifejezést hozunk létre belőle
+- Változó referencia:
+  - Megnézzük, hogy `var a = a + 1` jellegű kifejezésről van szó, ekkor hibát dobunk
+  - Ha pedig még nem deklarálták, akkor azért dobunk hibát
+  - Ha ezeken nem dob hibát elmentjük a verembe
+
+```haskell
+--Resolver.hs
+{-...-}
+resolve (DEC_STMT (EXPR_STMT x)) meta = resolveExpression x meta >>= addDecWithExprToMeta (DEC_STMT . EXPR_STMT)
+{-...-}
+
+resolveExpression :: EXPRESSION ->  ResolverMeta -> IO ResolverMeta
+{-...-}
+resolveExpression (EXP_BINARY (BIN left op right) tokens) meta = resolveExpression left meta >>= resolveExpression right >>= addBinaryExpr (op, tokens)
+{-...-}
+resolveExpression (EXP_LITERAL (IDENTIFIER iden tokens id)) meta = do
+  if checkIfResolverError meta iden then do
+    addError (RESOLVER_ERROR "Can't read local variable in its own initializer." tokens) meta
+  else do
+    maybeId <- findIdInVariables iden meta
+    if isNothing maybeId then do
+      addError (RESOLVER_ERROR "Variable is not declared yet." tokens) meta
+    else do
+      addSimpleExpr (EXP_LITERAL (IDENTIFIER iden tokens (fromJust maybeId))) meta
+{-...-}
+resolveExpression expr meta = addSimpleExpr expr meta
+```
+
+```haskell
+-- ResolverTypes
+{-...-}
+addError :: ResolverError -> ResolverMeta -> IO ResolverMeta
+addError error meta = return meta{rErrors=(rErrors meta S.|> error)}
+{-...-}
+addDecWithExprToMeta :: (EXPRESSION -> DECLARATION) -> ResolverMeta -> IO ResolverMeta
+addDecWithExprToMeta unFinishedDec meta = addDecToMeta (unFinishedDec expr) newMeta
+  where (expr, rest) = pop (newExpressions meta)
+        newMeta = meta{newExpressions=rest}
+{-...-}
+checkIfResolverError :: ResolverMeta -> T.Text -> Bool
+checkIfResolverError meta iden = Just iden == (varIden meta)
+{-...-}
+addSimpleExpr :: EXPRESSION -> ResolverMeta -> IO ResolverMeta
+addSimpleExpr expr meta = return meta{newExpressions=push expr (newExpressions meta)}
+{-...-}
+addBinaryExpr :: (OPERATOR, S.Seq TH.Token) -> ResolverMeta -> IO ResolverMeta
+addBinaryExpr (op, tokens) meta = return meta{newExpressions=newExprs}
+  where (right, fRest) = pop (newExpressions meta)
+        (left, sRest) = pop fRest
+        newExprs = push (EXP_BINARY (BIN left op right) tokens) sRest
+```
+
+### Második megoldás
+
+#### Alaptípusok
+Ezekről volt szó a parsernél.
+
+#### Rezolválás logika
