@@ -1466,6 +1466,8 @@ type ResolverEnvironment = Stack ResolverBlockEnvironment
      - Létrehozzuk a Blokk deklarációt a blokkban mentett deklarációkból
      - Módosítjuk a `newDeclarations` legfelső elemét a létrehozott blokk deklarációval (abban hozták létre)
   4. Töröljük a blokk környzetét a `resEnv`-ből
+  
+Amit nem kedvelek ebben a megoldásban, az az hogy oda-vissza alakítgatom a deklaráiókat és az állításokat. Ezt külön állításra specializált függvényekkel kellett volna meg oldanom, amit sikerült is a második megoldásban.
      
 ```haskell
 -- Resolver.hs
@@ -1749,5 +1751,171 @@ createNewMeta = do
 ```
 
 #### Rezolválás logika
+
+Külön logikákat hoztam létre a különböző változatokra
+
+```haskell
+resolveProgram :: PROGRAM -> IO ResolverMeta
+resolveProgram (PROG decs) = createNewMeta >>= resolveDeclarations decs >>= reverseDeclarationsAndErrors
+
+resolveDeclarations :: [DECLARATION] -> ResolverMeta -> IO ResolverMeta
+resolveDeclarations [] meta = return meta
+resolveDeclarations (x:xs) meta = resolveDeclaration x meta >>= resolveDeclarations xs
+
+resolveDeclaration :: DECLARATION -> ResolverMeta -> IO ResolverMeta 
+resolveDeclaration (DEC_VAR x) meta = resolveVarDeclaration x meta
+resolveDeclaration (DEC_CLASS x) meta = resolveClassDeclaration x meta
+resolveDeclaration (DEC_STMT stmt) meta = resolveDecStatement stmt meta
+resolveDeclaration (DEC_FUNC x) meta = resolveFunctionDeclaration x meta
+resolveDeclaration EMPTY_DEC meta = return meta
+resolveDeclaration x meta = return meta{declarations=x:declarations meta}
+```
+
+##### Blokk rezolválása
+
+- Ebben a megoldásban külön válik a deklaráció és állítás logika, így nem kell odavissza változtatgatni ezeket
+- Ezt problémának érzékeltem, az előző megoldásban, és itt javítottam 
+Menete:
+1. Deklarációk üresre állítása, annak ahol átadjuk azt a `addBlockToMeta`-nak
+2. `addBlockToMeta` új környezet hozzáadása a `resEnv`-hez
+3. Deklarációk feldolgozása
+4. Deklarációk és hibák megfordítása, mivel itt nem szekvenciát használtam, hanem a beépített láncolt listát. (!check! -> valószínű átírom Sequence-re, sokkal kényelmesebb megoldás)
+5. Kiszedjük a deklarációkat és elmentjük az elkészült állítást a `newStmt`-be
+6. Visszaállítjuk az eredeti `declarations`, kihasználjuk, hogy haskell funkcionális, és closure-ben lévő értéket használjuk
+6. Töröljük a blokk környezetét
+
+```haskell
+-- Resolver.hs
+resolveDecStatement :: STATEMENT -> ResolverMeta -> IO ResolverMeta
+resolveDecStatement stmt meta = resolveStatement stmt meta >>= buildDecStmt
+
+ 
+buildDecStmt :: ResolverMeta -> IO ResolverMeta
+buildDecStmt meta = return meta{declarations=DEC_STMT (newStmt meta):declarations meta, newStmt=EMPTY_STMT}
+ 
+{-...-}
+ 
+resolveStatement :: STATEMENT -> ResolverMeta -> IO ResolverMeta
+resolveStatement (BLOCK_STMT x) meta = resolveBlock x meta
+{-...-}
+
+-- Set the declarations to empty (this is where we will put the resolved block body declarations), 
+-- Add block to resEnv, resolve block body, reverse declarations
+-- Before returning, deleteBlock from resEnv, add the created block dec to the original declarations
+resolveBlock :: [DECLARATION] -> ResolverMeta -> IO ResolverMeta
+resolveBlock decs meta = do
+  newMeta <- addBlockToMeta meta{declarations=[]} >>= resolveDeclarations decs >>= reverseDeclarationsAndErrors
+  deleteBlockFromMeta (newMeta{newStmt=BLOCK_STMT (declarations newMeta), declarations=declarations meta})
+{-...-}
+
+```
+
+```haskell
+-- ResolverTypes.hs
+createResolverBlockEnvironment :: IO ResolverBlockEnvironment
+createResolverBlockEnvironment = HT.new
+
+-- Add a new block for the indexed variable checking
+addNewBlockToResEnv :: ResolverEnvironment -> IO ResolverEnvironment
+addNewBlockToResEnv resEnv = do
+  block <- createResolverBlockEnvironment
+  return (block:resEnv)
+
+{-...-}
+
+addBlockToMeta :: ResolverMeta -> IO ResolverMeta
+addBlockToMeta meta = do
+  newEnv <- addNewBlockToResEnv (resolverEnv meta)
+  return meta{resolverEnv=newEnv}  
+
+-- This is needed as we save the declarations and errors as a list, and the earliest is the last
+reverseDeclarationsAndErrors :: ResolverMeta -> IO ResolverMeta
+reverseDeclarationsAndErrors meta = return meta{declarations=reverse (declarations meta), resolverErrors=reverse (resolverErrors meta)} 
+```
+
+##### Függvény rezolválása
+
+1. Ellenőrizzük, hogy a változó nevet mentették-e már a scope-ban, ha nem, akkor mentsünk egy üres deklarációt, hogy megkapjuk az id-t
+   - És ezt később alakítjuk át a végső verzióra
+   - A `checkIfFunctionOrClassIsDefinedAndSaveEmpty` függvényben, a `isInFunctionOrClass` függvénnyel nézzük meg, hogy closure-ben, vagy pedig a indexelt változók között keressük-e az értéket 
+2. Elmentjük a `currentFunctionName`, hogy önrekurziónál tudjuk majd használni
+3. Hozzáadjuk a környezetét a `resEnv`-hez és a `closure`-t is hozzáadjuk, ahol a deklarációk lesznek elmentve
+4. Csekkoljuk a paramétereket, hogy egyedi neveik vannak-e, ha igen hozzáadjuk az hibákhoz `updateResolverErrorsByPredicate` függvény segítségével 
+5. Függvény testet rezolváljuk
+6. `reserveDeclarationsAndError` fordítás
+7. Töröljük a `resEnv`-ből és a `closure`-ből a környezetet
+8. Changert meghívjuk: Visszaállítja a `isInFunction` értékét az eredeti értékre, elmenti a rezolválási hibákat, és elmenti a végső függvény deklarációt
+
+```haskell
+-- Resolver.hs
+
+-- Check if that identifier is already saved in scope, if not save empty (get id -> will be used for the final dec)
+-- Save current function name (for self recursion)
+-- Add a new block to resolver environment and a new scope in closure
+-- Check if all the params are unique
+-- Resolve Function body (is inFunction is set True) and reverse the decs and errors
+-- Set current function name to ""
+-- Delete block from resEnv, delete scope closure,
+-- Call changer, which will set isInFunction to what was originally, saves the resolve errors, creates the final function declaration saves the function declaration to the original declarations
+resolveFunctionDeclarationHelper :: TextType -> [DECLARATION] -> [DECLARATION] -> (ID -> TextType -> [DECLARATION] -> ResolverMeta -> ResolverMeta -> IO ResolverMeta) -> ResolverMeta -> IO ResolverMeta
+resolveFunctionDeclarationHelper iden params decs changer meta = do
+  (id, savedMeta) <- checkIfFunctionOrClassIsDefinedAndSaveEmpty iden meta
+  newBlockMeta <- addBlockToMeta savedMeta{currentFunctionName=iden} >>= addClosureToMeta
+  let isUniqueParamNames = U.allUnique (map getIdentifierFromParams params)
+  updatedParams <- handleParams params newBlockMeta
+  newMeta <- resolveDeclarations decs (updateResolverErrorsByPredicate isUniqueParamNames "Parameter names are not unique" (updatedParams{
+                                       isInFunction = True
+                                       , declarations=[]
+  })) >>= reverseDeclarationsAndErrors
+  deleteBlockFromMeta newMeta{currentFunctionName=""} >>= deleteClosureFromMeta >>= changer id iden params meta
+
+functionMetaChanger :: ID -> TextType -> [DECLARATION] -> ResolverMeta -> ResolverMeta -> IO ResolverMeta
+functionMetaChanger id iden params meta newMeta = updateFunctionOrClassDeclaration id iden dec newMeta{isInFunction = isInFunction meta, resolverErrors=resolverErrors newMeta, declarations=declarations meta}
+  where dec = if isInFunction meta then DEC_FUNC (RC_FUNC_DEC iden params (BLOCK_STMT (declarations newMeta))) else DEC_FUNC (R_FUNC_DEC iden params (BLOCK_STMT (declarations newMeta)) id)
+
+
+```
+
+```haskell
+-- ResolverTypes.hs
+{-...-}
+isInFunctionOrClass :: ResolverMeta -> Bool
+isInFunctionOrClass meta = isInFunction meta || isInClass meta
+{-...-}
+getIdOfIden :: T.Text -> ResolverBlockEnvironment -> IO (Maybe Int)
+getIdOfIden iden resEnv = HT.lookup resEnv iden
+{-...-}
+
+-- In this function we save the class and function placeholder declaration,
+-- Here we check if we already declared a function or a class with this name,
+-- And save a dummy declaration.
+-- We need to save a dummy declaration, as we don't have the function or class bodies' inner declarations
+-- And I thought it was easier to save a dummy, send back the ID and if we have the inner declarations resolved
+-- we update the declaration in "updateFunctionOrClassDeclaration"
+checkIfFunctionOrClassIsDefinedAndSaveEmpty :: TextType -> ResolverMeta -> IO (ID, ResolverMeta)
+checkIfFunctionOrClassIsDefinedAndSaveEmpty iden meta = do
+  if isInFunctionOrClass meta then do
+    inScope <- isInScope iden meta
+    if inScope then do
+      return (NON_ID, meta{resolverErrors="Function/class already declared in scope":resolverErrors meta})
+    else do
+      newMeta <- updateClosureInMeta iden EMPTY_DEC meta 
+      return (NON_ID, newMeta)
+  else do
+    let (currentResEnv:_) = resolverEnv meta
+    maybeId <- getIdOfIden iden currentResEnv
+    if isNothing maybeId then do
+      newMeta <- updateCurrentVariableInMeta iden (const EMPTY_DEC) meta
+      return (ID currId, newMeta)
+    else
+      return (NON_ID, meta{resolverErrors="Function/class already declared in scope":resolverErrors meta})
+  where currId = currentVariableId meta
+
+{-...-}
+updateResolverErrorsByPredicate :: Bool -> TextType -> ResolverMeta -> ResolverMeta
+updateResolverErrorsByPredicate predicate message meta = meta{resolverErrors=if predicate then resolverErrors meta else message:resolverErrors meta}
+
+  
+```
 
 
