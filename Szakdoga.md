@@ -1914,8 +1914,337 @@ checkIfFunctionOrClassIsDefinedAndSaveEmpty iden meta = do
 {-...-}
 updateResolverErrorsByPredicate :: Bool -> TextType -> ResolverMeta -> ResolverMeta
 updateResolverErrorsByPredicate predicate message meta = meta{resolverErrors=if predicate then resolverErrors meta else message:resolverErrors meta}
-
-  
 ```
 
+##### Osztály és alosztály rezolválása
+- Rezolválás lépései
+- Init kérdése
 
+```haskell
+-- Methods can only be in classes, therefore always be in closure
+methodMetaChanger :: ID -> TextType -> [DECLARATION] -> ResolverMeta -> ResolverMeta -> IO ResolverMeta
+methodMetaChanger id iden params meta newMeta = return newMeta{isInFunction = isInFunction meta, declarations=DEC_FUNC (METHOD_DEC iden params (BLOCK_STMT (declarations newMeta))):declarations meta}
+
+-- Check if that identifier is already saved in scope, if not save empty (get id -> will be used for the final dec)
+-- set "isInClass" to true
+-- "handleClassSetup": adds new block to resEnv, new scope to closure, resolves methods
+-- Call "handleSaveClassDec" with the final class dec
+-- "handleSaveClassDec": sets the isInClass, isInSubClass, declarations to the original, save the final class dec into the original declarations
+resolveClassDeclaration :: CLASS_DECLARATION -> ResolverMeta -> IO ResolverMeta
+resolveClassDeclaration (CLASS_DEC iden methods) meta = do
+  (id, updatedMeta) <- checkIfFunctionOrClassIsDefinedAndSaveEmpty iden meta
+  newMeta <- handleClassSetup methods updatedMeta{isInClass=True}
+  let newMethods = declarations newMeta
+  if isInFunctionOrClass meta then do
+    handleSaveClassDec id iden (R_DEC_CLASS (RC_CLASS_DEC iden newMethods)) meta newMeta
+  else do
+    handleSaveClassDec id iden (R_DEC_CLASS (R_CLASS_DEC iden newMethods id)) meta newMeta
+-- Similar as above but we have a plus check, where we check if the parent the a child identifier is the same, and we set the "isInSubClass" to true
+resolveClassDeclaration (SUB_CLASS_DEC iden parentIden methods) meta = do
+  let cMeta = updateResolverErrorsByPredicate (iden == parentIden) "Class name cannot be parent class name" meta
+  (id, updatedMeta) <- checkIfFunctionOrClassIsDefinedAndSaveEmpty iden meta
+  newMeta <- handleClassSetup methods updatedMeta{isInClass=True, isInSubClass=True}
+  let newMethods = declarations newMeta
+  if isInFunctionOrClass meta then do
+    inClosure <- isInClosure parentIden meta
+    if inClosure then do
+      handleSaveClassDec id iden (R_DEC_CLASS (RC_SUB_CLASS_DEC iden parentIden newMethods NON_ID)) meta newMeta
+    else do
+      maybeParentIdVal <- findIdInVariables parentIden newMeta
+      let maybeParentId = ID <$> maybeParentIdVal
+      handleSaveClassDec id iden (R_DEC_CLASS (RC_SUB_CLASS_DEC iden parentIden newMethods (fromMaybe NON_ID maybeParentId))) meta (parentNotInScopeError maybeParentId newMeta)
+  else do
+    maybeParentIdVal <- findIdInVariables parentIden newMeta
+    let maybeParentId = ID <$> maybeParentIdVal
+    handleSaveClassDec id iden (R_DEC_CLASS (R_SUB_CLASS_DEC iden parentIden newMethods id (fromMaybe NON_ID maybeParentId))) meta (parentNotInScopeError maybeParentId newMeta)
+    
+parentNotInScopeError :: Maybe ID -> ResolverMeta -> ResolverMeta
+parentNotInScopeError maybeParentId = updateResolverErrorsByPredicate (isJust maybeParentId) "Parent class is not in scope"
+
+-- see in "resolveClassDeclaration"
+handleSaveClassDec :: ID -> TextType -> DECLARATION -> ResolverMeta -> ResolverMeta -> IO ResolverMeta
+handleSaveClassDec id iden dec oldMeta meta = deleteBlockFromMeta meta{isInClass=isInClass oldMeta, isInSubClass=isInSubClass oldMeta, declarations=declarations oldMeta} >>= updateFunctionOrClassDeclaration id iden dec
+
+-- see in "resolveClassDeclaration"
+handleClassSetup :: [DECLARATION] -> ResolverMeta -> IO ResolverMeta
+handleClassSetup methods meta = addBlockToMeta meta >>= addClosureToMeta >>= resolveMethods methods
+
+-- I will force that "init" is required, because creating init on the fly is easy for simple classes, but when it comes to subclasses,
+-- what happens if the superclass init has args -> 
+-- 1. you can create an init to have the same number of arguments (confusing)
+-- 2. You add default args to super -> hard to create, confusing for users
+-- 3. force it -> easy to check, transparent to users, albeit tedious
+resolveMethods :: [DECLARATION] -> ResolverMeta -> IO ResolverMeta
+resolveMethods methods meta = do
+ let isUniqueMethodNames = U.allUnique (map getIdentifierFromMethod methods)
+ let hasInit = any (\method -> getIdentifierFromMethod method == "init") methods
+ let isSuperError = not (isInSubClass meta) || hasSuperInitInInit methods
+ resolveDeclarations methods (
+   updateResolverErrorsByPredicate hasInit "Class does not have init" (
+   updateResolverErrorsByPredicate isSuperError "Subclass does not have super.init in init function" (
+   updateResolverErrorsByPredicate isUniqueMethodNames "Method names are not unique" meta{
+   declarations=[]
+ }))) >>= reverseDeclarationsAndErrors
+ 
+```
+
+##### Kifejezés rezolválása
+
+
+
+## Eval
+
+### Feladata
+
+- Olvassa be a rezolvált adatokat, alakítsa át haskellnek értelmezhető adatoknak
+- Legfontosabb feladata a parsolt, és rezolvált AST feldolgozása, és kiértékelése
+- Adatok kiírása
+- Kifejezések kiértékelése
+- Változók új értékeinek elmentése 
+
+
+### Első megoldás
+
+#### Alaptípusok
+
+##### Meta
+
+- `IsInFunction`: függvényben vagyunk-e, tehát indexelt, vagy closure változót használjunk-e
+- `isInLoop`: Jelenleg nincs funkciója, de kettős szerepe lett volna: `break` és `continue` validáció, és ha a függvényen belüli loop `return`-öl, akkor lépjen ki onnan is.
+- `variableValues`: Az indexelt változók értékeinek tárolója
+- `globalVariableValues`: A globális indexelt változók, ezt már később nem implementáltam.
+  - Eredetileg a könyvben használ globális és lokális változó hasító táblát, de én ugye megimplementáltam az egyik szorgalmi feladatot a tömbös indexelést, ami fölöslegessé tette a globális változó kölün tárolását.
+- `closure`: Itt tároljuk a closure-ben lévő összes változót
+
+```haskell
+-- EvalMeta.hs
+{-...-}
+type Scope = HT.BasicHashTable T.Text EVAL
+
+type Closure = Stack Scope
+
+{-...-}
+-- META
+data META = META {
+  isInFunction :: Bool
+  , isInLoop :: Bool
+  , variableValues :: V.Vector EVAL
+  , globalVariableValues :: V.Vector EVAL
+  , closure :: Closure
+                 } deriving Show
+
+
+createGlobalMeta ::  V.Vector EVAL -> IO META
+createGlobalMeta vector = do
+  return META { isInFunction=False, isInLoop=True, variableValues=vector, globalVariableValues=createGlobalVector, closure=createStack }
+{-..-}
+
+```
+
+##### Eval típusok
+
+- Szerintem ezek a típusok eléggé magától értetődőek. 
+
+```haskell
+-- EvalTypes.hs
+module EvalTypes where
+
+import AST
+import qualified Data.Sequence as S
+import qualified TokenHelper as TH
+import qualified Data.Vector as V
+import Utils
+
+-- Types
+type Arity = Int
+type Name = TextType
+type ErrorMessage = TextType
+
+data EVAL = EVAL_NUMBER Double
+          | EVAL_STRING TextType
+          | EVAL_BOOL Bool
+          | EVAL_NIL
+          | RUNTIME_ERROR ErrorMessage (S.Seq TH.Token) 
+          | SKIP_EVAL
+          | DEC_EVAL Name EVAL ID
+          | FUNC_DEC_EVAL Name Arity AST.PARAMETERS FUNCTION_STATEMENT
+          | RETURN_EVAL EVAL
+          deriving Eq
+
+instance Show EVAL where
+  show (EVAL_NUMBER x) = show x
+  show (EVAL_STRING x) = show x
+  show (EVAL_BOOL x) = show x
+  show EVAL_NIL = "nil"
+  show (RUNTIME_ERROR x neLines) = mconcat ["RuntimeError: ", show x, getLineError neLines]
+  show (DEC_EVAL x y _) = mconcat [show x, " = ",show y]
+  show SKIP_EVAL = "skip"
+  show (FUNC_DEC_EVAL iden arity params stmt) = mconcat ["Function ", show iden, ", arity: ", show arity, ", params: ", show params, ", statement: ", show stmt]
+  show (RETURN_EVAL x) = "return: " ++ show x
+
+getLineError :: S.Seq TH.Token -> String
+getLineError tokens = if firstLine /= secondLine then mconcat [". Between lines: ", show firstLine, "-", show secondLine] else mconcat [". In line: ", show firstLine]
+  where firstLine = TH.line <$> S.lookup 0 tokens 
+        secondLine = TH.line <$> S.lookup (S.length tokens - 1) tokens
+
+
+isRuntimeError :: EVAL -> Bool
+isRuntimeError (RUNTIME_ERROR _ _) = True
+isRuntimeError _ = False
+
+isReturn :: EVAL -> Bool
+isReturn (RETURN_EVAL x) = True
+isReturn _ = False
+
+getValueFromReturn :: EVAL -> EVAL
+getValueFromReturn (RETURN_EVAL x) = x
+getValueFromReturn _ = EVAL_NIL
+```
+
+#### Eval logika
+
+- Ami itt érdekesebb az előző feladatokhoz képest, az az, hogy az eredményt és a meta objektumot különvettem, aminek igazából a metában való change-eknek a csökkentése lett volna, de mivel meta objektum így is sokat változik, igazából ezt is belehelyeztem a második megoldásban.
+- Amit az `eval` függvényben láthatunk:
+  1. Kiszedjük a `meta`-t a az `IO`-ból (Ezt majd pontosítani kell mi történik itt)
+  2. Ha elfogytunk a deklarációkból, akkor visszatérünk, az amit megkaptunk argumentumnak
+     - Ez Blokk logikánál fontos, hogy az utolsót megkapjuk, főleg, hogy ha `RUNTIME_ERROR` típusú, így minden scope-ból kitudunk lépni
+  3. Ha van még deklaráció, akkor `evalDeclarations` a következő deklarációra
+  4. Ha `return` volt az utolsó, akkor visszatérünk a `return`-nel (!check! -> nem gondolom hogy `isInFunction` ellenőrzés az kell)
+  5. Ha `RUNTIME_ERROR` akkor is visszatérünk, (és akkor )
+
+```haskell
+{-...-}
+evalProgram :: PROGRAM -> V.Vector EVAL -> IO ()
+evalProgram (PROG x) vector = do
+  eval x SKIP_EVAL (createGlobalMeta vector)
+  return ()
+
+evalBlock :: S.Seq DECLARATION -> META -> IO (IO EVAL, IO META)
+evalBlock x meta = eval x SKIP_EVAL (return meta)
+
+
+eval :: S.Seq DECLARATION -> EVAL -> IO META -> IO (IO EVAL, IO META)
+eval decs prev meta = do
+  nonIOMeta <- meta
+  if S.null decs then do
+    return (return prev, meta)
+  else do
+    (ev, newMeta) <- evalDeclaration (S.index decs 0) meta
+    if isInFunction newMeta && isReturn ev
+      then do return(return ev, meta)
+      else do
+       if isRuntimeError ev
+         then do
+           return (return ev, meta)
+          else do
+            eval (S.drop 1 decs) ev (return newMeta)
+
+
+```
+
+##### Blokk kiértékelése
+
+- Itt látható, hogy az evalt hívja meg.
+
+```haskell
+evalDeclaration :: DECLARATION -> IO META -> IO (EVAL, META)
+{-...-}
+evalDeclaration (DEC_STMT (BLOCK_STMT x)) meta = do
+  locMeta <- meta
+  (evIO, newMetaIO) <- evalBlock x locMeta
+  newMeta <- newMetaIO
+  ev <- evIO
+  return (ev, newMeta)
+```
+
+##### `print` hívása
+
+- Itt igazából kihasználjuk, hogy a ``
+
+```haskell
+evalDeclaration :: DECLARATION -> IO META -> IO (EVAL, META)
+evalDeclaration (DEC_STMT (PRINT_STMT x)) meta = do
+  locMeta <- meta
+  (expr, newMeta) <- evalExpression x locMeta
+  print expr
+  return (expr, locMeta)
+```
+
+##### Függvény kiértékelése
+
+- Elmentjük a deklarációt
+```haskell
+evalDeclaration (DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) (PARAMETERS params tokens) stmt id)) meta = do
+  locMeta <- meta
+  let eval = FUNC_DEC_EVAL iden (S.length params) (PARAMETERS params tokens) stmt
+  newMeta <- addUpdateValueToMeta id eval locMeta
+  return (eval, newMeta)
+```
+
+##### Függvény hívás
+
+##### Kifejezés kiértékelése
+
+- Csak a teljesség kedvéért, de igazából ez szerintem teljesen követhető
+
+```haskell
+evalBinary :: S.Seq TH.Token -> EVAL -> OPERATOR -> EVAL -> EVAL
+evalBinary tokens evalLeft op evalRight
+ | op == MINUS = getArithOp (-)
+ | op == SLASH = getArithOp (/)
+ | op == STAR = getArithOp (*)
+ | op == PLUS = handlePlus
+ | op == GREATER = getCompOp (>)
+ | op == GREATER_EQUAL = getCompOp (>=)
+ | op == LESS = getCompOp (<)
+ | op == LESS_EQUAL = getCompOp (<=)
+ | op == EQUAL_EQUAL = equals
+ | op == BANG_EQUAL = notEquals
+ | op == AND = createAnd evalLeft evalRight
+ | op == OR = createOr evalLeft evalRight
+ where leftNum = maybeEvalNumber evalLeft
+       rightNum = maybeEvalNumber evalRight
+       leftStr = maybeEvalString evalLeft
+       rightStr = maybeEvalString evalRight
+       getArithOp = createArithmeticOps tokens leftNum rightNum
+       getCompOp = createComparison tokens leftNum rightNum
+       equals = createEquality evalLeft evalRight id
+       notEquals = createEquality evalLeft evalRight not
+       handlePlus
+         | isJust leftNum && isJust rightNum = getArithOp (+)
+         | isJust leftStr && isJust rightStr = concatTwoString (fromJust leftStr) (fromJust rightStr)
+         | otherwise = RUNTIME_ERROR "Operands must be two numbers or two strings" tokens
+{-...-}
+maybeEvalNumber :: EVAL -> Maybe Double
+maybeEvalNumber (EVAL_NUMBER x) = Just x
+maybeEvalNumber _ = Nothing
+
+{-...-}
+maybeEvalString :: EVAL -> Maybe TextType
+maybeEvalString (EVAL_STRING x) = Just x
+maybeEvalString _ = Nothing
+
+{-...-}
+createMathOp :: (a -> EVAL) -> S.Seq TH.Token -> Maybe Double -> Maybe Double -> (Double -> Double -> a)  -> EVAL
+createMathOp x tokens l r f = if isJust l && isJust r then x (f (fromJust l) (fromJust r)) else RUNTIME_ERROR "Operands must be numbers" tokens
+
+createArithmeticOps :: S.Seq TH.Token -> Maybe Double -> Maybe Double -> (Double -> Double -> Double) -> EVAL
+createArithmeticOps = createMathOp EVAL_NUMBER
+
+createComparison :: S.Seq TH.Token -> Maybe Double -> Maybe Double -> (Double -> Double -> Bool) -> EVAL
+createComparison = createMathOp EVAL_BOOL
+
+createOr :: EVAL -> EVAL -> EVAL
+createOr l r = if maybeEvalTruthy l == Just True then l else r
+
+createAnd :: EVAL -> EVAL -> EVAL
+createAnd l r = if maybeEvalTruthy l == Just False then l else r
+
+createEquality :: (Eq a) => a -> a -> (Bool -> Bool) -> EVAL
+createEquality l r ch = if l == r then EVAL_BOOL (ch True) else EVAL_BOOL (ch False)
+
+
+
+```
+
+### Második megoldás
