@@ -1988,6 +1988,8 @@ resolveMethods methods meta = do
  
 ```
 
+##### Lánc rezolválása
+
 ##### Kifejezés rezolválása
 
 
@@ -2110,7 +2112,8 @@ getValueFromReturn _ = EVAL_NIL
      - Ez Blokk logikánál fontos, hogy az utolsót megkapjuk, főleg, hogy ha `RUNTIME_ERROR` típusú, így minden scope-ból kitudunk lépni
   3. Ha van még deklaráció, akkor `evalDeclarations` a következő deklarációra
   4. Ha `return` volt az utolsó, akkor visszatérünk a `return`-nel (!check! -> nem gondolom hogy `isInFunction` ellenőrzés az kell)
-  5. Ha `RUNTIME_ERROR` akkor is visszatérünk, (és akkor )
+  5. Ha `RUNTIME_ERROR` akkor is visszatérünk, (és akkor végig az összes blokkban visszatérünk)
+  6. Ha nem akkor levesszük a deklarációt és tovább folytatjuk a kiértéklést a következővel
 
 ```haskell
 {-...-}
@@ -2159,7 +2162,8 @@ evalDeclaration (DEC_STMT (BLOCK_STMT x)) meta = do
 
 ##### `print` hívása
 
-- Itt igazából kihasználjuk, hogy a ``
+- Itt igazából kihasználjuk, hogy az `EVAL` típus az a `Show` típusnak a példánya, amiben meg kellett implementálnunk a string outputját a típusnak
+- Ezt fogja a haskell `print` függvénye használni.
 
 ```haskell
 evalDeclaration :: DECLARATION -> IO META -> IO (EVAL, META)
@@ -2182,6 +2186,120 @@ evalDeclaration (DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) (PARAMETERS params toke
 ```
 
 ##### Függvény hívás
+
+1. Kifejezés, ami bármi lehet és reménykedünk benne, hogy a függvénynek az azonosítóját fogja tartalmazni, azt megkeressük (Ezért tettem ide a literál feldolgozó evaluáló függvényt)
+2. Literál feldolgozás az igazán egyszerű, ha függvény a closure változók között keressük, ha nem akkor a indexelt változók között.
+3. Utána meghívjuk az `evalFunctions` függvényt
+4. Ha nincsen argumentumok listájában elem, akkor csak egy referencia lesz a függvényre (például elmentjük a függvényt egy változóban)
+5. Amíg van elem az argumentumok listájában addig feldolgozzuk a függvényeket
+   - Ilyen jellegű kifejezések
+     - ```lox
+       a(2,3)(5,6);```
+   - Itt nincsen típus ellenőrzés hogy tényleg hívás-e, mivel az a parserben megtörtént
+   - `callFunction` az egy arity check (!check! -> érdemes lesz átnevezni) 
+   - `functionCall`, amiben maga a logika helyezkedik el
+     - Ha általunk definiált függvény:
+        1. új scope létrehozás
+        2. Argumentumok kiértékelése, majd a scope-ba mentése
+        3. Függvény test kiértékelése (isInFunction az igaz, és az `isInLoop` hamis, mert az egy új scope, és ha új loop, akkor ne legyen zavaró, az az érték -> !check! -> Bár ezt lehetett volna a ciklusn belül kezelni)
+        4. Kiszedjük az adatot, ha `return`-nel térünk vissza, nincs `return` akkor csak `EVAL_NIL` lesz az érték
+        5. Visszaállítjuk a hívás előtti `isInFunction` és `isInLoop` értékeket, töröljük a függvény scope-ját, és mellé rakjuk a függvény visszatérési értékét
+ 
+
+```haskell
+-- Eval.hs
+
+{-...-}
+
+evalExpression :: EXPRESSION -> META -> IO (EVAL, META)
+{-...-}
+evalExpression (EXP_CALL (CALL_FUNC exp args id)) meta = do
+  (eval, newMeta) <- evalExpression exp meta
+  evalFunctions newMeta eval args
+{-...-}
+evalExpression (EXP_LITERAL (IDENTIFIER iden tokens id)) meta = do
+  if isInFunction meta 
+  then do
+    val <- findValueInFunction iden id meta
+    return (val, meta)
+  else do
+    val <- findValueInMeta id meta
+    return (val, meta)
+{-...-}
+
+evalFunctions :: META -> EVAL -> S.Seq ARGUMENTS -> IO (EVAL, META)
+evalFunctions meta (FUNC_DEC_EVAL iden arity params stmt) argCalls
+  | S.null argCalls = return (FUNC_DEC_EVAL iden arity params stmt, meta)
+  | otherwise = do
+      (eval, newMeta) <- callFunction meta (FUNC_DEC_EVAL iden arity params stmt) (S.index argCalls 0)
+      evalFunctions newMeta eval (S.drop 1 argCalls)
+  where args = S.index argCalls 0
+evalFunctions meta ev _ = return (ev, meta)
+{-...-}
+
+-- Helpers for functions
+callFunction :: META -> EVAL -> ARGUMENTS ->IO (EVAL, META)
+callFunction meta (FUNC_DEC_EVAL iden arity params stmt) (ARGS args)
+  | S.length args /= arity = return (RUNTIME_ERROR (T.pack (mconcat ["Expected ", show arity, " arguments", ", but got ", show argsLength])) S.empty, meta)
+  | otherwise = functionCall meta (FUNC_DEC_EVAL iden arity params stmt) (ARGS args)
+  where argsLength = S.length args
+
+-- TODO: right now all of them saves to one variable, is is fine for blocks and loops, but for functions when there are multiple one running 
+-- It should be different closure for all function call, so params should be taken out of the resolver, and functions should build up their closures
+functionCall :: META -> EVAL -> ARGUMENTS -> IO (EVAL, META)
+functionCall meta (FUNC_DEC_EVAL iden _ params (FUNC_STMT (BLOCK_STMT decs))) arguments = do
+  toEvalMeta <- addNewScopeToMeta meta >>= saveFunctionArgs params arguments
+  (pIO, afterMetaIO) <- eval decs SKIP_EVAL (return toEvalMeta{isInFunction=True, isInLoop=False})
+  afterMeta <- afterMetaIO
+  returnEval <- pIO
+  let evalValue = getValueFromReturn returnEval
+  return (evalValue, afterMeta{isInFunction=isInFunction meta, isInLoop=isInLoop meta, closure=deleteScopeFromClosure (closure afterMeta)})
+functionCall meta (FUNC_DEC_EVAL iden _ params (NATIVE_FUNC_STMT f)) arguments = do
+  eval <- callNativeFunction f arguments
+  return (eval, meta)
+  
+saveFunctionArgs :: PARAMETERS -> ARGUMENTS -> META -> IO META
+saveFunctionArgs (PARAMETERS params tokens) (ARGS args) meta
+ | S.null params = return meta
+ | otherwise = do
+     let (DEC_VAR (PARAM_DEC (TH.IDENTIFIER iden) tokens _)) = S.index params 0
+     let a = S.index args 0
+     (evalA, evalMeta) <- evalExpression a meta
+     newMeta <- addUpdateScopeInMeta iden evalA evalMeta
+     saveFunctionArgs (PARAMETERS (S.drop 1 params) tokens) (ARGS (S.drop 1 args)) newMeta
+
+callNativeFunction :: NATIVE_FUNCTION_TYPES -> ARGUMENTS -> IO EVAL
+callNativeFunction (CLOCK x) _ = do
+  val <- x id
+  return (EVAL_NUMBER (fromInteger val))
+
+
+```
+
+```haskell
+-- EvalMeta.hs
+findValueInMeta :: ID -> META -> IO EVAL
+findValueInMeta (LOCAL_ID id) meta = return (variableValues meta V.! id)
+findValueInMeta (GLOBAL_ID id) meta = return (globalVariableValues meta V.! id)
+findValueInMeta NOT_READY _ = return EVAL_NIL
+findValueInMeta PARAM _ = return EVAL_NIL
+
+findValueInFunction :: T.Text -> ID -> META -> IO EVAL
+findValueInFunction iden id meta = do
+  values <- mapM (getEvalByIden iden) (closure meta)
+  let val = find isJust values
+  if isJust val then return (fromJust (fromJust val)) else do
+     findValueInMeta id meta
+```
+
+```haskell
+-- EvalTypes.hs
+{-...-}
+getValueFromReturn :: EVAL -> EVAL
+getValueFromReturn (RETURN_EVAL x) = x
+getValueFromReturn _ = EVAL_NIL
+
+```
 
 ##### Kifejezés kiértékelése
 
@@ -2242,9 +2360,350 @@ createAnd l r = if maybeEvalTruthy l == Just False then l else r
 
 createEquality :: (Eq a) => a -> a -> (Bool -> Bool) -> EVAL
 createEquality l r ch = if l == r then EVAL_BOOL (ch True) else EVAL_BOOL (ch False)
-
-
-
 ```
 
 ### Második megoldás
+
+#### Alaptípusok
+
+##### Meta
+
+- `variableValues`: hasonló szerepet tölti be mint az előző megoldásban, itt tároljuk a indexelt változókat
+  - Az előzőhöz képest nincsenek globális változók
+- `closure`: hasonló, mint az előző megoldásban, closure változók kapnak itt helyet
+- `eval`: ide bekerült, az `eval` a könnyebb kezelhetőség érdekében.
+- `isReturn`: Kicsit másképp kezelem a `return`-t, így felvettem egy segéd változót, ami akkor válik igazzá, ha `return`-re lépünk, és akkor hamissá, ha az a függvény, amihez tartozott, abból kilépünk
+- `superClass`: ez egy segéd változó, hogy elmentsük a "super.init" metódusok által létrehozott osztályokat
+  - Amikor meghívódik egy "init" függvény egy gyerekosztályon belül, akkor az meghívja a szülőosztályt, és ha az is gyerekosztály, akkor az is meghívja, és így tovább, amíg a legfelső ősig el nem jutunk.
+  - Amikor a legfelső ős meghívódik, ő elmenti magát ebben a változóban, majd, ami meghívta őt is betudja fejezni az "init"-jét
+    - Kimenti a változóból a szülőjét, majd amikor végzett, magát menti el benne
+    - És ez így folytatódik, amíg a legalsó gyerekosztályig nem jutunk
+    - Ő már nem menti el magát, csak kimenti a változót és befejezi az inicializálást
+
+```haskell
+-- META
+-- variableValues: indexed values' EVAL are saved here
+data META = META {
+-- indexed values' EVAL are saved here
+  variableValues :: V.Vector EVAL
+-- closure variables' EVAL are saved here
+  , closure :: Closure
+-- The evaluated value
+  , eval :: EVAL
+-- If the last eval was inside a return function (it's a helper for functions to know they should stop evaluating the remaining declarations)
+  , isReturn :: Bool
+-- superClass, this is for saving the values of called "super.init".
+-- When we call a subClasses "init" function it will call the superclasses "init" function recursively, till we reach a class
+-- When the class calls it it can finish its init method and can save its declaration here.
+-- Then the subclass which called the class takes out the superclass, saves it in its closure as super
+-- and saves itself into this prop, and it goes down till we get to the leaf child class
+  , superClass :: EVAL
+                 } deriving Show
+
+
+createGlobalMeta ::  V.Vector EVAL -> IO META
+createGlobalMeta vector = do
+  return META { variableValues=vector, EvalMeta.closure=[], eval=SKIP_EVAL, EvalMeta.isReturn=False, superClass=EVAL_NIL }
+
+```
+
+##### Eval típusok
+
+- Itt látható, hogy jóval több típus jelenik meg
+
+```haskell
+-- IMPROVE: Maybe create a different class eval which after creating an instance
+data EVAL = EVAL_NUMBER Double
+          | EVAL_STRING TextType
+          | EVAL_BOOL Bool
+          | EVAL_NIL
+          | RUNTIME_ERROR ErrorMessage
+          | SKIP_EVAL
+          | DEC_EVAL Name EVAL ID
+          | FUNC_DEC_EVAL Name Arity [DECLARATION] STATEMENT Closure ID
+          | NATIVE_FUNC_DEC_EVAL Name Arity [DECLARATION] NATIVE_FUNCTION_TYPES
+          | CLASS_DEC_EVAL Name [DECLARATION] Closure ID
+          | SUB_CLASS_DEC_EVAL Name ParentName [DECLARATION] Closure ID PARENT_ID
+          | THIS_EVAL [Closure]
+          | RETURN_EVAL EVAL
+          | BREAK_EVAL
+          | CONTINUE_EVAL
+
+
+instance Show EVAL where
+  show (EVAL_NUMBER x) = show x
+  show (EVAL_STRING x) = show x
+  show (EVAL_BOOL x) = show x
+  show EVAL_NIL = "nil"
+  show (RUNTIME_ERROR x) = mconcat ["RuntimeError: ", show x]
+  show (DEC_EVAL x y _) = mconcat [show x, " = ",show y]
+  show SKIP_EVAL = "skip"
+  show (FUNC_DEC_EVAL iden arity params stmt _ _) = mconcat ["Function ", show iden, ", arity: ", show arity, ", params: ", show params, ", statement: ", show stmt]
+  show (NATIVE_FUNC_DEC_EVAL iden arity params _) = mconcat ["<<native>> Function ", show iden, ", arity: ", show arity, ", params: ", show params]
+  show (CLASS_DEC_EVAL name decs clos id) = mconcat ["Class: ", show name, "decs: ", show decs, "id: ", show id]
+  show (SUB_CLASS_DEC_EVAL name pName decs _ id _) = mconcat ["Class: ", show name, "parent: ", show pName, "decs: ", show decs, "id: ", show id]
+  show (RETURN_EVAL x) = "return: " ++ show x
+  show (THIS_EVAL _) = "this"
+  show BREAK_EVAL = "break"
+  show CONTINUE_EVAL = "continue"
+```
+
+#### Eval logika
+
+- Hasonlóan az előzőhöz, csak az utolsó `eval` érték érdekel minket
+- Ha `return`, `break`, `continue` akkor befejezzük abban a scope-ban a kiértékelést
+  - `return` mellett elmentjük, hogy `isReturn`, hogy minden blokkból kilépjen, ami a függvényének scope-jához nem ér
+  - `RUNTIME_ERROR` -nál, meg kiírjuk és abbahagyjuk teljesen a kiértékelést
+
+
+```haskell
+evalProgram :: [DECLARATION] -> V.Vector EVAL -> IO META
+evalProgram x vector = createGlobalMeta vector >>= evalDeclarations x
+
+evalBlock :: [DECLARATION]  -> META -> IO META
+evalBlock = evalDeclarations
+
+-- We only care about the last eval
+-- if return type (RETURN_EVAL x), then stop evaluating the declarations (function body), and return the RETURN_EVAL's eval
+-- if continue or break stop evaluation
+-- RUNTIME_ERROR -> print then stop evaluating the declarations return meta
+-- IMPROVE: Runtime error is written twice, if it is in a closure
+evalDeclarations :: [DECLARATION] -> META -> IO META
+evalDeclarations decs meta
+  | L.null decs || EvalMeta.isReturn meta = return meta
+  | otherwise = do
+    let (current:rest) = decs
+    newMeta <- evalDeclaration current meta
+    let ev = eval newMeta
+    case ev of
+      (RETURN_EVAL x)  -> return newMeta{eval=x, EvalMeta.isReturn=True}
+      CONTINUE_EVAL -> return newMeta{eval=ev}
+      BREAK_EVAL -> return newMeta{eval=ev}
+      (RUNTIME_ERROR x) -> do
+        print ev
+        return newMeta{eval=ev}
+      _ -> evalDeclarations rest newMeta
+
+```
+
+##### Blokk eval
+
+```haskell
+-- Eval.hs
+evalDeclaration :: DECLARATION -> META -> IO META
+{-...-}
+evalDeclaration (DEC_STMT (BLOCK_STMT x)) meta = evalBlock x meta
+```
+
+
+##### Függvény deklaráció
+
+- Igazából itt annyival lett sokkal több, hogy a closure-t amiben meghívják, azt is elmentjük.
+- így igazából a következő kifejezések jól fognak működni:
+  - ```lox 
+    fun a() {
+        var i = 1;
+        fun e() {
+            i = i + 1;
+        }
+        return e;
+    }```
+- Bár a problémák ott kezdődnek, hogy: 
+  - ```lox
+  fun a() {
+        var i = 1;
+        fun e() {
+            i = i + 1;
+            print i;
+        }
+        fun f(){
+            i = i + 2;
+            print i;
+        }
+        class A {
+            init() {
+                this.e = e;
+                this.f = f;
+            }
+        }
+        return A();
+    }
+    var problem = a();
+    a().e(); //  ez jó. output: 1
+    a().f(); // Itt a probléma, output: 2, a 3 helyett```
+  - Ebben az esetben a haskell működése miatt elfog térni a viselkedése más programozási nyelvek hasonló kódjainál
+    - Legtöbb esetben ha az `e`-t, majd az `f`-t, hívva 3-t kapunk eredményül, mivel közös scope van elmentve nekik, <i>ugyanazon referencián</i>
+    - Míg a haskellnél, pedig mindenből másolatot készít, hogy minél állapotmentesebb legyen, így itt a két függvénynek külön-külön scope-ja van.
+
+```haskell
+-- Eval.hs
+{-...-}
+-- Creating the function/class eval from the declaration, then saving it to either closure or variableVector
+-- If it's in a closure save the closure on the eval as well
+evalDeclaration (DEC_FUNC (R_FUNC_DEC iden params stmt id)) meta = functionDecEvalHelper (addUpdateValueToMeta id) iden params stmt id meta
+evalDeclaration (DEC_FUNC (RC_FUNC_DEC iden params stmt)) meta = functionDecEvalHelper (addUpdateScopeInMeta iden) iden params stmt NON_ID meta
+
+{-...-}
+-- Save the function as a FUNC_DEC_EVAL with the closure the function is currently in.
+functionDecEvalHelper :: (META -> IO META) -> TextType -> [DECLARATION] -> STATEMENT -> ID -> META -> IO META
+functionDecEvalHelper addUpdateFunc iden params stmt id meta = addUpdateFunc meta{eval=evalFunc}
+  where evalFunc = FUNC_DEC_EVAL iden (L.length params) params stmt (closure meta) id
+
+```
+
+##### Függvény hívása
+- Itt kihasználjuk a `CALL` típust, és ha a `CALL` az `CALL_MULTI`, akkor rekurzívan meghívjuk a beágyazott függvényt, amíg egy egyszerűbb `CALL`-t nem kapunk, itt csak is szöveges azonosítóval lehet függvényt hívni
+- Ha egyszerűbb típus megkeressük valahol a változók között, ha indexelt, az indexeltek között, ha nem akkor a closure változók között
+- A következő függvény: `handleCallEval`, azonosítja a típust, és hívja a hozzá megfelelő függvényt
+  - Itt a hívás nem csak függvény hívás, de osztály példányosítás is lehet
+  - Itt elsőre nem annyira lehet érteni, de `RUNTIME_ERROR` tapasztalataim szerint ebben az esetben csak ez lehet. Mivel rezolváltuk a változókat, és tudjuk, hogy amik lehetnek a függvényen belül azok mind hívhatóak, akár saját maga is. De ha közben felül írjuk a blokkon belül, akkor az nem fog jól lefutni (!check! -> Ezt rezolverben nem lehet kivédeni, mondjuk megnézzük a rezolválási blokkban a változó, és ha nincs benne, és ez a függvény neve, örülünk, vagy ez egy nem hívható lokális változó, akkor dobunk egy errort???)
+- Ha rendes függvényról volt szó, akkor `handleFunctionCall`
+  - Aritás ellenőrzés
+  - A függvény mentett closure-jeinek hozzáadása a closure-hoz
+  - A függvénytest closure-jének hozzáadása
+  - Argumentumok kiértékelése
+    - Így a függvény test closure-jében lesznek, és könnyen elérhetők lesznek a függvény testen belül 
+    - Megnézzük, hogy bármelyik hibás-e
+      - Ha igen Futási hiba, és abba hagyjuk a kiértékelést
+    - Ha mind jó pároztatjuk az argumentumot a paraméterrel
+    - és utána kiértékeljük a függvénytestet
+    - `cleanUpFunction`: hamisra állítjuk a `isReturn` értéket, mivel más függvényhez nem tartozhat, a függvény test closure-két töröljük, majd a függvény closure-jét töröljük.
+
+```haskell
+-- Call
+-- Unresolved Call is from a chain
+evalExpression (EXP_CALL (CALL call_iden args)) meta = handleCallEval args (findValueInClosureInMeta call_iden) meta
+evalExpression (EXP_CALL (R_CALL _ args id)) meta = handleCallEval args (findIndexedValueInMeta id) meta
+evalExpression (EXP_CALL (RC_CALL call_iden args)) meta = handleCallEval args (findValueInClosureInMeta call_iden) meta
+evalExpression (EXP_CALL (CALL_MULTI call args)) meta = evalExpression (EXP_CALL call) meta >>= handleCallEval args multiCallGetFunc
+
+handleCallEval :: [ARGUMENT] -> (META -> IO EVAL) -> META -> IO META
+handleCallEval args findDec meta = do
+  ev <- findDec meta
+  case ev of 
+    FUNC_DEC_EVAL {} -> handleFunctionCall args ev meta
+    NATIVE_FUNC_DEC_EVAL {} -> handleNativeFunctionCall args ev meta 
+    CLASS_DEC_EVAL {} -> evalInit args ev meta
+    SUB_CLASS_DEC_EVAL {} -> evalInit args ev meta
+    _ -> return meta{eval=RUNTIME_ERROR "Self recursive function name overwritten in block"}
+
+-- Check arity
+-- Save how many closures the function is already in (saved closures on FUNC_DEC_EVAL)
+-- Add the saved closures and a new closure
+-- Eval arguments (they are expressions)
+-- Check if any of the arguments are RuntimeErrors, if runtime send return the meta with an eval of runtime error
+-- Pair up the params with the arguments (save the iden of the params and the eval result of arguments as pairs in the closure)
+-- Eval function body
+-- Clean up function (isReturn is set to False, delete that new closure and the saved closure)
+handleFunctionCall :: [ARGUMENT] -> EVAL -> META -> IO META
+handleFunctionCall args ev meta = do
+  let (FUNC_DEC_EVAL _ arity params stmt clos _) = ev
+  if arity /= L.length args then return meta{eval=RUNTIME_ERROR "Arity is not the same"} else do
+    let numberOfClos = L.length clos
+    updatedClosMeta <- addSavedClosure clos meta >>= addNewScopeToMeta
+    evaledArgsMetas <- Prelude.mapM (`evalExpression` updatedClosMeta) args
+    if L.any (isRuntimeError . eval) evaledArgsMetas then return updatedClosMeta{eval=fromJust (L.find isRuntimeError (L.map eval evaledArgsMetas))} else do
+      handleArgumentsEval params (L.map eval evaledArgsMetas) updatedClosMeta >>= evalDeclaration (createDecFromStatement stmt) >>= cleanUpFunction numberOfClos
+
+multiCallGetFunc :: META -> IO EVAL
+multiCallGetFunc meta = return (eval meta)  
+
+handleNativeFunctionCall :: [ARGUMENT] -> EVAL -> META -> IO META 
+handleNativeFunctionCall _ (NATIVE_FUNC_DEC_EVAL _ _ _ (CLOCK clock)) meta = do
+  val <- clock id
+  return meta{eval=EVAL_NUMBER (fromInteger val)}
+  
+-- Pair up the params and the arguments, save them to the current closure (function's)
+handleArgumentsEval :: [DECLARATION] -> [EVAL] ->  META -> IO META
+handleArgumentsEval (p:params) (e:evals) meta = do
+  let (DEC_VAR (PARAM iden)) = p
+  newMeta <- addUpdateScopeInMetaWithEval iden e meta
+  handleArgumentsEval params evals newMeta
+handleArgumentsEval [] [] meta = return meta
+
+-- isReturn set to False, delete new scope, delete FUNC_DEC_EVALs saved closure
+-- TODO: check how does this work if we have to functions saving the same closure (the two closure are to different object)
+cleanUpFunction :: Int -> META -> IO META
+cleanUpFunction numberOfClos meta = setReturnToFalse meta >>= deleteScopeFromMeta >>= deleteSavedClosure numberOfClos
+```
+
+##### Init hívás
+
+- `evalInit` bár meghívja a handleInit függvényt, érdekes, maga `fact` függvény, ami itt igazából a lényeges, az az, hogy itt ez egy closure-t vár
+  - Tehát előbb felépítjük az osztályunknak a closure-jét, amiben a szülői closure-ok is benne vannak, hogy öröklődést tudjunk használni
+  - és utána mentjük rá azt a closure-t amiben az osztályt mentették
+- `handleInit` létrehozza, az új closure-t, feldolgozza a metódusok deklarációkat, és a `this` értéket elmentjük, tehát saját (korlátozott) magát elmentjük
+  - igazából, ez volt az egyszerűbb megoldás a `this` kezelésére, és nem szeretnék használni, olyan kifejezést, hogy `super.this`, vagy `this.this`, de ezt a parser szabályok nem is engedik meg.
+  - Amikor meghívjuk az osztály `init` függvényét, akkor akkor az meghívja a `super.init()` kifejezést, amire külön `evalExpression`-t írtam.
+    - Megeressük a this-ben magát a `init` függvényben az osztály példány deklarációját, amit korábban elmentettünk
+    - Abból a deklarációból megkeressük a szülőosztályt, meghívjuk az ő initjét, elmentjük őt a `superClass` változóba
+    - Itt nehezen vettem észre másodjára, de itt görgetjük a closure-oket az `evalInit` rekurzív hívása miatt és az bekerül a végén a gyerekosztály végső closure-jébe
+- És amikor a `handleInit` végez, hozzáadja a valódi closure-t, amit felgörgettünk az `evalInit` rekurzív hívásával, elmentjük a szülőosztályt, hogy ha gyerekosztály inicializáltunk, és mentjük az `eval` változóba a végleges alosztályt a felgörgetett closure-rel. 
+
+```haskell
+-- Eval.hs
+-- handling "super.init" call
+-- We have already saved the "this" in the class when we call the super.init();
+-- Find parent class, eval it save it superClass so that the subclass can save it into its super
+evalExpression (EXP_CHAIN (CHAIN [LINK_SUPER,LINK_CALL (CALL "init" args)])) meta = do
+  (SUB_CLASS_DEC_EVAL _ parentName _ _ _ parentId) <- findValueInClosureInMeta "this" meta
+  parentClassEval <- findParentClass parentName parentId meta
+  newMeta <- evalInit args parentClassEval meta
+  return meta{superClass=eval newMeta}
+
+
+handleCallEval :: [ARGUMENT] -> (META -> IO EVAL) -> META -> IO META
+handleCallEval args findDec meta = do
+  ev <- findDec meta
+  case ev of 
+    FUNC_DEC_EVAL {} -> handleFunctionCall args ev meta
+    NATIVE_FUNC_DEC_EVAL {} -> handleNativeFunctionCall args ev meta 
+    CLASS_DEC_EVAL {} -> evalInit args ev meta
+    SUB_CLASS_DEC_EVAL {} -> evalInit args ev meta
+    _ -> return meta{eval=RUNTIME_ERROR "Self recursive function name overwritten in block"}
+
+{-...-}
+-- The only interesting thing here is that we take the closure the class was saved in 
+-- and when the init runs and creates the closure and calls this fact function
+-- it will merge the closure the class was declared in and the class's own newly created closure
+evalInit :: [ARGUMENT]  -> EVAL -> META -> IO META
+evalInit args classEval meta = do
+  case classEval of
+    (CLASS_DEC_EVAL iden decs clos id) -> do
+      -- TODO: if class is defined in function and returned, the original function closure is lost from the class
+      let fact = (\pClos -> CLASS_DEC_EVAL iden decs (mconcat [pClos, clos]) id)
+      let func initMeta = return initMeta
+      handleInit args decs fact func meta
+    (SUB_CLASS_DEC_EVAL iden pIden decs clos id pId) -> do
+      let fact = (\pClos -> SUB_CLASS_DEC_EVAL iden pIden decs (mconcat [pClos, clos]) id pId)      
+      handleInit args decs fact addSuperToClosure meta
+
+-- Pair of the evalExpression, which evals the super.init()
+-- Before we return the initialized class in the eval of the meta
+-- We save the superclass (which is filled when the init calls super.init())
+addSuperToClosure :: META -> IO META
+addSuperToClosure initMeta = do
+  let parentClass = superClass initMeta
+  superMeta <- addUpdateScopeInMetaWithEval "super" parentClass initMeta
+  return superMeta{superClass=EVAL_NIL}
+  
+ 
+handleInit :: [ARGUMENT] -> [DECLARATION] -> (Closure -> EVAL) -> (META -> IO META) -> META -> IO META
+handleInit args decs fact func meta = do
+  newMeta <- addNewScopeToMeta meta >>= handleMethodsEval decs
+  -- Class's this declaration will not have this in it but the parser already filters out "this.this/super.this" structure
+  -- TODO: This should not really work because we save a closure that has only methods, and yet we have props and functions when I check it later in this function...
+  thisMeta <- addUpdateScopeInMetaWithEval "this" (fact (closure newMeta)) newMeta
+  init <- findValueInClosureInMeta "init" thisMeta
+  initMeta <- handleFunctionCall args init thisMeta
+  additionalMeta <- func initMeta
+  deleteScopeFromMeta additionalMeta{eval=fact (closure additionalMeta)}
+
+{-...-}
+handleMethodsEval :: [DECLARATION] -> META -> IO META
+handleMethodsEval (d:decs) meta = evalDeclaration d meta >>= handleMethodsEval decs
+handleMethodsEval [] meta = return meta
+
+```
+
+##### Lánchívás
