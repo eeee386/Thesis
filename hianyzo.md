@@ -11,4 +11,4 @@
      - Lehet elég lesz csak a Recursive Descent Parser-ről egy bekezdés
   - Esettanulmányok 
     - Ezek mindenképp, és sokkal érdekesebbek, mint ami most van kész
-    - Ezekhez képek, amit a PPT-n be tudok mutatni. -> szép képekkel, hogy a 
+    - Ezekhez képek, amit a PPT-n be tudok mutatni. -> szép képekkel, hogy a védésen jól mutasson
