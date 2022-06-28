@@ -1,0 +1,8 @@
+- Clock Implementation
+- Deleting list reverses with sequences
+- Resolving expressions into a evalList, like in the first one
+- Resolving declarations like in the first one in a list of sequences
+- See if you can fix self-recursive functions
+  - Put it in resolver
+  - If the variable that is called is not in local closure, and is the name of the function -> good
+  - If the variable that is called, is in local closure and not callable, -> bad, if callable -> good

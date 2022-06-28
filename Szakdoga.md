@@ -91,8 +91,8 @@ Ez a három adatstruktúra az, ami nem funkcionális, de a amit adnak teljesítm
 
 ##### Imperatív vs. Funkcionális (!)
 
-Imperatív: egymást követő utasítások sorozatából áll
-Funkcionális: rekurzív függvény hívások sorozata 
+Imperatív: egymást követő utasítások sorozatából áll, amelyek állapotakat változtatnak 
+Funkcionális: A számításokat matematikai függvényekként kezeli, és próbálja elkerülni az állapot változtatásokat
 
 ##### Pure programming vs. Side Effects
 
@@ -236,7 +236,6 @@ Ez egy dinamikus típusosságot használó, imperatív, objektum orientált prog
 
 #### Kifejezések
 - A típusoknál kifejtett alapműveletek láncolata.
-- Precedencia (!)
 
 #### Utasítások
 - Output, input beolvasása
@@ -2043,7 +2042,7 @@ isSuperInit _ = False
 ##### Lánc rezolválása
 
 - Igazából, ami érdekes ebben az, hogy csak az első értéket nézem meg és utána csak hozzáteszem a maradékot.
-- Itt ami fontos, az az, hogy nehéz lett volna ellenőrizni azt, amit az "init"-ben hozok létre változót (!check! -> éppen meg lehet oldani, hogy külön rezolváljuk a "this.[IDENTIFIER]" jellegű kifejezéseket és hozzáadjuk az osztály scope-jához, szerintem, de nem tudom így most mekkora effort az.)  
+- Itt ami fontos, az az, hogy nehéz lett volna ellenőrizni azt, amit az "init"-ben hozok létre változót
 - `checkIfReferenceForDefinition` egy teljesen magától értetődő függvény, próbálja megtalálni a változót, ha nincs, hibát jelzünk
 
 ```haskell
