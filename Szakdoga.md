@@ -59,8 +59,6 @@ Első és utolsó elem megtalálsa, levétele, módosítása konstans idejű, k�
 
 ```haskell
 import qualified Data.Sequence as S
-
-
 ```
 
 
@@ -111,12 +109,13 @@ Haskellben nincsen állapot kezelés és meg kellett oldanom, hogy valahogyan az
   ```haskell
   [1..]
   ```
+  
   kiértékelődik, és addig növeli a listát, amíg a memória el nem fogy
 
 - Az IO is lusta a Haskellben, tehát addig nem tesz semmit, amíg nem muszáj neki, és puffereli a bejövő értékeket
   - Ez problémás egy olyan esetben, amikor egy interaktív shellt is szeretnék létrehozni a nyelvhez
   - Ezt kézzel kell flusholni
-  ```haskell
+```haskell
 -- Meghívja a "readFromRepl" függvényt, ami kiírja, hogy Lox, flusholja a puffert, és elmenti a sort a pufferben volt
 -- Ezt elmnetjük az outputba
 -- Futtatjuk az inputot
@@ -131,7 +130,7 @@ readFromRepl :: IO String
 readFromRepl = putStr "Lox> "
      >> hFlush stdout
      >> getLine
-  ```
+```
   
 - Clock (!Megnézni másik megoldást)
 
@@ -2303,7 +2302,8 @@ evalDeclaration (DEC_FUNC (FUNC_DEC (TH.IDENTIFIER iden) (PARAMETERS params toke
 5. Amíg van elem az argumentumok listájában addig feldolgozzuk a függvényeket
    - Ilyen jellegű kifejezések
      - ```lox
-       a(2,3)(5,6);```
+       a(2,3)(5,6);
+       ```
    - Itt nincsen típus ellenőrzés hogy tényleg hívás-e, mivel az a parserben megtörtént
    - `callFunction` az egy arity check (!check! -> érdemes lesz átnevezni) 
    - `functionCall`, amiben maga a logika helyezkedik el
@@ -2616,10 +2616,11 @@ evalDeclaration (DEC_STMT (BLOCK_STMT x)) meta = evalBlock x meta
             i = i + 1;
         }
         return e;
-    }```
+    }
+    ```
 - Bár a problémák ott kezdődnek, hogy: 
   - ```lox
-  fun a() {
+    fun a() {
         var i = 1;
         fun e() {
             i = i + 1;
@@ -2639,7 +2640,8 @@ evalDeclaration (DEC_STMT (BLOCK_STMT x)) meta = evalBlock x meta
     }
     var problem = a();
     a().e(); //  ez jó. output: 1
-    a().f(); // Itt a probléma, output: 2, a 3 helyett```
+    a().f(); // Itt a probléma, output: 2, a 3 helyett
+    ```
   - Ebben az esetben a haskell működése miatt elfog térni a viselkedése más programozási nyelvek hasonló kódjainál
     - Legtöbb esetben ha az `e`-t, majd az `f`-t, hívva 3-t kapunk eredményül, mivel közös scope van elmentve nekik, <i>ugyanazon referencián</i>
     - Míg a haskellnél, pedig mindenből másolatot készít, hogy minél állapotmentesebb legyen, így itt a két függvénynek külön-külön scope-ja van.
