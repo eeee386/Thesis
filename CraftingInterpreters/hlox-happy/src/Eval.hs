@@ -418,7 +418,7 @@ addHelper left right meta
         maybeRightNum = maybeEvalNumber right
         maybeLeftString = maybeEvalString left
         maybeRightString = maybeEvalString right
-
+-- Use evalExpressionStack here as well -> similar to Resolver in first solution
 binaryNumericHelper :: EXPRESSION -> EXPRESSION -> (a -> EVAL) -> (Double -> Double -> a) -> META -> IO META
 binaryNumericHelper left right fact op meta = do
   leftMeta <- evalExpression left meta

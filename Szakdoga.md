@@ -565,6 +565,11 @@ run text = do
 
 ## Scanner/Lexer
 
+### Feladata
+
+- Forrásfájl stringjének feldolgozása egy - a parser számára könnyen feldolgozható - struktúrába
+- Forrásfájl kulcsszavainak és egyéb részeinek mintaillesztése és besorolása egy megfelelő típusba  
+
 ### Első megoldás (Scanner.hs)
 
 #### Alaptípusok, amivel jellemezhetjük a tokeneket
@@ -768,11 +773,18 @@ lexKeyword cs =
 
 ## Parser
 
+### Feladata
+
+- A tokenek feldolgozása, és egy Abstract Syntax Tree (Absztrackt szintaxis fa) létrehozása, amiből az evaluáció tud dolgozni
+- Parser hibák megtalálása, pl.: `class 4;`, amit elfogad a scanner, de a parser már nem tud értelmezni 
+
+
 ### Descent Parser és LR bemutatása
 
 #### Descent Parser
 - Felülről lefelé parser
 - A legkisebb precedenciájú műveleteket keresi először, ha talál, akkor leválasztja az előtte lévő részt, és abban keres magasabb precedenciájú műveletet
+- Egészen addig rekurzívan lefele megyünk, amíg a legmagasabb precedenciájúakat feldolgozza, utána pedig visszafele haladunk, és feldolgozzuk az alacsonyabb precedenciájúakat
 
 #### LR
 
@@ -1917,8 +1929,36 @@ updateResolverErrorsByPredicate predicate message meta = meta{resolverErrors=if 
 ```
 
 ##### Osztály és alosztály rezolválása
-- Rezolválás lépései
-- Init kérdése
+Lépései: 
+1. Hasonlóan a függvény deklarációhoz, itt is meghívjuk a `checkIfFunctionOrClassIsDefinedAndSaveEmpty`-t
+   - Megnézzük, hogy létrehozták-e már ezt a változónevet ebben a scope-ban
+   - Elmentünk egy üres osztály deklarációt, hogy abból kinyerjük az id-t
+2. `handleClassSetup`, menti az új scope-ot a rezolver környezetbe, és a closure-be, és feldolgozza a metódusokat
+   - Metódusok feldolgozása, a `resolveMethods` függvény:
+     1. Megnézzük minden metódusnak egyedi-e a neve
+     2. Megnézzük, hogy van-e "init"
+     3. Ha alosztály, azt is megnézzük, hogy az "init" az meghívja-e a "super.init()" függvényt
+       - Itt döntést kellett hoznom, az "init" függvényekkel kapcsolatban. Az egyzerű osztályokkal nem volt probléma, mivel ott létrehozok egy üres "init"-et, ha hiányzik és a feladat megoldott. Viszont alosztályoknál ez problémásabb, ha a szülő osztálynak "init"-jének vannak paraméterei:
+         1. Megoldás: Automatikusan létrehozunk az alosztályban egy "init"-et, ami tartalmazza azokat a paramétereket, amik szükségesek, ahhoz, hogy a szülő osztály "init" függvényét meghívjuk
+            - Ez könnyen összezavarhatja a felhasználókat, mivel tudtuk nélkül helyeztünk oda kódokat, és nem tudják miért kellenek paraméterek, amikor nem adták meg azokat
+            - Nehéz lenne kivitelezni
+         2. Megoldás: Default argumentumok a szülő osztály "init"-jében, nehéz lenne kivitelezni, és összezavarhatja a felhasználókat
+         3. Megoldás: Üres initet hozunk létre, ami ha alosztály automatikusan hoz létre egy üres "super.init()"-et
+            - Ha voltak paraméterei a szülő osztály "init"-jének, akkor ott dobunk el egy hibát 
+            - Könnyű kivitelezni
+            - De összezavarhatja a felhasználókat
+            - Ez az, ami a könyvben is szerepel
+         4. Megoldás: "init" kötelező
+            - Könnyű implementálni
+            - Explicit, pontosan leírja mi a probléma, ha feljön
+            - Ezt a megoldást választottam
+     4. Feldolgozom a metódusokat, és megfordítom a deklarációkat és a hibákat (!check!-> Sequence)
+3. Ha sima osztály, akkor azt ellenőrizzük, hogy closure, vagy indexelt változó, és meghívjuk a `handleSaveClassDec`
+   - Alosztálynál, a szülő osztályt is megkeressük, és azzal hívjuk meg
+4. `handleSaveClassDec`
+   - Törli az osztály scope-ját
+   - Visszaállítja az `isInClass`, `isInSubClass` és `declarations` változókat az osztály feldolgozása előtti állapotba
+   - Menti a végső osztály deklarációt
 
 ```haskell
 -- Methods can only be in classes, therefore always be in closure
@@ -1986,13 +2026,83 @@ resolveMethods methods meta = do
    declarations=[]
  }))) >>= reverseDeclarationsAndErrors
  
+{-...-}
+hasSuperInitInInit :: [DECLARATION] -> Bool
+hasSuperInitInInit methods =  hasSuperInit (head (filter (not . null) (map getInitFromMethods methods)))
+  where getInitFromMethods (DEC_FUNC (METHOD_DEC "init" _ (BLOCK_STMT decs))) = decs
+        getInitFromMethods _ = []
+
+hasSuperInit :: [DECLARATION] -> Bool
+hasSuperInit = any isSuperInit
+
+isSuperInit :: DECLARATION -> Bool
+isSuperInit (DEC_STMT (EXPR_STMT (EXP_CHAIN (CHAIN [LINK_SUPER,LINK_CALL (CALL "init" _)])))) = True
+isSuperInit _ = False
 ```
 
 ##### Lánc rezolválása
 
+- Igazából, ami érdekes ebben az, hogy csak az első értéket nézem meg és utána csak hozzáteszem a maradékot.
+- Itt ami fontos, az az, hogy nehéz lett volna ellenőrizni azt, amit az "init"-ben hozok létre változót (!check! -> éppen meg lehet oldani, hogy külön rezolváljuk a "this.[IDENTIFIER]" jellegű kifejezéseket és hozzáadjuk az osztály scope-jához, szerintem, de nem tudom így most mekkora effort az.)  
+- `checkIfReferenceForDefinition` egy teljesen magától értetődő függvény, próbálja megtalálni a változót, ha nincs, hibát jelzünk
+
+```haskell
+-- Resolver.hs
+-- Here I only check the first link, as it is the one that could be anything.
+-- The other links should be some property on the class referenced, or returned
+resolveExpression (EXP_CHAIN (CHAIN links)) meta = do
+  let (firstLink:rest) = links
+  case firstLink of
+    (LINK_CALL firstCall) -> do
+      callMeta <- resolveExpression (EXP_CALL firstCall) meta
+      let (EXP_CALL x) = newExpr callMeta
+      return meta{newExpr=EXP_CHAIN (CHAIN (LINK_CALL x:rest))}
+    (LINK_IDENTIFIER iden) -> do 
+      newMeta <- checkIfReferenceForDefinition iden (\p -> EXP_CHAIN (CHAIN [R_LINK_IDENTIFIER iden p])) (EXP_CHAIN (CHAIN [RC_LINK_IDENTIFIER iden])) meta
+      let (EXP_CHAIN (CHAIN (x:_))) = newExpr newMeta
+      return newMeta{newExpr=EXP_CHAIN (CHAIN (x:rest))}
+    LINK_THIS -> return (updateResolverErrorsByPredicate (isInClass meta) "The 'this' keyword has to be called in a class" meta{newExpr=EXP_CHAIN (CHAIN links)})
+    LINK_SUPER -> return (updateResolverErrorsByPredicate (isInClass meta) "The 'super' keyword has to be called in a subclass" meta{newExpr=EXP_CHAIN (CHAIN links)})
+    _ -> return meta{newExpr=EXP_CHAIN (CHAIN links)}
+```
+
+```haskell
+-- ResolverTypes.hs
+-- Check if the variable/class/function "a" already exists
+checkIfReferenceForDefinition :: TextType -> (ID -> EXPRESSION) -> EXPRESSION -> ResolverMeta -> IO ResolverMeta
+checkIfReferenceForDefinition iden factExp funcExp meta = do
+  inClosure <- isInClosure iden meta
+  if isInFunctionOrClass meta && inClosure then do
+    return meta{newExpr=funcExp}
+  else do
+    maybeId <- findIdInVariables iden meta
+    if isJust maybeId then
+      return meta{newExpr=factExp (ID (fromJust maybeId))}
+    else do
+      return meta{
+        resolverErrors="Variable is not in scope":resolverErrors meta
+        , newExpr=factExp NON_ID}
+```
+
 ##### Kifejezés rezolválása
 
+- Ez annyival másabb, hogy kiszedem az utolsó értéket a `newExpr`-ből és abból építem fel az új `newExpr`-t (!check! -> listás megoldás az előzőből, azt visszaállítani)
 
+```haskell
+-- Resolver.hs
+resolveExpression :: EXPRESSION -> ResolverMeta -> IO ResolverMeta
+resolveExpression (EXP_BINARY (BIN_EQ left right)) meta = handleBinaryExp BIN_EQ left right meta 
+{-...-}
+
+handleBinaryExp :: (EXPRESSION -> EXPRESSION -> BINARY) -> EXPRESSION -> EXPRESSION -> ResolverMeta -> IO ResolverMeta
+handleBinaryExp fact left right meta = do
+  leftMeta <- resolveExpression left meta
+  let leftExpr = newExpr leftMeta
+  rightMeta <- resolveExpression right leftMeta
+  let rightExpr = newExpr rightMeta
+  return rightMeta{newExpr=EXP_BINARY (fact leftExpr rightExpr) }
+
+```
 
 ## Eval
 
@@ -2633,12 +2743,11 @@ cleanUpFunction numberOfClos meta = setReturnToFalse meta >>= deleteScopeFromMet
   - Tehát előbb felépítjük az osztályunknak a closure-jét, amiben a szülői closure-ok is benne vannak, hogy öröklődést tudjunk használni
   - és utána mentjük rá azt a closure-t amiben az osztályt mentették
 - `handleInit` létrehozza, az új closure-t, feldolgozza a metódusok deklarációkat, és a `this` értéket elmentjük, tehát saját (korlátozott) magát elmentjük
-  - igazából, ez volt az egyszerűbb megoldás a `this` kezelésére, és nem szeretnék használni, olyan kifejezést, hogy `super.this`, vagy `this.this`, de ezt a parser szabályok nem is engedik meg.
+  - igazából, ez volt az egyszerűbb megoldás a `this` kezelésére, és nem szeretnék használni olyan kifejezést, hogy `super.this`, vagy `this.this`, de ezt a parser szabályok nem is engedik meg.
   - Amikor meghívjuk az osztály `init` függvényét, akkor akkor az meghívja a `super.init()` kifejezést, amire külön `evalExpression`-t írtam.
-    - Megeressük a this-ben magát a `init` függvényben az osztály példány deklarációját, amit korábban elmentettünk
+    - Megkeressük a this-ben magát a `init` függvényben az osztály példány deklarációját, amit korábban elmentettünk
     - Abból a deklarációból megkeressük a szülőosztályt, meghívjuk az ő initjét, elmentjük őt a `superClass` változóba
-    - Itt nehezen vettem észre másodjára, de itt görgetjük a closure-oket az `evalInit` rekurzív hívása miatt és az bekerül a végén a gyerekosztály végső closure-jébe
-- És amikor a `handleInit` végez, hozzáadja a valódi closure-t, amit felgörgettünk az `evalInit` rekurzív hívásával, elmentjük a szülőosztályt, hogy ha gyerekosztály inicializáltunk, és mentjük az `eval` változóba a végleges alosztályt a felgörgetett closure-rel. 
+- És amikor a `handleInit` végez, hozzáadja a valódi closure-t, amiben van `super` és `this`, elmentjük a szülőosztályt, hogy ha gyerekosztály inicializáltunk, és mentjük az `eval` változóba a végleges alosztályt a végleges closure-rel. 
 
 ```haskell
 -- Eval.hs
@@ -2707,3 +2816,133 @@ handleMethodsEval [] meta = return meta
 ```
 
 ##### Lánchívás
+
+- Egyszerre csak egy linket evaluálunk, amíg ki nem fogyunk a láncszemekből
+- A rezolválásnál csak az első láncszemmel foglalkoztunk, amiről tudtuk, hogy létező változó vagy nem, de itt fogjuk ellenőrizni, hogy ténylegesen jól hívtuk-e a dolgokat.
+- Az `eval`-ba mentjük az előző láncszem eredményét
+- Ha osztály és a következő pont operátor az egy rajta lévő metódus, vagy attribútum haladunk tovább a láncon
+- Amit fontos itt látni, hogy itt hozom helyben létre a closure-t, amiben keresem az attribútumot, minden egyes lánchívásra, ami az osztályban keres egy metódust vagy attribútumot (!!)
+  - Bár erőforrás pocsékolásnak tűnhet, de így ki tudom kerülni az olyan problémákat, mint a `super.methodInParentOfSuperClass()` hívás, ami a jelenlegi osztály szülőjét hívja meg egy olyan metódussal, amit nem definiáltak, vagy ha egy új osztályt kapunk eredményül egy láncszemből 
+
+
+```haskell
+-- Evaling this one link at a time with evalExpression, till the links are empty
+-- A().name -> eval A() class initialization, we save it eval, 
+-- then next link checks if the previous eval is a classEval, 
+-- then check the closure of initialized A class, for that identifier
+evalExpression (EXP_CHAIN (CHAIN (l:links))) meta = do
+  case l of
+    LINK_THIS -> do
+      classEval <- findValueInClosureInMeta "this" meta
+      evalExpression (EXP_CHAIN (CHAIN links)) meta{eval=classEval}
+    LINK_SUPER -> do
+      parentClassEval <- findValueInClosureInMeta "super" meta
+      evalExpression (EXP_CHAIN (CHAIN links)) meta{eval=parentClassEval}
+    LINK_CALL x -> do
+      case eval meta of
+        (CLASS_DEC_EVAL _ _ clos _) -> handleChainCall l links clos meta
+        (SUB_CLASS_DEC_EVAL _ _ _ clos _ _) -> handleSubClassChain l links clos handleChainCall meta
+        _ -> handleChainCall l links (closure meta) meta
+    -- Inner link    
+    (LINK_IDENTIFIER x) -> do
+      case eval meta of
+        (CLASS_DEC_EVAL _ _ clos _) -> handleChainIdentifier l links clos meta
+        (SUB_CLASS_DEC_EVAL _ _ _ clos _ _) -> handleSubClassChain l links clos handleChainIdentifier meta
+        _ -> return meta{eval=RUNTIME_ERROR "Dot operation is only permitted on classes"}
+    (R_LINK_IDENTIFIER _ id) -> do
+      ev <- findIndexedValueInMeta id meta
+      evalExpression (EXP_CHAIN (CHAIN links)) meta{eval=ev}
+    (RC_LINK_IDENTIFIER iden) -> do 
+      ev <- findValueInClosureInMeta iden meta
+      evalExpression (EXP_CHAIN (CHAIN links)) meta{eval=ev}
+evalExpression (EXP_CHAIN (CHAIN [])) meta = return meta
+
+{-...-}
+-- What we do here is create a merged closure of the inheritance chain's all closure
+-- First being the subclass that the prop or method is called, and going up merging them one-by-one
+-- And then calling the handler for chain call or prop, which will find the method/prop in merged closure, and eval it.
+handleSubClassChain :: CHAIN_LINK -> [CHAIN_LINK] -> Closure -> (CHAIN_LINK -> [CHAIN_LINK] -> Closure -> META -> IO META) -> META -> IO META
+handleSubClassChain l links clos func meta = do
+  parentClassEval <- findValueInClosure "super" clos
+  case parentClassEval of
+    (CLASS_DEC_EVAL _ _ parentClos _) -> func l links (mconcat [clos, parentClos]) meta
+    (SUB_CLASS_DEC_EVAL _ _ _ parentClos _ _) -> do
+      newClos <- getAllClosuresFromInheritance clos parentClos
+      func l links newClos meta
+
+-- Helper function is getting all the closure from the inheritance chain
+getAllClosuresFromInheritance :: Closure -> Closure -> IO Closure
+getAllClosuresFromInheritance clos pClos = do
+  parentClassEval <- findValueInClosure "super" pClos
+  let newClos = mconcat [clos, pClos]
+  case parentClassEval of
+    (CLASS_DEC_EVAL _ _ parentClos _) -> return (mconcat [newClos, parentClos])
+    (SUB_CLASS_DEC_EVAL _ _ _ parentClos _ _) -> getAllClosuresFromInheritance newClos parentClos
+
+{-...-}
+handleChainCall :: CHAIN_LINK -> [CHAIN_LINK] -> Closure -> META -> IO META
+handleChainCall (LINK_CALL (CALL iden args)) links clos meta = do
+  ev <- findValueInClosure iden clos
+  handleFunctionCall args ev meta >>= evalExpression (EXP_CHAIN (CHAIN links))
+handleChainCall (LINK_CALL x) links clos meta = evalExpression (EXP_CALL x) meta >>= evalExpression (EXP_CHAIN (CHAIN links))
+
+{-...-}
+
+handleChainIdentifier :: CHAIN_LINK -> [CHAIN_LINK] -> Closure -> META -> IO META
+handleChainIdentifier link links clos meta = do
+  let (LINK_IDENTIFIER iden) = link
+  eval <- maybeFindValueInClosure iden clos
+  if isNothing eval then do
+    return meta{eval=RUNTIME_ERROR "This is not a property on the class"}
+  else do
+    evalExpression (EXP_CHAIN (CHAIN links)) meta{eval=fromJust eval}
+```
+
+##### Kifejezés
+
+- Csak string-string vagy number-number összeadás lehetséges, amit ellenőrzök az `addHelper`- ben
+- A korábbi `eval` eredményeket kiszedem és abból hozok létre egy redukált eredményt a művelet elvégzése után
+
+```haskell
+{-...-}
+evalExpression (EXP_BINARY (BIN_ADD left right)) meta = do
+  leftMeta <- evalExpression left meta
+  let evaledLeft = eval leftMeta
+  rightMeta <- evalExpression right leftMeta
+  let evaledRight = eval rightMeta
+  return (addHelper evaledLeft evaledRight rightMeta)
+{-...-}
+evalExpression (EXP_BINARY (BIN_MUL left right)) meta = binaryNumericHelper left right EVAL_NUMBER (*) meta
+evalExpression (EXP_BINARY (BIN_COMP_LESS left right)) meta = binaryNumericHelper left right EVAL_BOOL (<) meta
+{-...-}
+evalExpression (EXP_BINARY (BIN_EQ left right)) meta = binaryBoolHelper left right (createEquality id) meta
+
+{-...-}
+addHelper :: EVAL -> EVAL -> META -> META
+addHelper left right meta
+  | isJust maybeLeftNum && isJust maybeRightNum = meta{eval=EVAL_NUMBER (fromJust maybeLeftNum + fromJust maybeRightNum)}
+  | isJust maybeLeftString && isJust maybeRightString = meta{eval=concatTwoString (fromJust maybeLeftString) (fromJust maybeRightString)}
+  | otherwise = meta{eval=RUNTIME_ERROR "Type error: use only strings or only numbers as operands"}
+  where maybeLeftNum = maybeEvalNumber left
+        maybeRightNum = maybeEvalNumber right
+        maybeLeftString = maybeEvalString left
+        maybeRightString = maybeEvalString right
+
+binaryNumericHelper :: EXPRESSION -> EXPRESSION -> (a -> EVAL) -> (Double -> Double -> a) -> META -> IO META
+binaryNumericHelper left right fact op meta = do
+  leftMeta <- evalExpression left meta
+  let maybeLeftNum = maybeEvalNumber(eval leftMeta)
+  rightMeta <- evalExpression right leftMeta
+  let maybeRightNum = maybeEvalNumber (eval rightMeta)
+  return rightMeta{eval=createMathOp fact maybeLeftNum maybeRightNum op}
+
+binaryBoolHelper :: EXPRESSION -> EXPRESSION -> (EVAL -> EVAL -> EVAL) ->  META -> IO META
+binaryBoolHelper left right handler meta = do
+  leftMeta <- evalExpression left meta
+  let leftEval = eval leftMeta
+  rightMeta <- evalExpression right leftMeta
+  let rightEval = eval rightMeta
+  return rightMeta{eval=handler leftEval rightEval}
+
+
+```
